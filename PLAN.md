@@ -268,7 +268,7 @@ Names are centralised in `Core/ParameterNames.h`. Shared, `PROCESSOR_SCOPE` unle
 **Power only:** `max_trials` (50), `baseline_mode` {None, dB, %, z-score},
 `baseline_start_ms` / `baseline_end_ms`. Baseline normalisation is essentially
 mandatory for a readable spectrogram, and is applied at *display* time so changing it
-does not discard accumulated spectra.
+does not discard accumulated spectra. Plus the whitening parameters below.
 
 **Coherence only:** `smooth_time_bins`, `smooth_freq_bins`, `coherence_display`
 {Coherence, Phase}, plus the pair table. Same rule: none of these invalidate the
@@ -276,6 +276,100 @@ accumulators.
 
 Trigger sources persist via `saveCustomParametersToXml` **[done]**; canvas display
 state via `Visualizer::saveCustomParametersToXml` **[todo]**.
+
+---
+
+## Spectral whitening (1/f removal) **[todo]**
+
+### Why
+
+Neural power spectra are dominated by an aperiodic, roughly scale-free component,
+`P(f) ∝ 1/f^χ` with χ typically 1–3. On a linear colour scale this swallows the
+entire dynamic range at the low-frequency end and leaves everything above ~30 Hz
+looking flat and empty. Oscillatory peaks are what the user is looking for, and they
+sit *on top of* that background.
+
+Offline this is normally handled by dividing through a baseline spectrum estimated
+from a long reference recording. That is not available online: there is no reference
+block, the recording has only just started, and the aperiodic exponent drifts with
+brain state. So whitening has to be estimated from the data at hand.
+
+### Where it sits
+
+Whitening is a **display-time transform on the power accumulators**, in exactly the
+same place as baseline normalisation (`TriggeredPowerNode::getPowerForDisplay`). It
+therefore:
+
+- never discards accumulated data, so it can be toggled freely mid-experiment;
+- costs nothing until the display asks for values;
+- composes with baseline normalisation — whitening is applied *first*, then the
+  baseline mode, so `dB change from baseline` of whitened data still means what it
+  says.
+
+**It applies to TriggeredPower only.** Coherence is a normalised ratio,
+`|ΣSxy|² / (ΣSxx · ΣSyy)`, so any per-frequency gain cancels exactly. Whitening a
+coherence estimate is a no-op, and offering the control there would be misleading.
+This must be stated in the coherence UI rather than silently omitted.
+
+### Methods
+
+Four, exposed as `whitening_mode`:
+
+| Mode | What it does | When it is the right choice |
+|---|---|---|
+| `None` | pass through | baseline mode already removes 1/f |
+| `Fixed exponent` | `P'(f) = P(f) · f^χ`, χ from `whitening_exponent` (default 1.0) | quick, predictable, no estimation; good when χ is known |
+| `Fitted aperiodic` | robust log-log fit of `log10 P = b − χ·log10 f`, then subtract | the principled default; also *reports* χ, which is itself of interest |
+| `Running reference` | divide by an exponential moving average of the spectrum across trials | when the background is not a clean power law |
+
+**Fitted aperiodic** is the recommended default and needs care in one respect: the
+oscillatory peaks bias an ordinary least-squares fit upwards, flattening χ. Use
+FOOOF's trick — fit, discard the frequency points lying above the fit, refit, and
+iterate two or three times. That converges to the lower envelope, which is the
+aperiodic component. Optionally extend to a knee term, `b − log10(k + f^χ)`, when the
+band spans the bend that most LFP spectra show around 10–20 Hz; make it a toggle
+rather than always-on, since fitting a knee over a narrow band is unstable.
+
+The fit runs over the frequency axis only — 60–1000 points — so it is microseconds,
+and a **log-spaced frequency grid is exactly the right sampling for it** (uniform
+weighting in log f). That is already the default.
+
+**Estimate the aperiodic profile once per (source, channel), not per time bin.** Fit
+it on the trial-averaged spectrum, averaged over time bins in spectrogram mode, then
+divide every time bin by that one profile. Fitting per bin would be noisier and would
+partly absorb the genuine time-varying changes the plugin exists to show.
+
+**Running reference** keeps an exponential moving average `R(f)` over committed
+trials with an adjustable time constant, and reports `P(f) / R(f)`. It adapts to
+drift and needs no functional form, at the cost of also suppressing sustained genuine
+effects — a trade-off the user has to be told about, not hidden.
+
+### Parameters (Power only)
+
+| Name | Type | Default | Notes |
+|---|---|---|---|
+| `whitening_mode` | Categorical | `None` | None / Fixed exponent / Fitted aperiodic / Running reference |
+| `whitening_exponent` | Float | 1.0 | fixed-exponent mode only, 0–4 |
+| `whitening_fit_knee` | Boolean | false | fitted mode only |
+| `whitening_time_constant` | Float | 30 s | running-reference mode only |
+
+All are display-time, so none of them is an analysis parameter and none invalidates
+the accumulators.
+
+### Verification
+
+- A synthetic `1/f^χ` spectrum with a known χ and an injected narrowband peak:
+  fitted-aperiodic whitening must recover χ to within ~0.1 and leave the peak
+  standing proud of a flat background.
+- Fixed-exponent whitening of an exact `f^-χ` input with the matching exponent must
+  give a spectrum flat to floating-point tolerance.
+- Peak *frequency* must be unchanged by every mode — whitening rescales, it must not
+  shift.
+- The peak-biasing case: a spectrum with a very strong wide peak must still yield an
+  aperiodic fit close to the true background, confirming the iterative rejection
+  works and plain OLS would not.
+- Coherence must be bit-identical with whitening on and off, confirming the
+  no-op claim above.
 
 ---
 
@@ -312,7 +406,8 @@ per-source trial counts and dropped-request count.
    JUCE-free so they test standalone (the reason `TrialSpectrumBuffer` is JUCE-free).
 3. **[part done] TriggeredPower.** Node computes spectra into accumulators, keeps
    per-trial line spectra, and applies baseline normalisation (None/dB/%/z) at
-   display time. **[todo]**: the grid of spectrogram/line panels.
+   display time. **[todo]**: spectral whitening (see above, same display-time code
+   path as the baseline) and the grid of spectrogram/line panels.
 4. **[part done] TriggeredCoherence.** Pair data model with seed generation and
    XML persistence, cross-spectrum accumulation, coherence/phase, significance
    threshold and smoothing all wired. **[todo]**: the pair config popup and the
