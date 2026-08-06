@@ -25,11 +25,13 @@
 #include "Core/Accumulators.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TrialSpectrumBuffer.h"
+#include "Core/Whitening.h"
 #include "Core/TriggerMessaging.h"
 #include "Core/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
 #include <memory>
+#include <map>
 #include <unordered_map>
 
 namespace TriggeredSpectra
@@ -82,12 +84,28 @@ public:
                              int frequencyIndex,
                              std::span<double> destination) const;
 
+    /** Fills the whole (numFrequencies x numBins) grid for one channel,
+     *  frequency-major, with baseline normalisation or whitening already applied.
+     *
+     *  Whitening needs the entire frequency axis at once, so it cannot be done
+     *  through the per-frequency accessor above. Prefer this from the display.
+     */
+    bool getPowerGridForDisplay (TriggerSource* source,
+                                 int channelIndex,
+                                 std::span<double> grid) const;
+
     int getNumFrequencies() const { return m_engine.numFrequencies(); }
     int getNumBins() const { return m_engine.numAccumulatorBins(); }
     std::span<const double> getFrequencies() const { return m_engine.frequencies(); }
     std::span<const double> getBinTimes() const { return m_engine.binTimes(); }
 
     BaselineMode getBaselineMode() const;
+    WhiteningMode getWhiteningMode() const;
+
+    /** The 1/f exponent the fitted whitening recovered for this channel, or 0 if
+        no fit is current. Worth surfacing: chi is a result, not just a nuisance
+        parameter. */
+    double getFittedExponent (TriggerSource* source, int channelIndex) const;
 
     /** Per-trial line spectra, or nullptr outside Spectrum mode. */
     const TrialSpectrumBuffer* getTrialBuffer (TriggerSource* source) const;
@@ -130,6 +148,22 @@ private:
         pre-trigger *time bins* of the same spectrogram. */
     void applyBaseline (std::span<double> values, BaselineMode mode) const;
 
+    /** Applies whichever baseline normalisation is configured to one frequency's
+        bins, choosing between the time-axis and separate-window paths. */
+    void applyBaselineToFrequency (TriggerSource* source,
+                                   int channelIndex,
+                                   int frequencyIndex,
+                                   std::span<double> values) const;
+
+    /** Removes the 1/f background from a line spectrum, in place. Spectrum mode
+        only: a spectrogram is whitened per frequency across all its time bins,
+        which needs the whole grid rather than one frequency's worth. */
+    void applyWhitening (TriggerSource* source, int channelIndex, std::span<double> values) const;
+
+    /** Recomputes the aperiodic fits from the current accumulators. Called when
+        the display asks for data and the fits are stale. */
+    void refreshAperiodicFits() const;
+
     /** Applies normalisation against a separately estimated pre-trigger
         spectrum. `baseline` is the mean pre-trigger power at this frequency and
         `baselineSd` its spread across trials, used only for z-scoring. */
@@ -157,6 +191,12 @@ private:
 
     /** Captures waiting for a commit message. */
     PendingCaptureStore<PendingTrial> m_pendingCaptures;
+
+    /** Aperiodic fit per (source, channel), cached because fitting every
+        frequency request would be wasteful and the fit only changes when trials
+        are added. */
+    mutable std::map<std::pair<TriggerSource*, int>, AperiodicFit> m_aperiodicFits;
+    mutable int m_fitsTrialCount = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)
 };

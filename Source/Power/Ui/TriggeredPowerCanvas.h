@@ -98,6 +98,7 @@ private:
 
     /** Scratch reused across updates so a refresh does not allocate. */
     std::vector<double> m_binScratch;
+    std::vector<double> m_gridScratch;
     std::vector<float> m_valueScratch;
 
     ColorMapType m_colorMapType = ColorMapType::Viridis;

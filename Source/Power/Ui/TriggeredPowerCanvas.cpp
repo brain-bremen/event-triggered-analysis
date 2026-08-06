@@ -156,13 +156,20 @@ void TriggeredPowerCanvas::updatePanelData()
 
     const bool spectrogram = (m_node->getEstimateMode() == EstimateMode::Spectrogram);
     const auto mode = m_node->getBaselineMode();
+    const auto whitening = m_node->getWhiteningMode();
+
+    // dB / percent / z-score are already signed and comparable; whitened power is
+    // a ratio around 1, which reads best in dB. Only raw power needs the log to
+    // compress its decades.
+    const bool plotInDecibels = (mode == BaselineMode::None);
 
     // In dB / percent / z-score the data is signed and centred on zero, so a
     // diverging map is the honest default; raw power is one-sided.
+    const bool signedQuantity = (mode != BaselineMode::None) || (whitening != WhiteningMode::None);
+
     const ColorMapType effectiveMap =
-        (mode != BaselineMode::None && m_colorMapType == ColorMapType::Viridis)
-            ? ColorMapType::Diverging
-            : m_colorMapType;
+        (signedQuantity && m_colorMapType == ColorMapType::Viridis) ? ColorMapType::Diverging
+                                                                   : m_colorMapType;
 
     // Hold the node's lock only while copying values out.
     const auto lock = m_node->lockData();
@@ -183,34 +190,29 @@ void TriggeredPowerCanvas::updatePanelData()
             continue;
         }
 
-        bool any = false;
+        // One call for the whole grid: whitening needs the entire frequency axis
+        // at once, so it cannot go through the per-frequency accessor.
+        m_gridScratch.resize (static_cast<std::size_t> (numFrequencies) * numBins);
 
-        for (int f = 0; f < numFrequencies; ++f)
-        {
-            if (! m_node->getPowerForDisplay (key.source, key.channelIndex, f, m_binScratch))
-                continue;
-
-            any = true;
-
-            float* destination = m_valueScratch.data() + static_cast<std::size_t> (f) * numBins;
-
-            for (int bin = 0; bin < numBins; ++bin)
-            {
-                const double value = m_binScratch[static_cast<std::size_t> (bin)];
-
-                // Raw power spans decades, so plot it in dB unless a baseline
-                // mode has already produced a signed, comparable quantity.
-                destination[bin] =
-                    (mode == BaselineMode::None)
-                        ? static_cast<float> (10.0 * std::log10 (std::max (value, 1e-30)))
-                        : static_cast<float> (value);
-            }
-        }
-
-        if (! any)
+        if (! m_node->getPowerGridForDisplay (key.source, key.channelIndex, m_gridScratch))
         {
             panel->setValues ({}, 0, 0);
             continue;
+        }
+
+        for (int f = 0; f < numFrequencies; ++f)
+        {
+            for (int bin = 0; bin < numBins; ++bin)
+            {
+                const std::size_t index = static_cast<std::size_t> (f) * numBins + bin;
+                const double value = m_gridScratch[index];
+
+                // Raw power spans decades, so plot it in dB unless a baseline or
+                // whitening mode has already produced a comparable quantity.
+                m_valueScratch[index] =
+                    plotInDecibels ? static_cast<float> (10.0 * std::log10 (std::max (value, 1e-30)))
+                                   : static_cast<float> (value);
+            }
         }
 
         if (spectrogram)
@@ -254,7 +256,9 @@ void TriggeredPowerCanvas::applySharedScale()
         return;
 
     // A diverging scale is only meaningful when it is symmetric about zero.
-    if (m_node != nullptr && m_node->getBaselineMode() != BaselineMode::None)
+    if (m_node != nullptr
+        && (m_node->getBaselineMode() != BaselineMode::None
+            || m_node->getWhiteningMode() != WhiteningMode::None))
     {
         const float extent = std::max (std::abs (low), std::abs (high));
         low = -extent;

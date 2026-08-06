@@ -88,6 +88,120 @@ void TriggeredPowerNode::registerAdditionalParameters()
                        10000.0f,
                        10.0f,
                        false);
+
+    addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
+                             ParameterNames::whitening_mode,
+                             "Whiten",
+                             "Remove the aperiodic 1/f background",
+                             { "None", "Fixed exponent", "Fitted 1/f" },
+                             0,
+                             false);
+
+    addFloatParameter (Parameter::PROCESSOR_SCOPE,
+                       ParameterNames::whitening_exponent,
+                       "Exponent",
+                       "Exponent used by fixed-exponent whitening",
+                       "",
+                       1.0f,
+                       0.0f,
+                       4.0f,
+                       0.1f,
+                       false);
+}
+
+WhiteningMode TriggeredPowerNode::getWhiteningMode() const
+{
+    auto* parameter = getParameter (ParameterNames::whitening_mode);
+
+    if (parameter == nullptr)
+        return WhiteningMode::None;
+
+    return static_cast<WhiteningMode> (
+        static_cast<CategoricalParameter*> (parameter)->getSelectedIndex());
+}
+
+double TriggeredPowerNode::getFittedExponent (TriggerSource* source, int channelIndex) const
+{
+    const auto it = m_aperiodicFits.find ({ source, channelIndex });
+    return (it != m_aperiodicFits.end() && it->second.valid) ? it->second.exponent : 0.0;
+}
+
+void TriggeredPowerNode::refreshAperiodicFits() const
+{
+    const int numFrequencies = m_engine.numFrequencies();
+    const auto frequencies = m_engine.frequencies();
+
+    if (numFrequencies <= 0 || frequencies.empty())
+        return;
+
+    // The fit is estimated from the trial-averaged spectrum, averaged over time
+    // bins in spectrogram mode. Fitting per time bin would be noisier and would
+    // partly absorb the very time-varying changes the plugin exists to show.
+    std::vector<double> averaged (static_cast<std::size_t> (numFrequencies));
+
+    int newestTrialCount = 0;
+
+    for (const auto& [source, accumulator] : m_accumulators)
+    {
+        if (accumulator.numTrials() == 0)
+            continue;
+
+        newestTrialCount = std::max (newestTrialCount, accumulator.numTrials());
+
+        for (int channel = 0; channel < accumulator.numChannels(); ++channel)
+        {
+            for (int f = 0; f < numFrequencies; ++f)
+            {
+                const auto bins = accumulator.mean (channel, f);
+
+                if (bins.empty())
+                {
+                    averaged[static_cast<std::size_t> (f)] = 0.0;
+                    continue;
+                }
+
+                double sum = 0.0;
+                for (const double value : bins)
+                    sum += value;
+
+                averaged[static_cast<std::size_t> (f)] = sum / static_cast<double> (bins.size());
+            }
+
+            m_aperiodicFits[{ source, channel }] = fitAperiodic (frequencies, averaged);
+        }
+    }
+
+    m_fitsTrialCount = newestTrialCount;
+}
+
+void TriggeredPowerNode::applyWhitening (TriggerSource* source,
+                                         int channelIndex,
+                                         std::span<double> values) const
+{
+    const auto mode = getWhiteningMode();
+
+    if (mode == WhiteningMode::None)
+        return;
+
+    const auto frequencies = m_engine.frequencies();
+
+    if (frequencies.size() != values.size())
+        return;
+
+    if (mode == WhiteningMode::FixedExponent)
+    {
+        double exponent = 1.0;
+        if (auto* parameter = getParameter (ParameterNames::whitening_exponent))
+            exponent = parameter->getValue();
+
+        applyFixedExponentWhitening (frequencies, values, exponent);
+        return;
+    }
+
+    const auto it = m_aperiodicFits.find ({ source, channelIndex });
+
+    if (it != m_aperiodicFits.end())
+        applyFittedWhitening (frequencies, values, it->second);
 }
 
 bool TriggeredPowerNode::isAnalysisParameter (const juce::String& parameterName) const
@@ -477,6 +591,44 @@ void TriggeredPowerNode::applyBaseline (std::span<double> values, BaselineMode m
     }
 }
 
+void TriggeredPowerNode::applyBaselineToFrequency (TriggerSource* source,
+                                                   int channelIndex,
+                                                   int frequencyIndex,
+                                                   std::span<double> values) const
+{
+    const auto mode = getBaselineMode();
+
+    if (mode == BaselineMode::None)
+        return;
+
+    if (m_engine.hasSeparateBaseline())
+    {
+        const auto baseline = m_baselineAccumulators.find (source);
+
+        if (baseline == m_baselineAccumulators.end())
+            return;
+
+        const auto baselineMean = baseline->second.mean (channelIndex, frequencyIndex);
+
+        if (baselineMean.empty())
+            return;
+
+        double baselineSd = 0.0;
+
+        if (mode == BaselineMode::ZScore)
+        {
+            double sem = 0.0;
+            baseline->second.standardError (channelIndex, frequencyIndex, std::span<double> (&sem, 1));
+            baselineSd = sem * std::sqrt (static_cast<double> (baseline->second.numTrials()));
+        }
+
+        applyBaselineValue (values, baselineMean[0], baselineSd, mode);
+        return;
+    }
+
+    applyBaseline (values, mode);
+}
+
 bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
                                              int channelIndex,
                                              int frequencyIndex,
@@ -566,6 +718,75 @@ void TriggeredPowerNode::applyBaselineValue (std::span<double> values,
         default:
             break;
     }
+}
+
+bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
+                                                 int channelIndex,
+                                                 std::span<double> grid) const
+{
+    const auto it = m_accumulators.find (source);
+
+    if (it == m_accumulators.end() || it->second.numTrials() == 0)
+        return false;
+
+    const int numFrequencies = m_engine.numFrequencies();
+    const int numBins = m_engine.numAccumulatorBins();
+
+    if (numFrequencies <= 0 || numBins <= 0
+        || grid.size() < static_cast<std::size_t> (numFrequencies) * numBins)
+        return false;
+
+    for (int f = 0; f < numFrequencies; ++f)
+    {
+        const auto mean = it->second.mean (channelIndex, f);
+
+        if (mean.size() != static_cast<std::size_t> (numBins))
+            return false;
+
+        std::copy (mean.begin(), mean.end(), grid.begin() + static_cast<std::ptrdiff_t> (f) * numBins);
+    }
+
+    const auto baselineMode = getBaselineMode();
+
+    if (baselineMode != BaselineMode::None)
+    {
+        // A baseline already divides out anything common to the pre- and
+        // post-trigger spectra, and 1/f is exactly that. Whitening on top would
+        // be redundant at best; applied to the response alone it would be wrong,
+        // because the baseline it is compared against was not whitened. So the
+        // two are alternatives, not a pipeline - which corrects what the plan
+        // originally assumed.
+        for (int f = 0; f < numFrequencies; ++f)
+            applyBaselineToFrequency (
+                source, channelIndex, f, grid.subspan (static_cast<std::size_t> (f) * numBins, numBins));
+
+        return true;
+    }
+
+    if (getWhiteningMode() != WhiteningMode::None)
+    {
+        if (m_fitsTrialCount != it->second.numTrials())
+            refreshAperiodicFits();
+
+        // Whiten each time bin across the frequency axis, using one background
+        // estimated from the trial- and time-averaged spectrum.
+        std::vector<double> column (static_cast<std::size_t> (numFrequencies));
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            for (int f = 0; f < numFrequencies; ++f)
+                column[static_cast<std::size_t> (f)] =
+                    grid[static_cast<std::size_t> (f) * numBins + bin];
+
+            applyWhitening (source, channelIndex, column);
+
+            for (int f = 0; f < numFrequencies; ++f)
+                grid[static_cast<std::size_t> (f) * numBins + bin] =
+                    column[static_cast<std::size_t> (f)];
+        }
+    }
+
+    return true;
 }
 
 void TriggeredPowerNode::refreshDisplay()

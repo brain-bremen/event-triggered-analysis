@@ -360,7 +360,7 @@ or be rejected in the UI.
 
 ---
 
-## Spectral whitening (1/f removal) **[todo]**
+## Spectral whitening (1/f removal) **[done]**
 
 ### Why
 
@@ -384,8 +384,14 @@ therefore:
 - never discards accumulated data, so it can be toggled freely mid-experiment;
 - costs nothing until the display asks for values;
 - composes with baseline normalisation — whitening is applied *first*, then the
-  baseline mode, so `dB change from baseline` of whitened data still means what it
-  says.
+  baseline mode.
+
+**[changed]** In implementation the two turned out to be **alternatives, not a
+pipeline**. A baseline divides out anything common to the pre- and post-trigger
+spectra, and 1/f is exactly that — so whitening on top is redundant at best, and
+applied to the response alone it would be *wrong*, since the baseline it is
+compared against was not whitened. Whitening is therefore skipped whenever a
+baseline mode is active.
 
 **It applies to TriggeredPower only.** Coherence is a normalised ratio,
 `|ΣSxy|² / (ΣSxx · ΣSyy)`, so any per-frequency gain cancels exactly. Whitening a
@@ -401,13 +407,18 @@ Four, exposed as `whitening_mode`:
 | `None` | pass through | baseline mode already removes 1/f |
 | `Fixed exponent` | `P'(f) = P(f) · f^χ`, χ from `whitening_exponent` (default 1.0) | quick, predictable, no estimation; good when χ is known |
 | `Fitted aperiodic` | robust log-log fit of `log10 P = b − χ·log10 f`, then subtract | the principled default; also *reports* χ, which is itself of interest |
-| `Running reference` | divide by an exponential moving average of the spectrum across trials | when the background is not a clean power law |
+| `Running reference` | divide by an exponential moving average of the spectrum across trials | **[todo]** when the background is not a clean power law |
 
 **Fitted aperiodic** is the recommended default and needs care in one respect: the
-oscillatory peaks bias an ordinary least-squares fit upwards, flattening χ. Use
-FOOOF's trick — fit, discard the frequency points lying above the fit, refit, and
-iterate two or three times. That converges to the lower envelope, which is the
-aperiodic component. Optionally extend to a knee term, `b − log10(k + f^χ)`, when the
+oscillatory peaks bias an ordinary least-squares fit upwards, flattening χ.
+
+**[changed]** The plan originally called for FOOOF's trick — fit, discard the points
+above the fit, refit. That was implemented and measurably *over*-corrected: on a
+1/f² spectrum with a 10 Hz peak it returned χ = 2.18. Peaks are not spread evenly
+across the band, so discarding them removes frequency support asymmetrically and
+tilts the line. The implementation uses **Theil–Sen** instead — the median of all
+pairwise slopes — which needs no iteration or tuning and has a breakdown point near
+29%. Optionally extend to a knee term, `b − log10(k + f^χ)`, when the
 band spans the bend that most LFP spectra show around 10–20 Hz; make it a toggle
 rather than always-on, since fitting a knee over a narrow band is unstable.
 
@@ -446,11 +457,14 @@ the accumulators.
   give a spectrum flat to floating-point tolerance.
 - Peak *frequency* must be unchanged by every mode — whitening rescales, it must not
   shift.
-- The peak-biasing case: a spectrum with a very strong wide peak must still yield an
-  aperiodic fit close to the true background, confirming the iterative rejection
-  works and plain OLS would not.
-- Coherence must be bit-identical with whitening on and off, confirming the
-  no-op claim above.
+- The peak-biasing case: a realistic alpha peak (σ ≈ 1.5 Hz at 10 Hz, ~21% of a
+  log-spaced grid) must leave χ recovered to 0.15.
+- **The breakdown point is tested, not hidden.** A peak wide enough to cover more
+  than ~29% of the grid *does* bias the estimate, and a test pins that down so a
+  future estimator change is a deliberate decision. Note how quickly this happens
+  on a log grid: σ = 4 Hz at 10 Hz spans 2–22 Hz, which is 52% of a 2–200 Hz grid.
+- Coherence is unaffected by construction (the gain cancels in the ratio), so no
+  whitening control is offered there.
 
 ---
 

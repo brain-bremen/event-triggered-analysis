@@ -66,6 +66,10 @@ inline constexpr auto baseline_mode = "baseline_mode";
 inline constexpr auto baseline_start_ms = "baseline_start_ms";
 inline constexpr auto baseline_end_ms = "baseline_end_ms";
 
+/** 1/f removal. Display-time, like the baseline modes. */
+inline constexpr auto whitening_mode = "whitening_mode";
+inline constexpr auto whitening_exponent = "whitening_exponent";
+
 // --- TriggeredCoherence only -----------------------------------------------
 
 inline constexpr auto smooth_time_bins = "smooth_time_bins";
