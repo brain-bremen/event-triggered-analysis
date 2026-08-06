@@ -1,0 +1,9 @@
+spectra_add_plugin(TriggeredCoherence
+    ${CMAKE_CURRENT_SOURCE_DIR}/OpenEphysLib.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredCoherenceNode.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredCoherenceNode.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceEditor.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceCanvas.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceCanvas.h
+)

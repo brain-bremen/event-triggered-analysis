@@ -1,0 +1,10 @@
+-xc++
+-std=c++23
+-DOEPLUGIN
+-I../../plugin-GUI/JuceLibraryCode/modules/
+-I../../plugin-GUI/JuceLibraryCode/
+-I../../plugin-GUI/Plugins/Headers/
+-I../../plugin-GUI/installed_libs/include/
+-ISource/Core/
+-ISource/
+-Ilibs/windows/include/

@@ -1,0 +1,62 @@
+/*
+    ------------------------------------------------------------------
+
+    This file is part of the Open Ephys GUI plugin TriggeredCoherence.
+    Copyright (C) 2026 Joscha Schmiedt, Universität Bremen
+
+    ------------------------------------------------------------------
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+*/
+#include "TriggeredCoherenceEditor.h"
+
+#include "../TriggeredCoherenceNode.h"
+#include "TriggeredCoherenceCanvas.h"
+
+namespace TriggeredSpectra
+{
+
+TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
+    : VisualizerEditor (parentNode, "TRIG COHER", 220)
+{
+    addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 30);
+
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 70);
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 70);
+
+    for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
+    {
+        if (auto* parameterEditor = getParameterEditor (name))
+        {
+            parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
+            parameterEditor->setBounds (
+                parameterEditor->getX(), parameterEditor->getY(), 90, 36);
+        }
+    }
+
+    addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 115);
+}
+
+Visualizer* TriggeredCoherenceEditor::createNewCanvas()
+{
+    auto* node = static_cast<TriggeredCoherenceNode*> (getProcessor());
+
+    m_canvas = new TriggeredCoherenceCanvas (node);
+    node->setCanvas (m_canvas);
+
+    return m_canvas;
+}
+
+} // namespace TriggeredSpectra
