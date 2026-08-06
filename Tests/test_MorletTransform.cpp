@@ -10,8 +10,10 @@
 #include "Core/MorletTransform.h"
 
 #include <cmath>
+#include <complex>
 #include <gtest/gtest.h>
 #include <numbers>
+#include <random>
 #include <vector>
 
 using namespace TriggeredSpectra;
@@ -355,7 +357,7 @@ TEST (MorletTransform, ReportsBinTimesRelativeToTheTrigger)
     EXPECT_GT (times.back(), 0.0);
 }
 
-TEST (MorletTransform, NoiseBandwidthsGrowWithFrequency)
+TEST (MorletTransform, PsdScaleFollowsTheFilterBandwidth)
 {
     const FrequencyGrid grid (5.0, 100.0, 20, FrequencySpacing::Logarithmic, sampleRate);
 
@@ -368,19 +370,83 @@ TEST (MorletTransform, NoiseBandwidthsGrowWithFrequency)
     TfCoefficients output;
     transform.process (trial, std::span<const int> (&channel, 1), output);
 
-    const auto bandwidths = output.noiseBandwidths();
-    ASSERT_EQ (static_cast<int> (bandwidths.size()), grid.size());
+    EXPECT_EQ (output.binAxis(), BinAxis::Time);
 
-    // At fixed cycle count sigma_f is proportional to f, so the bandwidth must
-    // rise monotonically across a log grid.
-    for (int f = 0; f + 1 < grid.size(); ++f)
-        EXPECT_LT (bandwidths[static_cast<std::size_t> (f)],
-                   bandwidths[static_cast<std::size_t> (f + 1)])
-            << "frequency index " << f;
+    const auto frequencies = output.frequencies();
+    ASSERT_EQ (static_cast<int> (frequencies.size()), grid.size());
+    EXPECT_NEAR (frequencies.front(), 5.0, 1e-12);
+    EXPECT_NEAR (frequencies.back(), 100.0, 1e-12);
 
-    // sigma_f = f / cycles, ENBW = sigma_f * sqrt(pi), with cycles = 7 here.
+    const auto scale = output.psdScale();
+    ASSERT_EQ (static_cast<int> (scale.size()), grid.size());
+
+    // sigma_f = f / cycles, ENBW = sigma_f * sqrt(pi), psdScale = 1 / (2 ENBW),
+    // with cycles fixed at 7 in makeConfig.
     for (int f = 0; f < grid.size(); ++f)
-        EXPECT_NEAR (bandwidths[static_cast<std::size_t> (f)],
-                     (grid[f] / 7.0) * std::sqrt (std::numbers::pi),
-                     1e-9);
+    {
+        const double enbw = (grid[f] / 7.0) * std::sqrt (std::numbers::pi);
+        EXPECT_NEAR (scale[static_cast<std::size_t> (f)], 1.0 / (2.0 * enbw), 1e-12)
+            << "frequency index " << f;
+    }
+
+    // Wider filters at higher frequency mean a smaller density for the same
+    // squared amplitude, so the scale must fall monotonically.
+    for (int f = 0; f + 1 < grid.size(); ++f)
+        EXPECT_GT (scale[static_cast<std::size_t> (f)], scale[static_cast<std::size_t> (f + 1)])
+            << "frequency index " << f;
+}
+
+/** The claim that makes the two modes comparable: white noise of known variance
+    must integrate to that variance across the frequency axis. */
+TEST (MorletTransform, PsdOfWhiteNoiseIntegratesToItsVariance)
+{
+    constexpr int pre = 0, post = 4000, pad = 2000;
+    constexpr double variance = 4.0;
+
+    // Linear grid so a simple rectangular sum approximates the integral.
+    const FrequencyGrid grid (20.0, 400.0, 96, FrequencySpacing::Linear, sampleRate);
+
+    MorletTransform transform;
+    auto config = makeConfig (pre, post, pad, grid);
+    config.cyclesLow = 7.0;
+    config.cyclesHigh = 7.0;
+    ASSERT_TRUE (transform.prepare (config));
+
+    const int totalSamples = pre + post + 2 * pad;
+    juce::AudioBuffer<float> trial (1, totalSamples);
+
+    std::mt19937 generator (12345);
+    std::normal_distribution<double> gaussian (0.0, std::sqrt (variance));
+
+    for (int i = 0; i < totalSamples; ++i)
+        trial.setSample (0, i, static_cast<float> (gaussian (generator)));
+
+    const int channel = 0;
+    TfCoefficients output;
+    transform.process (trial, std::span<const int> (&channel, 1), output);
+
+    const auto frequencies = output.frequencies();
+    const auto scale = output.psdScale();
+    const double df = frequencies[1] - frequencies[0];
+
+    // Average the PSD over time at each frequency, then integrate over frequency.
+    double integral = 0.0;
+
+    for (int f = 0; f < output.numFrequencies(); ++f)
+    {
+        const auto bins = output.bins (0, f);
+
+        double meanSquared = 0.0;
+        for (const auto& value : bins)
+            meanSquared += std::norm (std::complex<double> (value.real(), value.imag()));
+        meanSquared /= static_cast<double> (bins.size());
+
+        integral += meanSquared * scale[static_cast<std::size_t> (f)] * df;
+    }
+
+    // White noise over [0, fs/2] carries variance uniformly, so the grid's
+    // 20-400 Hz span should hold (380/500) of it.
+    const double expected = variance * (400.0 - 20.0) / (sampleRate / 2.0);
+
+    EXPECT_NEAR (integral, expected, 0.15 * expected);
 }

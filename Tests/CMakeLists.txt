@@ -18,6 +18,9 @@ set(SPECTRA_TEST_SOURCES
     test_Fftw.cpp
     test_Dpss.cpp
     test_MorletTransform.cpp
+    test_TaperedPeriodogram.cpp
+    test_Accumulators.cpp
+    test_SpectralPipeline.cpp
 )
 
 enable_testing()

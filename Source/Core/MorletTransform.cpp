@@ -121,6 +121,15 @@ bool MorletTransform::prepare (const Config& config)
             sigmaFrequency * std::sqrt (std::numbers::pi);
     }
 
+    // Coefficients are amplitude-calibrated, so |X|^2 is squared envelope
+    // amplitude. Halving turns that into the mean square of the underlying real
+    // oscillation, and dividing by the filter bandwidth makes it a density.
+    m_psdScale.resize (static_cast<std::size_t> (numFrequencies));
+
+    for (int f = 0; f < numFrequencies; ++f)
+        m_psdScale[static_cast<std::size_t> (f)] =
+            1.0 / (2.0 * m_noiseBandwidths[static_cast<std::size_t> (f)]);
+
     // --- Bin times --------------------------------------------------------
     // Bin b reads input sample padSamples + b*decimation, and the trigger sits
     // preSamples into the trimmed window, so relative to the trigger:
@@ -173,7 +182,9 @@ void MorletTransform::process (const juce::AudioBuffer<float>& trial,
     }
 
     output.setSize (numChannels, numFrequencies, m_numOutputBins);
-    output.setNoiseBandwidths (m_noiseBandwidths);
+    output.setBinAxis (BinAxis::Time);
+    output.setFrequencies (m_config.frequencies.frequencies());
+    output.setPsdScale (m_psdScale);
     output.setBinTimes (m_binTimes);
 
     const int availableSamples = std::min (m_config.inputLength, trial.getNumSamples());

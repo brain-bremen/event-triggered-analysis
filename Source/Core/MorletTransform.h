@@ -128,6 +128,7 @@ private:
     std::vector<double> m_kernels;
 
     std::vector<double> m_noiseBandwidths;
+    std::vector<double> m_psdScale;
     std::vector<double> m_binTimes;
 
     // Scratch, allocated once in prepare().

@@ -15,6 +15,8 @@ set(SPECTRA_CORE_SOURCES
     FrequencyGrid.cpp
     Dpss.cpp
     MorletTransform.cpp
+    TaperedPeriodogram.cpp
+    Accumulators.cpp
     TriggeredSpectraNode.cpp
 )
 
@@ -31,6 +33,8 @@ set(SPECTRA_CORE_HEADERS
     Dpss.h
     SpectralTransform.h
     MorletTransform.h
+    TaperedPeriodogram.h
+    Accumulators.h
     ParameterNames.h
     TriggeredSpectraNode.h
 )

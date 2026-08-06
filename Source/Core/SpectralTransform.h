@@ -31,27 +31,42 @@
 namespace TriggeredSpectra
 {
 
-/** Complex time-frequency coefficients for one trial.
+/** What the third axis of a TfCoefficients means.
+ *
+ *  The two estimators differ structurally, and pretending otherwise is how
+ *  normalisation bugs get in: a spectrogram's bins are independent points in
+ *  time, whereas a multitaper periodogram's "bins" are repeated estimates of the
+ *  *same* quantity that must be averaged together.
+ */
+enum class BinAxis
+{
+    /** Each bin is a time point. Reduce per bin; do not average across bins. */
+    Time,
+    /** Each bin is a taper. Average |X|^2 across bins to get one estimate. */
+    Taper
+};
+
+/** Complex spectral coefficients for one trial.
  *
  *  Every estimator produces one of these, so the power and coherence accumulators
- *  never need to know which transform ran. In Spectrum mode there is a single
- *  "time bin" per taper instead of a time axis.
+ *  never need to know which transform ran.
  *
  *  Layout is [channel][frequency][bin], contiguous in bin — the order both
  *  accumulators walk, and the order that lets a channel pair's cross-spectrum be
  *  computed from two linear scans.
  *
- *  ### Calibration
+ *  ### The calibration contract
  *
- *  Coefficients are **amplitude-calibrated analytic signals**: a real input
- *  `A cos(2*pi*f0*t + phi)` produces, at frequency `f0`, a coefficient of
- *  magnitude `A` and phase `2*pi*f0*t + phi`.
+ *  Power spectral density, in input-units^2 per Hz, is always
  *
- *  That convention was chosen because it is directly interpretable (|W| is the
- *  envelope amplitude in the input's units), the phase is the true signal phase
- *  so coherence comes out right, and it is trivial to assert in a test. Turning it
- *  into a power spectral density is the accumulator's job, using
- *  `noiseBandwidth()` below.
+ *      Time axis :  psd(f, bin) = |X(f, bin)|^2            * psdScale(f)
+ *      Taper axis:  psd(f)      = mean_over_bins |X(f, b)|^2 * psdScale(f)
+ *
+ *  Each transform sets `psdScale` to whatever its own conventions require, so a
+ *  Morlet spectrogram and a multitaper line spectrum of the same data come out in
+ *  the same units and toggling between the two modes does not move the numbers.
+ *  Coherence divides two such quantities, so the scale cancels and only the
+ *  pooling rule above matters there.
  */
 class TfCoefficients
 {
@@ -78,24 +93,21 @@ public:
 
     void clear();
 
-    /** Equivalent noise bandwidth of each frequency's filter, in Hz.
-     *
-     *  Converts squared amplitude to a spectral density:
-     *      PSD(f) = |W(f)|^2 / (2 * noiseBandwidth(f))
-     *
-     *  The factor of two turns squared analytic amplitude into the mean square of
-     *  the underlying real oscillation. Dividing by the bandwidth is what makes a
-     *  Morlet spectrogram and a multitaper line spectrum come out in the same
-     *  units, so toggling between the two modes does not move the numbers.
-     */
-    std::span<const double> noiseBandwidths() const { return m_noiseBandwidths; }
-    void setNoiseBandwidths (std::vector<double> bandwidths)
+    BinAxis binAxis() const noexcept { return m_binAxis; }
+    void setBinAxis (BinAxis axis) noexcept { m_binAxis = axis; }
+
+    /** Centre frequency of each frequency index, in Hz. */
+    std::span<const double> frequencies() const { return m_frequencies; }
+    void setFrequencies (std::vector<double> frequencies)
     {
-        m_noiseBandwidths = std::move (bandwidths);
+        m_frequencies = std::move (frequencies);
     }
 
-    /** Seconds from the trigger for each bin. Empty in Spectrum mode, where the
-        bins are tapers rather than times. */
+    /** Per-frequency multiplier taking |X|^2 to a spectral density. See above. */
+    std::span<const double> psdScale() const { return m_psdScale; }
+    void setPsdScale (std::vector<double> scale) { m_psdScale = std::move (scale); }
+
+    /** Seconds from the trigger for each bin. Empty when binAxis() is Taper. */
     std::span<const double> binTimes() const { return m_binTimes; }
     void setBinTimes (std::vector<double> times) { m_binTimes = std::move (times); }
 
@@ -108,8 +120,11 @@ private:
     }
 
     std::vector<Coefficient> m_data;
-    std::vector<double> m_noiseBandwidths;
+    std::vector<double> m_frequencies;
+    std::vector<double> m_psdScale;
     std::vector<double> m_binTimes;
+
+    BinAxis m_binAxis = BinAxis::Time;
 
     int m_numChannels = 0;
     int m_numFrequencies = 0;
