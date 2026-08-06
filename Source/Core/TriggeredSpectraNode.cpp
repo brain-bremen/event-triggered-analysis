@@ -476,15 +476,38 @@ void TriggeredSpectraNode::handleTTLEvent (TTLEventPtr event)
 void TriggeredSpectraNode::handleBroadcastMessage (const juce::String& message,
                                                    int64 /*systemTimeMillis*/)
 {
+    // Sweep stale captures first, so a commit message cannot resurrect one that
+    // should already have timed out.
+    discardExpiredPendingCaptures();
+
+    bool anythingCommitted = false;
+
     for (auto* source : m_triggerSources.getAll())
     {
-        if (source->armPattern.isNotEmpty() && message.containsIgnoreCase (source->armPattern))
-            source->canTrigger = true;
+        const auto actions = matchTriggerMessage (*source, message);
 
-        if (source->cancelPattern.isNotEmpty()
-            && message.containsIgnoreCase (source->cancelPattern))
+        if (! actions.any())
+            continue;
+
+        // Cancel wins over commit: if a configuration makes a message mean both,
+        // discarding is the safe reading.
+        if (actions.cancel)
+        {
             source->canTrigger = false;
+            discardPendingCapture (source);
+        }
+        else if (actions.commit)
+        {
+            if (commitPendingCapture (source))
+                anythingCommitted = true;
+        }
+
+        if (actions.arm)
+            source->canTrigger = true;
     }
+
+    if (anythingCommitted)
+        triggerAsyncUpdate();
 }
 
 // --- Worker callbacks ------------------------------------------------------

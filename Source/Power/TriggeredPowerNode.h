@@ -25,6 +25,7 @@
 #include "Core/Accumulators.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TrialSpectrumBuffer.h"
+#include "Core/TriggerMessaging.h"
 #include "Core/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
@@ -101,7 +102,26 @@ protected:
 
     void refreshDisplay() override;
 
+    bool commitPendingCapture (TriggerSource* source) override;
+    void discardPendingCapture (TriggerSource* source) override;
+    void discardExpiredPendingCaptures() override;
+
 private:
+    /** Everything a parked capture needs to be folded in later. Holding the
+        transformed result rather than the raw window means committing is just an
+        accumulate call. */
+    struct PendingTrial
+    {
+        TfCoefficients response;
+        TfCoefficients baseline;
+        bool hasBaseline = false;
+    };
+
+    /** Accumulates one already-transformed trial. Caller holds m_dataLock. */
+    bool accumulateTrial (TriggerSource* source,
+                          const TfCoefficients& response,
+                          const TfCoefficients* baseline);
+
     /** Bin range covered by the baseline window, in accumulator bins.
         Returns false if no usable baseline is configured. */
     bool getBaselineBinRange (int& firstBin, int& lastBin) const;
@@ -134,6 +154,9 @@ private:
     std::unordered_map<TriggerSource*, PowerAccumulator> m_baselineAccumulators;
     TfCoefficients m_baselineCoefficients;
     std::unordered_map<TriggerSource*, TrialSpectrumBuffer> m_trialBuffers;
+
+    /** Captures waiting for a commit message. */
+    PendingCaptureStore<PendingTrial> m_pendingCaptures;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)
 };

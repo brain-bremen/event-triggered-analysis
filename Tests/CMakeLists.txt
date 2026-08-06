@@ -21,6 +21,7 @@ set(SPECTRA_TEST_SOURCES
     test_TaperedPeriodogram.cpp
     test_Accumulators.cpp
     test_SpectralPipeline.cpp
+    test_TriggerMessaging.cpp
 )
 
 enable_testing()

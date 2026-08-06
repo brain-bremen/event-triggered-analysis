@@ -27,6 +27,7 @@
 #include "MultiChannelRingBuffer.h"
 #include "ParameterNames.h"
 #include "SpectralWorker.h"
+#include "TriggerMessaging.h"
 #include "TriggerSource.h"
 #include "Types.h"
 
@@ -155,6 +156,23 @@ protected:
 
     /** Refreshes the visualizer. Implemented by subclasses that own a canvas. */
     virtual void refreshDisplay() {}
+
+    /** True when a capture for this source must be parked rather than accumulated
+        immediately, i.e. the source has a commit pattern configured. */
+    static bool requiresCommit (const TriggerSource* source)
+    {
+        return source != nullptr && source->commitPattern.isNotEmpty();
+    }
+
+    /** Folds a parked capture into the accumulators. Returns true if there was
+        one. Implemented by subclasses that hold pending captures. */
+    virtual bool commitPendingCapture (TriggerSource*) { return false; }
+
+    /** Throws a parked capture away. */
+    virtual void discardPendingCapture (TriggerSource*) {}
+
+    /** Drops parked captures whose timeout has elapsed. */
+    virtual void discardExpiredPendingCaptures() {}
 
     MultiChannelRingBuffer m_ringBuffer;
     TriggerSources m_triggerSources;

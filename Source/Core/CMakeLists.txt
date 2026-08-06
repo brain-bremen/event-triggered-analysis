@@ -18,6 +18,7 @@ set(SPECTRA_CORE_SOURCES
     TaperedPeriodogram.cpp
     Accumulators.cpp
     SpectralEngine.cpp
+    TriggerMessaging.cpp
     Ui/ColorMap.cpp
     Ui/SpectrumPanel.cpp
     Ui/PanelGrid.cpp
@@ -40,6 +41,7 @@ set(SPECTRA_CORE_HEADERS
     TaperedPeriodogram.h
     Accumulators.h
     SpectralEngine.h
+    TriggerMessaging.h
     Ui/ColorMap.h
     Ui/SpectrumPanel.h
     Ui/PanelGrid.h

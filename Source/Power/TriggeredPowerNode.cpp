@@ -123,6 +123,7 @@ void TriggeredPowerNode::analysisConfigurationChanged()
     m_accumulators.clear();
     m_baselineAccumulators.clear();
     m_trialBuffers.clear();
+    m_pendingCaptures.clear();
 
     const auto& geometry = getTrialGeometry();
     const auto& channels = getSelectedChannels();
@@ -214,6 +215,8 @@ void TriggeredPowerNode::clearAllData()
 
         for (auto& [source, trialBuffer] : m_trialBuffers)
             trialBuffer.clear();
+
+        m_pendingCaptures.clear();
     }
 
     triggerAsyncUpdate();
@@ -244,56 +247,80 @@ bool TriggeredPowerNode::processCapturedTrial (const CaptureRequest& request,
     if (channels.isEmpty())
         return false;
 
+    const std::span<const int> channelSpan (channels.getRawDataPointer(),
+                                            static_cast<std::size_t> (channels.size()));
+
     // Transform outside the lock: this is the expensive part, and the display
     // thread only ever touches the accumulators.
-    m_engine.process (
-        trial,
-        std::span<const int> (channels.getRawDataPointer(), static_cast<std::size_t> (channels.size())),
-        m_coefficients);
+    m_engine.process (trial, channelSpan, m_coefficients);
 
     if (m_coefficients.empty())
         return false;
 
+    const bool wantBaseline = m_engine.hasSeparateBaseline();
+
+    if (wantBaseline)
+        m_engine.processBaseline (trial, channelSpan, m_baselineCoefficients);
+
     const juce::ScopedLock lock (m_dataLock);
 
-    const auto accumulator = m_accumulators.find (request.triggerSource);
+    // A source with a commit pattern does not accumulate on the TTL edge: the
+    // trial is parked until the experimenter says whether to keep it.
+    if (requiresCommit (request.triggerSource))
+    {
+        PendingTrial pending;
+        pending.response = m_coefficients;
+        pending.hasBaseline = wantBaseline && ! m_baselineCoefficients.empty();
+
+        if (pending.hasBaseline)
+            pending.baseline = m_baselineCoefficients;
+
+        m_pendingCaptures.store (request.triggerSource,
+                                 std::move (pending),
+                                 request.triggerSource->pendingTimeoutMs,
+                                 juce::Time::currentTimeMillis());
+
+        // Nothing has changed in the accumulators yet, so no repaint is due.
+        return false;
+    }
+
+    return accumulateTrial (request.triggerSource,
+                            m_coefficients,
+                            (wantBaseline && ! m_baselineCoefficients.empty())
+                                ? &m_baselineCoefficients
+                                : nullptr);
+}
+
+bool TriggeredPowerNode::accumulateTrial (TriggerSource* source,
+                                          const TfCoefficients& response,
+                                          const TfCoefficients* baseline)
+{
+    const auto accumulator = m_accumulators.find (source);
 
     if (accumulator == m_accumulators.end())
         return false;
 
-    if (! accumulator->second.addTrial (m_coefficients))
+    if (! accumulator->second.addTrial (response))
         return false;
 
     // Same trial, pre-trigger window. Transformed separately because a line
     // spectrum has no time axis to take a baseline from.
-    if (m_engine.hasSeparateBaseline())
-    {
-        if (const auto baseline = m_baselineAccumulators.find (request.triggerSource);
-            baseline != m_baselineAccumulators.end())
-        {
-            m_engine.processBaseline (trial,
-                                      std::span<const int> (channels.getRawDataPointer(),
-                                                            static_cast<std::size_t> (channels.size())),
-                                      m_baselineCoefficients);
-
-            if (! m_baselineCoefficients.empty())
-                baseline->second.addTrial (m_baselineCoefficients);
-        }
-    }
+    if (baseline != nullptr)
+        if (const auto it = m_baselineAccumulators.find (source); it != m_baselineAccumulators.end())
+            it->second.addTrial (*baseline);
 
     // In Spectrum mode also keep the trial itself, so the display can overlay
     // individual trials and the user can spot an artefact.
-    if (const auto trialBuffer = m_trialBuffers.find (request.triggerSource);
-        trialBuffer != m_trialBuffers.end())
+    if (const auto trialBuffer = m_trialBuffers.find (source); trialBuffer != m_trialBuffers.end())
     {
-        const int numChannels = m_coefficients.numChannels();
-        const int numFrequencies = m_coefficients.numFrequencies();
+        const int numChannels = response.numChannels();
+        const int numFrequencies = response.numFrequencies();
 
         std::vector<std::vector<float>> storage (static_cast<std::size_t> (numChannels));
         std::vector<std::span<const float>> spans;
         spans.reserve (static_cast<std::size_t> (numChannels));
 
-        const auto psdScale = m_coefficients.psdScale();
+        const auto psdScale = response.psdScale();
 
         for (int channel = 0; channel < numChannels; ++channel)
         {
@@ -302,7 +329,7 @@ bool TriggeredPowerNode::processCapturedTrial (const CaptureRequest& request,
 
             for (int frequency = 0; frequency < numFrequencies; ++frequency)
             {
-                const auto bins = m_coefficients.bins (channel, frequency);
+                const auto bins = response.bins (channel, frequency);
 
                 double meanSquared = 0.0;
                 for (const auto& value : bins)
@@ -320,6 +347,31 @@ bool TriggeredPowerNode::processCapturedTrial (const CaptureRequest& request,
     }
 
     return true;
+}
+
+bool TriggeredPowerNode::commitPendingCapture (TriggerSource* source)
+{
+    const juce::ScopedLock lock (m_dataLock);
+
+    auto pending = m_pendingCaptures.take (source);
+
+    if (! pending.has_value())
+        return false;
+
+    return accumulateTrial (
+        source, pending->response, pending->hasBaseline ? &pending->baseline : nullptr);
+}
+
+void TriggeredPowerNode::discardPendingCapture (TriggerSource* source)
+{
+    const juce::ScopedLock lock (m_dataLock);
+    m_pendingCaptures.discard (source);
+}
+
+void TriggeredPowerNode::discardExpiredPendingCaptures()
+{
+    const juce::ScopedLock lock (m_dataLock);
+    m_pendingCaptures.discardExpired (juce::Time::currentTimeMillis());
 }
 
 bool TriggeredPowerNode::getBaselineBinRange (int& firstBin, int& lastBin) const
