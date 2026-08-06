@@ -2,9 +2,16 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
-Phases 1 and 2 are complete; 3 and 4 are partly done (estimation wired end to end,
-display still text-only); 5 is outstanding. Two decisions changed during
-implementation, both marked **[changed]** below.
+Phases 1–3 are complete. Phase 4 is partly done — coherence estimates fully, but
+the pair-configuration UI is missing, so no pairs can be created. Phase 5 is
+outstanding. Places where implementation diverged from this plan are marked
+**[changed]**; each says why.
+
+**Nothing here has been verified visually.** Every claim below rests on 110 unit
+tests and a clean build/install. Neither plugin has been watched rendering, and the
+display layer has no test coverage at all.
+
+See *Known gaps* near the end for what is unreachable from the UI today.
 
 ---
 
@@ -323,28 +330,36 @@ two ratios rather than a common gain.
 
 ---
 
-## Trigger arming, cancelling and committing **[part done]**
+## Trigger arming, cancelling and committing **[done]**
 
-Ported from `TriggeredAvg`, but only partly, and the gap is disguised because the
-unimplemented fields still round-trip through XML.
+Ported from `TriggeredAvg`, which has a complete implementation of this (plus 456
+lines of tests for it). For a while our port was partial in a way that was
+disguised — the unimplemented fields still round-tripped through XML, so the
+feature looked present from the outside.
 
 | Behaviour | Status |
 |---|---|
 | `armPattern` arms a `TTL_AND_MSG` source | **[done]** |
 | `cancelPattern` disarms it | **[done]** |
 | TTL edge gated on `canTrigger`, auto-disarm after firing | **[done]** |
-| `commitPattern` — hold the capture pending, commit on message | **[todo]** |
-| `pendingTimeoutMs` — auto-discard a stale pending capture | **[todo]** |
-| `MSG_TRIGGER` — message-only triggering, no TTL | **[todo]** selectable in the UI but never fires |
+| `commitPattern` — hold the capture pending, commit on message | **[done]** |
+| `pendingTimeoutMs` — auto-discard a stale pending capture | **[done]** |
 | Config UI for sources and patterns | **[done]** |
+| `MSG_TRIGGER` — message-only triggering, no TTL | **[todo]** selectable in the UI but never fires |
 
-**[done]** — the pending stage, the message rules and the config table all exist.
-One correctness note found by comparing against `TriggeredAvg`: cancelling must
-**not** clear `canTrigger` on a plain `TTL_TRIGGER` source. That type is always
-live and expects no arm message, so disarming it silences it for the whole
-session. Only message-gated types are disarmable; see `isMessageGated()`.
+### **[changed]** Cancelling must not disarm a plain TTL source
 
-Implementing it means a pending stage between the worker and the accumulators:
+Found by comparing against `TriggeredAvg`, which guards this and we initially did
+not. A `TTL_TRIGGER` source is always live: there is no arming concept for it and
+no arm message is expected, so clearing `canTrigger` silenced it for the rest of
+the session. Anyone configuring a cancel pattern to discard bad trials on a plain
+TTL source would have lost every subsequent trial.
+
+Cancelling still discards a parked capture for **every** source type — throwing
+away a bad trial is meaningful however the source fires — but only message-gated
+types are disarmable. See `isMessageGated()` and the named regression test.
+
+### How the pending stage works
 
 1. `SpectralWorker` extracts the trial as now.
 2. If the source has a `commitPattern`, the transformed result is held as a
@@ -358,9 +373,9 @@ Note the pending object here is a `TfCoefficients`, not a raw trial buffer — t
 transform has already run, so committing is just an `addTrial` call. That is
 cheaper than the reference implementation, which held the untransformed window.
 
-`MSG_TRIGGER` was a documented TODO in `TriggeredAvg` too, so it is not a
-regression, but a message-only source silently never fires and should either work
-or be rejected in the UI.
+`MSG_TRIGGER` is a documented TODO in `TriggeredAvg` too, so it is not a
+regression, but a message-only source is selectable in the config table and
+silently never fires. It should either work or be rejected in the UI.
 
 ---
 
@@ -474,8 +489,13 @@ the accumulators.
 
 ## UI **[part done]**
 
-Grid of panels in a `Viewport`, reusing `GridDisplay` + `OptionsBar` from
-`TriggeredAvg`. Power: one panel per selected channel. Coherence: one panel per pair.
+Grid of panels in a `Viewport`. Power: one panel per (trigger source, channel).
+Coherence: one panel per (trigger source, pair).
+
+**[changed]** `GridDisplay` / `SinglePlotPanel` were not ported from `TriggeredAvg`.
+A single `SpectrumPanel` handles both display modes, and `PanelGrid` replaces the
+grid container — the reference classes are built around a time-domain average and
+carry assumptions that do not survive a frequency axis.
 
 - **Spectrogram panel** — render into a cached `juce::Image` (`nFreq × nBins`, ARGB)
   through a colormap LUT, rebuilt only when `nTrials` changes (the invalidation trick
@@ -490,8 +510,18 @@ Grid of panels in a `Viewport`, reusing `GridDisplay` + `OptionsBar` from
 button generating "seed × all selected" pairs in one click, which is how these are
 used in practice. Mutations wrapped in `ProcessorAction` subclasses for undo/redo.
 
-Both canvases are currently Phase 1 status views showing geometry, channel count,
-per-source trial counts and dropped-request count.
+**[done]**: `ColorMap` (viridis / magma / diverging / greyscale via a 256-entry LUT),
+`SpectrumPanel` (heatmap and line modes, cached image and paths, log-aware frequency
+axis), `PanelGrid`, both canvases with an options bar (colormap, columns, panel
+height, shared scale, clear), and `TriggerSourceConfigWindow`.
+
+**[todo]**: the pair-configuration window, and a shared colour bar showing the
+value scale.
+
+Rendering notes worth keeping: heatmap row 0 is the *highest* frequency (frequency
+increases upwards on screen, image rows increase downwards); and
+`juce::Graphics::ScopedSaveState` is **not exported** by the GUI's import library,
+so transform-based drawing does not link in a plugin.
 
 ---
 
@@ -503,14 +533,14 @@ per-source trial counts and dropped-request count.
 2. **[done] FFT core.** `Dpss`, `Tapers`, `FrequencyGrid`, `MorletBank`,
    `MorletTransform`, `StftTransform`, `TaperedPeriodogram`, `Accumulators` — all
    JUCE-free so they test standalone (the reason `TrialSpectrumBuffer` is JUCE-free).
-3. **[part done] TriggeredPower.** Node computes spectra into accumulators, keeps
-   per-trial line spectra, and applies baseline normalisation (None/dB/%/z) at
-   display time. **[todo]**: spectral whitening (see above, same display-time code
-   path as the baseline) and the grid of spectrogram/line panels.
-4. **[part done] TriggeredCoherence.** Pair data model with seed generation and
-   XML persistence, cross-spectrum accumulation, coherence/phase, significance
-   threshold and smoothing all wired. **[todo]**: the pair config popup and the
-   panel display.
+3. **[done] TriggeredPower.** Spectra accumulate, per-trial line spectra are kept,
+   baseline normalisation (None/dB/%/z) and whitening both apply at display time,
+   and the panel grid renders both modes.
+4. **[part done] TriggeredCoherence.** Pair data model with seed generation and XML
+   persistence, cross-spectrum accumulation, coherence/phase, significance threshold
+   and smoothing all wired, and the panel grid renders. **[todo]**: the pair
+   configuration window — without it no pair can be created, so the plugin shows
+   "no pairs configured" and computes nothing.
 5. **[todo] Performance pass.** Batched `fftw_plan_many` everywhere, wisdom caching,
    profiling, and *only if measurements demand it* a thread pool over channels.
 
@@ -519,11 +549,67 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 
 ---
 
+## Known gaps **[todo]**
+
+The estimation core is complete and tested; the controls that make it reachable are
+not. These are ordered by how much they block actual use.
+
+### Most analysis parameters have no UI control
+
+The editor exposes five things: **TRIGGERS**, channels, pre, post, mode. Everything
+else is registered, functional and tested, but has no control anywhere — so it can
+only ever run at its default:
+
+`freq_min`, `freq_max`, `num_freqs`, `freq_spacing`, `tf_method`, `n_cycles_low`,
+`n_cycles_high`, `stft_window_ms`, `stft_hop_ms`, `line_method`, `nw`, `n_tapers`,
+`max_trials`, `baseline_mode`, `baseline_start_ms`, `baseline_end_ms`,
+`whitening_mode`, `whitening_exponent`, `smooth_time_bins`, `smooth_freq_bins`,
+`coherence_display`.
+
+Nineteen parameters will not fit in a 220 px editor, so this wants a settings popup
+in the same style as the trigger table, with the two or three most-used promoted
+onto the editor itself.
+
+### Coherence pairs cannot be created
+
+Covered above. The node supports add / remove / seed-against-all and persists pairs
+to XML; there is simply no window.
+
+### Nothing has been seen rendering
+
+No test touches the display layer, and neither plugin has been watched running.
+Layout, axis ticks, heatmap orientation and popup sizing are all unverified.
+
+### First-run experience needs two manual steps
+
+`addSelectedChannelsParameter` initialises to an empty `Array<var>`, so **no
+channels are selected** on a fresh drop, and no trigger source exists either.
+Nothing is computed until the user does both. The canvas says so ("Select channels
+and add a trigger source to begin"), but it is not zero-config.
+
+Adding a default trigger source would halve that. It must go in
+`initialize(signalChainIsLoading)`, **not** the constructor: `addTriggerSource`
+notifies the listener, which calls the pure-virtual `analysisConfigurationChanged()`,
+and doing that from the base constructor is a pure-virtual call.
+
+### Smaller items
+
+- `StftTransform` — the Hann alternative to Morlet. Selectable via `tf_method` but
+  falls back to Morlet.
+- Running-reference whitening — the third mode described above.
+- A pre-trigger *coherence* baseline, so coherence can show change-from-baseline.
+  Unlike whitening this is meaningful for coherence, being a difference of two
+  ratios rather than a common gain.
+- Undo/redo (`ProcessorAction`) for trigger-source and pair edits.
+- Phase 5 profiling, which is only worth doing once the plugins can be run.
+
+---
+
 ## Verification
 
 ### Unit tests
 
-**[done]** — 27 tests passing:
+**[done]** — 110 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -553,8 +639,18 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 - *Pipeline*: coherence isolates a shared component from an equally strong
   phase-independent one; independent channels sit near the null; Morlet and
   multitaper agree on band power; induced power survives random per-trial phase.
+- *Whitening*: exponent recovery on a pure power law and under noise; a realistic
+  alpha peak leaves χ intact; the ~29% breakdown point is pinned rather than
+  hidden; fitted whitening flattens the background and leaves the peak proud;
+  peak frequency never moves.
+- *Trigger messaging*: substring/case-insensitive matching; empty patterns are
+  disabled not wildcards; cancel beats commit; a plain TTL source is never
+  disarmed; per-source timeout expiry; move-only payloads; the full
+  arm → capture → commit / cancel / timeout sequences.
 
-**[todo]**: tests for the STFT alternative and for the display layer.
+**[todo]**: tests for the STFT alternative and for the display layer. The
+whitening, pre-trigger baseline and trigger-messaging paths are covered; the
+rendering path is not.
 
 ```sh
 cmake --build Build --config Release --target TriggeredSpectra_tests
