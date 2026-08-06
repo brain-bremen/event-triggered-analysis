@@ -63,6 +63,33 @@ struct TriggerMessageActions
 TriggerMessageActions matchTriggerMessage (const TriggerSource& source,
                                            const juce::String& message);
 
+/** True if the source's armed state is controlled by messages at all.
+ *
+ *  A plain TTL_TRIGGER source is always live: there is no arming concept, so
+ *  nothing may clear its canTrigger flag. Getting this wrong is quietly fatal —
+ *  a cancel message would disable the source permanently, because no arm message
+ *  is expected for that type and nothing else would ever set the flag again. */
+constexpr bool isMessageGated (TriggerType type)
+{
+    return type == TriggerType::TTL_AND_MSG_TRIGGER || type == TriggerType::MSG_TRIGGER;
+}
+
+/** What the caller must do with a parked capture after a message. */
+struct TriggerStateChange
+{
+    bool discardPending = false;
+    bool commitPending = false;
+};
+
+/** Applies a message's actions to `source`, updating its armed state, and reports
+ *  what should happen to any capture parked for it.
+ *
+ *  Cancel takes precedence over commit: if a configuration makes one message mean
+ *  both, discarding is the safe reading of an ambiguous instruction.
+ */
+TriggerStateChange applyTriggerMessage (TriggerSource& source,
+                                        const TriggerMessageActions& actions);
+
 /** Captures held between the TTL edge and the decision to keep them.
  *
  *  A source with a `commitPattern` does not accumulate on the edge. The trial is

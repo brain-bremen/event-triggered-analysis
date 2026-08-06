@@ -95,6 +95,103 @@ TEST (TriggerMessaging, OverlappingPatternsReportBothActions)
     EXPECT_TRUE (actions.cancel);
 }
 
+// --- Armed-state transitions -----------------------------------------------
+
+TEST (TriggerMessaging, OnlyMessageGatedTypesAreArmable)
+{
+    EXPECT_FALSE (isMessageGated (TriggerType::TTL_TRIGGER));
+    EXPECT_TRUE (isMessageGated (TriggerType::TTL_AND_MSG_TRIGGER));
+    EXPECT_TRUE (isMessageGated (TriggerType::MSG_TRIGGER));
+}
+
+/** Regression: a cancel message must not permanently disable a plain TTL source.
+ *
+ *  A TTL_TRIGGER source is always live - there is no arming concept for it, and
+ *  no arm message is expected. Clearing canTrigger would therefore silence it for
+ *  the rest of the session, and nothing would ever set the flag again. Cancelling
+ *  must still discard a parked capture, though: throwing away a bad trial is
+ *  meaningful regardless of how the source fires. */
+TEST (TriggerMessaging, CancelDoesNotDisarmAPlainTtlSource)
+{
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
+    source.cancelPattern = "ABORT";
+
+    ASSERT_TRUE (source.canTrigger) << "a plain TTL source starts live";
+
+    const auto actions = matchTriggerMessage (source, "ABORT");
+    const auto change = applyTriggerMessage (source, actions);
+
+    EXPECT_TRUE (source.canTrigger) << "must stay live, or it is silenced forever";
+    EXPECT_TRUE (change.discardPending) << "the parked trial should still be dropped";
+}
+
+TEST (TriggerMessaging, CancelDisarmsAMessageGatedSource)
+{
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    source.cancelPattern = "ABORT";
+    source.canTrigger = true;
+
+    const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "ABORT"));
+
+    EXPECT_FALSE (source.canTrigger);
+    EXPECT_TRUE (change.discardPending);
+}
+
+TEST (TriggerMessaging, ArmOnlyAffectsMessageGatedSources)
+{
+    TriggerSource gated ("gated", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    gated.armPattern = "GO";
+    ASSERT_FALSE (gated.canTrigger);
+
+    applyTriggerMessage (gated, matchTriggerMessage (gated, "GO"));
+    EXPECT_TRUE (gated.canTrigger);
+
+    // A plain TTL source is already live; arming is a no-op rather than an error.
+    TriggerSource plain ("plain", 0, TriggerType::TTL_TRIGGER);
+    plain.armPattern = "GO";
+
+    applyTriggerMessage (plain, matchTriggerMessage (plain, "GO"));
+    EXPECT_TRUE (plain.canTrigger);
+}
+
+TEST (TriggerMessaging, CancelWinsOverCommit)
+{
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    source.cancelPattern = "trial";
+    source.commitPattern = "trial";
+
+    const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "trial 7"));
+
+    EXPECT_TRUE (change.discardPending);
+    EXPECT_FALSE (change.commitPending) << "ambiguous instructions must not keep data";
+}
+
+TEST (TriggerMessaging, CommitAloneReportsCommit)
+{
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    source.commitPattern = "KEEP";
+
+    const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "KEEP"));
+
+    EXPECT_TRUE (change.commitPending);
+    EXPECT_FALSE (change.discardPending);
+}
+
+TEST (TriggerMessaging, UnrelatedMessageChangesNothing)
+{
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    source.armPattern = "GO";
+    source.cancelPattern = "ABORT";
+    source.commitPattern = "KEEP";
+    source.canTrigger = true;
+
+    const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "hello"));
+
+    EXPECT_TRUE (source.canTrigger);
+    EXPECT_FALSE (change.discardPending);
+    EXPECT_FALSE (change.commitPending);
+}
+
 // --- Pending capture store -------------------------------------------------
 
 TEST (PendingCaptureStore, StoresAndTakesByS)

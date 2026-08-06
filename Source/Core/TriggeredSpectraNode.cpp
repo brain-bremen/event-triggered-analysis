@@ -489,21 +489,13 @@ void TriggeredSpectraNode::handleBroadcastMessage (const juce::String& message,
         if (! actions.any())
             continue;
 
-        // Cancel wins over commit: if a configuration makes a message mean both,
-        // discarding is the safe reading.
-        if (actions.cancel)
-        {
-            source->canTrigger = false;
-            discardPendingCapture (source);
-        }
-        else if (actions.commit)
-        {
-            if (commitPendingCapture (source))
-                anythingCommitted = true;
-        }
+        const auto change = applyTriggerMessage (*source, actions);
 
-        if (actions.arm)
-            source->canTrigger = true;
+        if (change.discardPending)
+            discardPendingCapture (source);
+
+        if (change.commitPending && commitPendingCapture (source))
+            anythingCommitted = true;
     }
 
     if (anythingCommitted)

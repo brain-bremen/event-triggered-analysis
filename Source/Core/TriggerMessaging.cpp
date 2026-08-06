@@ -49,4 +49,31 @@ TriggerMessageActions matchTriggerMessage (const TriggerSource& source,
     return actions;
 }
 
+TriggerStateChange applyTriggerMessage (TriggerSource& source,
+                                        const TriggerMessageActions& actions)
+{
+    TriggerStateChange change;
+
+    if (actions.cancel)
+    {
+        // A parked capture is discarded whatever the source type: cancelling a
+        // trial is meaningful even for an always-live TTL source.
+        change.discardPending = true;
+
+        // Disarming, however, only applies to message-gated sources. Clearing the
+        // flag on a plain TTL source would disable it for the rest of the session.
+        if (isMessageGated (source.type))
+            source.canTrigger = false;
+    }
+    else if (actions.commit)
+    {
+        change.commitPending = true;
+    }
+
+    if (actions.arm && isMessageGated (source.type))
+        source.canTrigger = true;
+
+    return change;
+}
+
 } // namespace TriggeredSpectra
