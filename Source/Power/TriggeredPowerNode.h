@@ -22,15 +22,31 @@
 */
 #pragma once
 
+#include "Core/Accumulators.h"
+#include "Core/SpectralEngine.h"
+#include "Core/TrialSpectrumBuffer.h"
 #include "Core/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
+#include <memory>
 #include <unordered_map>
 
 namespace TriggeredSpectra
 {
 
 class TriggeredPowerCanvas;
+
+/** How accumulated power is normalised for display. */
+enum class BaselineMode
+{
+    None = 0,
+    /** 10 log10(power / baseline). The usual choice for a spectrogram. */
+    Decibel = 1,
+    /** 100 (power - baseline) / baseline. */
+    PercentChange = 2,
+    /** (power - baseline) / sd(baseline over time). */
+    ZScore = 3
+};
 
 /** Event-triggered power spectra: a spectrogram or a line spectrum per channel,
  *  accumulated across trials and split by trigger source.
@@ -47,8 +63,33 @@ public:
 
     void setCanvas (TriggeredPowerCanvas* canvas) { m_canvas = canvas; }
 
-    /** Trials accumulated so far for a source. Zero if the source is unknown. */
+    // --- Display access ----------------------------------------------------
+    // All of these take the data lock internally and are safe to call from the
+    // message thread while the worker is accumulating.
+
+    /** Scoped lock over the accumulated data. Hold it across a batch of reads so
+        the display sees one consistent snapshot. */
+    juce::ScopedLock lockData() const { return juce::ScopedLock (m_dataLock); }
+
     int getNumTrials (TriggerSource* source) const;
+
+    /** Mean PSD for one channel and frequency, already baseline-normalised if a
+        baseline mode is selected. `destination` must hold numBins() values.
+        Returns false if nothing has been accumulated yet. */
+    bool getPowerForDisplay (TriggerSource* source,
+                             int channelIndex,
+                             int frequencyIndex,
+                             std::span<double> destination) const;
+
+    int getNumFrequencies() const { return m_engine.numFrequencies(); }
+    int getNumBins() const { return m_engine.numAccumulatorBins(); }
+    std::span<const double> getFrequencies() const { return m_engine.frequencies(); }
+    std::span<const double> getBinTimes() const { return m_engine.binTimes(); }
+
+    BaselineMode getBaselineMode() const;
+
+    /** Per-trial line spectra, or nullptr outside Spectrum mode. */
+    const TrialSpectrumBuffer* getTrialBuffer (TriggerSource* source) const;
 
 protected:
     void registerAdditionalParameters() override;
@@ -61,12 +102,24 @@ protected:
     void refreshDisplay() override;
 
 private:
+    /** Bin range covered by the baseline window, in accumulator bins.
+        Returns false if no usable baseline is configured. */
+    bool getBaselineBinRange (int& firstBin, int& lastBin) const;
+
+    /** Applies the selected baseline normalisation in place. */
+    void applyBaseline (std::span<double> values, BaselineMode mode) const;
+
     TriggeredPowerCanvas* m_canvas = nullptr;
 
-    /** Phase 1 placeholder for the power accumulators: enough to prove the
-        capture path end to end. Replaced in Phase 2. */
+    /** Worker-thread only: transforms and their FFT plans. */
+    SpectralEngine m_engine;
+
+    /** Worker-thread scratch, reused across trials to avoid per-trial allocation. */
+    TfCoefficients m_coefficients;
+
     mutable juce::CriticalSection m_dataLock;
-    std::unordered_map<TriggerSource*, int> m_trialCounts;
+    std::unordered_map<TriggerSource*, PowerAccumulator> m_accumulators;
+    std::unordered_map<TriggerSource*, TrialSpectrumBuffer> m_trialBuffers;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)
 };

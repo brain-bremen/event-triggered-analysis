@@ -17,6 +17,7 @@ set(SPECTRA_CORE_SOURCES
     MorletTransform.cpp
     TaperedPeriodogram.cpp
     Accumulators.cpp
+    SpectralEngine.cpp
     TriggeredSpectraNode.cpp
 )
 
@@ -35,6 +36,7 @@ set(SPECTRA_CORE_HEADERS
     MorletTransform.h
     TaperedPeriodogram.h
     Accumulators.h
+    SpectralEngine.h
     ParameterNames.h
     TriggeredSpectraNode.h
 )

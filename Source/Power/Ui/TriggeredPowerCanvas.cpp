@@ -83,19 +83,66 @@ void TriggeredPowerCanvas::paint (juce::Graphics& g)
                 juce::Justification::left);
     y += 28;
 
+    const int numFrequencies = m_node->getNumFrequencies();
+    const int numBins = m_node->getNumBins();
+    const auto frequencies = m_node->getFrequencies();
+
+    g.drawText (juce::String ("Estimator: ") + juce::String (numFrequencies) + " frequencies x "
+                    + juce::String (numBins) + " bins"
+                    + (frequencies.empty()
+                           ? juce::String()
+                           : juce::String (" (") + juce::String (frequencies.front(), 1) + " - "
+                                 + juce::String (frequencies.back(), 1) + " Hz)"),
+                20,
+                y,
+                getWidth() - 40,
+                18,
+                juce::Justification::left);
+    y += 28;
+
+    const auto lock = m_node->lockData();
+
+    std::vector<double> values (static_cast<std::size_t> (std::max (1, numBins)));
+
     for (auto* source : m_node->getTriggerSources().getAll())
     {
         g.setColour (source->colour);
         g.fillRect (20, y + 4, 10, 10);
 
+        const int numTrials = m_node->getNumTrials (source);
+
+        juce::String line = source->name + "  (TTL line " + juce::String (source->line)
+                            + ")   trials: " + juce::String (numTrials);
+
+        // Report where the power actually is, so the plugin can be sanity-checked
+        // against a known input before the real display exists.
+        if (numTrials > 0 && numFrequencies > 0 && ! frequencies.empty())
+        {
+            double best = -std::numeric_limits<double>::max();
+            int argmax = 0;
+
+            for (int f = 0; f < numFrequencies; ++f)
+            {
+                if (! m_node->getPowerForDisplay (source, 0, f, values))
+                    continue;
+
+                for (int bin = 0; bin < numBins; ++bin)
+                {
+                    if (values[static_cast<std::size_t> (bin)] > best)
+                    {
+                        best = values[static_cast<std::size_t> (bin)];
+                        argmax = f;
+                    }
+                }
+            }
+
+            if (best > -std::numeric_limits<double>::max())
+                line += "   peak ch0: " + juce::String (frequencies[static_cast<std::size_t> (argmax)], 1)
+                        + " Hz";
+        }
+
         g.setColour (findColour (ThemeColours::defaultText));
-        g.drawText (source->name + "  (TTL line " + juce::String (source->line)
-                        + ")   trials: " + juce::String (m_node->getNumTrials (source)),
-                    38,
-                    y,
-                    getWidth() - 58,
-                    18,
-                    juce::Justification::left);
+        g.drawText (line, 38, y, getWidth() - 58, 18, juce::Justification::left);
         y += 22;
     }
 

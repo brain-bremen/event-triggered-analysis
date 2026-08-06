@@ -2,8 +2,9 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
-Phase 1 is complete. Phases 2–5 are outstanding. Two decisions changed during
-implementation; both are marked **[changed]** below.
+Phases 1 and 2 are complete; 3 and 4 are partly done (estimation wired end to end,
+display still text-only); 5 is outstanding. Two decisions changed during
+implementation, both marked **[changed]** below.
 
 ---
 
@@ -82,11 +83,14 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `TrialSpectrumBuffer.{h,cpp}` | **[done]** ported from `SingleTrialBuffer` |
 | `SpectralWorker.{h,cpp}` | **[done]** |
 | `TriggeredSpectraNode.{h,cpp}` | **[done]** **[changed]** — see below |
-| `Dpss.{h,cpp}`, `Tapers.h` | **[todo]** |
-| `FrequencyGrid.{h,cpp}` | **[todo]** |
-| `MorletBank.{h,cpp}`, `MorletTransform.{h,cpp}` | **[todo]** |
-| `StftTransform.{h,cpp}`, `TaperedPeriodogram.{h,cpp}` | **[todo]** |
-| `Accumulators.{h,cpp}`, `DataStore.{h,cpp}` | **[todo]** |
+| `Dpss.{h,cpp}`, `Tapers.h` | **[done]** matches scipy to 1e-9 |
+| `FrequencyGrid.{h,cpp}` | **[done]** |
+| `MorletTransform.{h,cpp}` (kernels folded in) | **[done]** |
+| `TaperedPeriodogram.{h,cpp}` | **[done]** |
+| `StftTransform.{h,cpp}` | **[todo]** Morlet is used meanwhile |
+| `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
+| `Accumulators.{h,cpp}` | **[done]** |
+| `DataStore.{h,cpp}` | **[done]** folded into each node |
 | `ColorMap.{h,cpp}` | **[todo]** |
 | `Ui/` shared widgets | **[todo]** |
 
@@ -114,7 +118,7 @@ SpectralWorker::run()  [background juce::Thread, Priority::high]
    ringBuffer.readAroundSample(trigger, pre + pad, post + pad, scratch)
        retry every 20 ms while NotEnoughNewData  (post data hasn't arrived yet)
        give up if the stream stops advancing or goes backwards
-   client->processCapturedTrial(request, trial)     <- estimator goes here [todo]
+   client->processCapturedTrial(request, trial)     <- SpectralEngine + accumulators
    client->capturesCommitted()  -> triggerAsyncUpdate()
 
 handleAsyncUpdate()  [message thread]  ->  canvas->refresh()
@@ -180,7 +184,7 @@ Other hazards, all handled in `Fftw.{h,cpp}`:
 
 ---
 
-## Core numerics **[todo]**
+## Core numerics **[done]**
 
 ### Morlet (spectrogram mode)
 
@@ -303,13 +307,16 @@ per-source trial counts and dropped-request count.
 1. **[done] Skeleton & plumbing.** Repo, CMake, FFTW vendoring + install to `shared/`,
    `OpenEphysLib.cpp` for both, ring buffer + `TriggerSource` + `SpectralWorker` with
    all four fixes, gtest harness. *Both DLLs load, capture trials, report trial counts.*
-2. **[todo] FFT core.** `Dpss`, `Tapers`, `FrequencyGrid`, `MorletBank`,
+2. **[done] FFT core.** `Dpss`, `Tapers`, `FrequencyGrid`, `MorletBank`,
    `MorletTransform`, `StftTransform`, `TaperedPeriodogram`, `Accumulators` — all
    JUCE-free so they test standalone (the reason `TrialSpectrumBuffer` is JUCE-free).
-3. **[todo] TriggeredPower.** Both display modes, baseline normalisation, trial
-   buffer, save/restore.
-4. **[todo] TriggeredCoherence.** Pair config popup, cross-spectrum accumulators,
-   coherence/phase display, significance threshold, smoothing.
+3. **[part done] TriggeredPower.** Node computes spectra into accumulators, keeps
+   per-trial line spectra, and applies baseline normalisation (None/dB/%/z) at
+   display time. **[todo]**: the grid of spectrogram/line panels.
+4. **[part done] TriggeredCoherence.** Pair data model with seed generation and
+   XML persistence, cross-spectrum accumulation, coherence/phase, significance
+   threshold and smoothing all wired. **[todo]**: the pair config popup and the
+   panel display.
 5. **[todo] Performance pass.** Batched `fftw_plan_many` everywhere, wisdom caching,
    profiling, and *only if measurements demand it* a thread pool over channels.
 
@@ -337,16 +344,23 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 - *Fftw*: aligned buffer lifetime/move; sinusoid recovery; batched transforms keeping
   signals separate; forward→backward identity (×n); Parseval.
 
-**[todo]**:
+- *DPSS*: orthonormality, concentration ordering, symmetry, sign convention, and a
+  match against `scipy.signal.windows.dpss(32, 2.5, Kmax=3)` to 1e-9 on both the
+  tapers and their concentration ratios.
+- *Morlet*: amplitude and instantaneous phase recovery, DC-offset immunity, chirp
+  ridge tracking, decimation, bin times, and white-noise PSD integrating to its
+  variance.
+- *Periodogram*: flat white-noise PSD at 2σ²/fs, sinusoid integrating to A²/2, Hann
+  and multitaper agreeing on total power, multitaper's lower variance, channel
+  independence, DC removal.
+- *Accumulators*: mean/SEM, psdScale application, taper-vs-time reduction, coherence
+  at both extremes, the 1/ν bias, taper and smoothing degrees of freedom, and the
+  significance threshold.
+- *Pipeline*: coherence isolates a shared component from an equally strong
+  phase-independent one; independent channels sit near the null; Morlet and
+  multitaper agree on band power; induced power survives random per-trial phase.
 
-- *DPSS*: orthonormality `wᵢ·wⱼ = δᵢⱼ`; eigenvalue concentration `λ₀ > λ₁ > …`; first
-  taper matching `scipy.signal.windows.dpss(N, NW, K)` to 1e-9.
-- *Morlet*: unit-amplitude sinusoid → correct peak frequency and PSD amplitude; chirp
-  → ridge tracks instantaneous frequency; no edge ringing inside the reported window.
-- *Periodogram*: white noise of known variance → flat PSD integrating to that variance.
-- *Coherence*: identical signals → `|C|² = 1`; independent noise over `N` trials →
-  mean `|C|² ≈ 1/(N·K)`, the theoretical bias; injected common narrowband component →
-  a peak only at that frequency.
+**[todo]**: tests for the STFT alternative and for the display layer.
 
 ```sh
 cmake --build Build --config Release --target TriggeredSpectra_tests

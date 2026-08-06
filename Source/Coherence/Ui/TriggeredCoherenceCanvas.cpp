@@ -83,20 +83,101 @@ void TriggeredCoherenceCanvas::paint (juce::Graphics& g)
                 juce::Justification::left);
     y += 28;
 
+    const int numFrequencies = m_node->getNumFrequencies();
+    const int numBins = m_node->getNumBins();
+    const auto frequencies = m_node->getFrequencies();
+    const auto& pairs = m_node->getPairs();
+
+    g.drawText (juce::String ("Estimator: ") + juce::String (numFrequencies) + " frequencies x "
+                    + juce::String (numBins) + " bins    pairs: " + juce::String (pairs.size()),
+                20,
+                y,
+                getWidth() - 40,
+                18,
+                juce::Justification::left);
+    y += 20;
+
+    if (pairs.empty())
+    {
+        g.setColour (juce::Colours::orange);
+        g.drawText ("No channel pairs configured - coherence needs at least one.",
+                    20,
+                    y,
+                    getWidth() - 40,
+                    18,
+                    juce::Justification::left);
+        y += 20;
+        g.setColour (findColour (ThemeColours::defaultText));
+    }
+
+    y += 8;
+
+    const auto lock = m_node->lockData();
+
+    std::vector<double> values (static_cast<std::size_t> (std::max (1, numBins)));
+
     for (auto* source : m_node->getTriggerSources().getAll())
     {
         g.setColour (source->colour);
         g.fillRect (20, y + 4, 10, 10);
 
+        const int numTrials = m_node->getNumTrials (source);
+        const int dof = m_node->getDegreesOfFreedom (source);
+        const double threshold = m_node->getSignificanceThreshold (source);
+
         g.setColour (findColour (ThemeColours::defaultText));
-        g.drawText (source->name + "  (TTL line " + juce::String (source->line)
-                        + ")   trials: " + juce::String (m_node->getNumTrials (source)),
+        g.drawText (source->name + "  trials: " + juce::String (numTrials) + "   dof: "
+                        + juce::String (dof) + "   p<0.05 above: "
+                        + (dof >= 2 ? juce::String (threshold, 3) : juce::String ("n/a")),
                     38,
                     y,
                     getWidth() - 58,
                     18,
                     juce::Justification::left);
-        y += 22;
+        y += 20;
+
+        // Peak coherence per pair, with the significance call, so the estimate can
+        // be sanity-checked before the real display exists.
+        for (int pairIndex = 0; pairIndex < static_cast<int> (pairs.size()); ++pairIndex)
+        {
+            double best = 0.0;
+            int argmax = 0;
+            bool any = false;
+
+            for (int f = 0; f < numFrequencies; ++f)
+            {
+                if (! m_node->getCoherenceForDisplay (source, pairIndex, f, values))
+                    continue;
+
+                any = true;
+
+                for (int bin = 0; bin < numBins; ++bin)
+                {
+                    if (values[static_cast<std::size_t> (bin)] > best)
+                    {
+                        best = values[static_cast<std::size_t> (bin)];
+                        argmax = f;
+                    }
+                }
+            }
+
+            const auto& pair = pairs[static_cast<std::size_t> (pairIndex)];
+
+            juce::String line = "    " + pair.name;
+
+            if (! pair.isResolved())
+                line += "  (channels not selected)";
+            else if (any && ! frequencies.empty())
+                line += "  peak " + juce::String (best, 3) + " at "
+                        + juce::String (frequencies[static_cast<std::size_t> (argmax)], 1) + " Hz"
+                        + (best > threshold ? "  *" : "");
+
+            g.setColour (pair.colour);
+            g.drawText (line, 48, y, getWidth() - 68, 16, juce::Justification::left);
+            y += 18;
+        }
+
+        y += 6;
     }
 
     if (const int dropped = m_node->getNumDroppedRequests(); dropped > 0)
