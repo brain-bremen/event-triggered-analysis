@@ -280,6 +280,86 @@ state via `Visualizer::saveCustomParametersToXml` **[todo]**.
 
 ---
 
+## Pre-trigger baseline **[done]**
+
+Every trial carries its own reference: the period before the trigger. That is what
+makes a baseline feasible online — it is not a separate reference recording, it
+accumulates trial by trial alongside the response.
+
+How it is obtained differs by mode, and the difference is not cosmetic:
+
+- **Spectrogram mode** — average the spectrogram's own pre-trigger *time bins*,
+  over `[baseline_start_ms, baseline_end_ms]`. Costs nothing extra.
+- **Spectrum mode** — a line spectrum has no time axis, so there are no pre-trigger
+  bins to average. The pre-trigger window is transformed **separately**, into its
+  own accumulator, and the analysis window becomes the post-trigger part only. Both
+  windows are padded to a common FFT length so their frequency grids match exactly,
+  which is what makes dividing one by the other meaningful.
+
+  This was a real bug before it was a feature: `binTimes` is only populated in the
+  spectrogram branch, so `getBaselineBinRange()` returned false and the baseline
+  controls were a **silent no-op** in Spectrum mode.
+
+Because turning the baseline on in Spectrum mode changes what is estimated (it
+splits the trial), `baseline_mode` counts as an analysis parameter *in that mode
+only*; everywhere else it stays display-time.
+
+Caveats worth surfacing in the UI rather than hiding:
+
+- A short pre-trigger window supports fewer DPSS tapers than the response window,
+  so the baseline estimate is noisier. Too short and the engine falls back to no
+  baseline rather than failing.
+- A pre-trigger baseline removes 1/f **and** any sustained pre-existing
+  oscillation. If the pre-trigger period is not a neutral state — back-to-back
+  trials, anticipatory activity — it is contaminated. This is precisely why the
+  fitted-aperiodic whitening below is still worth having: it assumes nothing about
+  the pre-trigger period.
+
+**[todo]** — the same split applies to coherence, where a pre-trigger *coherence*
+baseline would let the display show change-from-baseline rather than raw coherence.
+Unlike whitening, this is meaningful for coherence, because it is a difference of
+two ratios rather than a common gain.
+
+---
+
+## Trigger arming, cancelling and committing **[part done]**
+
+Ported from `TriggeredAvg`, but only partly, and the gap is disguised because the
+unimplemented fields still round-trip through XML.
+
+| Behaviour | Status |
+|---|---|
+| `armPattern` arms a `TTL_AND_MSG` source | **[done]** |
+| `cancelPattern` disarms it | **[done]** |
+| TTL edge gated on `canTrigger`, auto-disarm after firing | **[done]** |
+| `commitPattern` — hold the capture pending, commit on message | **[todo]** |
+| `pendingTimeoutMs` — auto-discard a stale pending capture | **[todo]** |
+| `MSG_TRIGGER` — message-only triggering, no TTL | **[todo]** |
+
+Captures currently commit to the accumulators **immediately** on the TTL edge. The
+workflow the reference plugin supports — capture on the edge, then keep or discard
+it once the trial outcome is known — does not exist yet.
+
+Implementing it means a pending stage between the worker and the accumulators:
+
+1. `SpectralWorker` extracts the trial as now.
+2. If the source has a `commitPattern`, the transformed result is held as a
+   *pending capture* keyed by trigger source instead of being accumulated.
+3. A broadcast message matching `commitPattern` folds it in; one matching
+   `cancelPattern` discards it; `pendingTimeoutMs` reaps it if neither arrives.
+4. Expired captures are swept lazily on each broadcast message, as
+   `TriggeredAvg::discardExpiredPendingCaptures` does.
+
+Note the pending object here is a `TfCoefficients`, not a raw trial buffer — the
+transform has already run, so committing is just an `addTrial` call. That is
+cheaper than the reference implementation, which held the untransformed window.
+
+`MSG_TRIGGER` was a documented TODO in `TriggeredAvg` too, so it is not a
+regression, but a message-only source silently never fires and should either work
+or be rejected in the UI.
+
+---
+
 ## Spectral whitening (1/f removal) **[todo]**
 
 ### Why

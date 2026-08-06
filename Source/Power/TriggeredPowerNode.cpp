@@ -92,9 +92,14 @@ void TriggeredPowerNode::registerAdditionalParameters()
 
 bool TriggeredPowerNode::isAnalysisParameter (const juce::String& parameterName) const
 {
-    // Baseline settings are applied when the data is read for display, so
-    // changing them must not discard the accumulated spectra.
+    // Baseline settings are normally display-time only. The exception is
+    // baseline_mode in Spectrum mode: turning it on splits the trial into a
+    // pre-trigger and a post-trigger window, which changes what is estimated.
     if (parameterName.equalsIgnoreCase (ParameterNames::max_trials))
+        return true;
+
+    if (parameterName.equalsIgnoreCase (ParameterNames::baseline_mode)
+        && getEstimateMode() == EstimateMode::Spectrum)
         return true;
 
     return TriggeredSpectraNode::isAnalysisParameter (parameterName);
@@ -116,6 +121,7 @@ void TriggeredPowerNode::analysisConfigurationChanged()
     const juce::ScopedLock lock (m_dataLock);
 
     m_accumulators.clear();
+    m_baselineAccumulators.clear();
     m_trialBuffers.clear();
 
     const auto& geometry = getTrialGeometry();
@@ -156,6 +162,12 @@ void TriggeredPowerNode::analysisConfigurationChanged()
     if (auto* parameter = getParameter (ParameterNames::n_tapers))
         settings.numTapers = parameter->getValue();
 
+    // A line spectrum has no time axis, so a baseline can only come from a
+    // separately transformed pre-trigger window. Only pay for it when a baseline
+    // mode is actually selected.
+    settings.separateBaselineWindow =
+        (settings.mode == EstimateMode::Spectrum) && (getBaselineMode() != BaselineMode::None);
+
     if (! m_engine.prepare (settings, channels.size()))
     {
         LOGD ("[TriggeredPower] could not prepare the spectral engine");
@@ -175,6 +187,10 @@ void TriggeredPowerNode::analysisConfigurationChanged()
         auto& accumulator = m_accumulators[source];
         accumulator.setSize (channels.size(), m_engine.numFrequencies(), m_engine.numAccumulatorBins());
 
+        if (m_engine.hasSeparateBaseline())
+            m_baselineAccumulators[source].setSize (
+                channels.size(), m_engine.numFrequencies(), m_engine.numAccumulatorBins());
+
         if (keepTrials)
         {
             auto& trialBuffer = m_trialBuffers[source];
@@ -191,6 +207,9 @@ void TriggeredPowerNode::clearAllData()
         const juce::ScopedLock lock (m_dataLock);
 
         for (auto& [source, accumulator] : m_accumulators)
+            accumulator.reset();
+
+        for (auto& [source, accumulator] : m_baselineAccumulators)
             accumulator.reset();
 
         for (auto& [source, trialBuffer] : m_trialBuffers)
@@ -244,6 +263,23 @@ bool TriggeredPowerNode::processCapturedTrial (const CaptureRequest& request,
 
     if (! accumulator->second.addTrial (m_coefficients))
         return false;
+
+    // Same trial, pre-trigger window. Transformed separately because a line
+    // spectrum has no time axis to take a baseline from.
+    if (m_engine.hasSeparateBaseline())
+    {
+        if (const auto baseline = m_baselineAccumulators.find (request.triggerSource);
+            baseline != m_baselineAccumulators.end())
+        {
+            m_engine.processBaseline (trial,
+                                      std::span<const int> (channels.getRawDataPointer(),
+                                                            static_cast<std::size_t> (channels.size())),
+                                      m_baselineCoefficients);
+
+            if (! m_baselineCoefficients.empty())
+                baseline->second.addTrial (m_baselineCoefficients);
+        }
+    }
 
     // In Spectrum mode also keep the trial itself, so the display can overlay
     // individual trials and the user can spot an artefact.
@@ -406,10 +442,78 @@ bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
 
     std::copy (mean.begin(), mean.end(), destination.begin());
 
-    if (const auto mode = getBaselineMode(); mode != BaselineMode::None)
-        applyBaseline (destination.subspan (0, mean.size()), mode);
+    const auto mode = getBaselineMode();
+
+    if (mode == BaselineMode::None)
+        return true;
+
+    if (m_engine.hasSeparateBaseline())
+    {
+        // Spectrum mode: the baseline is its own accumulated pre-trigger
+        // spectrum, not a slice of the time axis.
+        const auto baseline = m_baselineAccumulators.find (source);
+
+        if (baseline == m_baselineAccumulators.end())
+            return true;
+
+        const auto baselineMean = baseline->second.mean (channelIndex, frequencyIndex);
+
+        if (baselineMean.empty())
+            return true;
+
+        double baselineSd = 0.0;
+
+        if (mode == BaselineMode::ZScore)
+        {
+            // standardError is SEM; z-scoring wants the across-trial SD.
+            double sem = 0.0;
+            baseline->second.standardError (channelIndex, frequencyIndex, std::span<double> (&sem, 1));
+            baselineSd = sem * std::sqrt (static_cast<double> (baseline->second.numTrials()));
+        }
+
+        applyBaselineValue (destination.subspan (0, mean.size()), baselineMean[0], baselineSd, mode);
+        return true;
+    }
+
+    applyBaseline (destination.subspan (0, mean.size()), mode);
 
     return true;
+}
+
+void TriggeredPowerNode::applyBaselineValue (std::span<double> values,
+                                             double baseline,
+                                             double baselineSd,
+                                             BaselineMode mode)
+{
+    if (baseline < minimumPower)
+        baseline = minimumPower;
+
+    switch (mode)
+    {
+        case BaselineMode::Decibel:
+            for (auto& value : values)
+                value = 10.0 * std::log10 (std::max (value, minimumPower) / baseline);
+            break;
+
+        case BaselineMode::PercentChange:
+            for (auto& value : values)
+                value = 100.0 * (value - baseline) / baseline;
+            break;
+
+        case BaselineMode::ZScore:
+            // Needs at least two trials for the spread to mean anything; with
+            // fewer, leave the values alone rather than dividing by noise.
+            if (baselineSd < minimumPower)
+                return;
+
+            for (auto& value : values)
+                value = (value - baseline) / baselineSd;
+            break;
+
+        case BaselineMode::None:
+        default:
+            break;
+    }
 }
 
 void TriggeredPowerNode::refreshDisplay()

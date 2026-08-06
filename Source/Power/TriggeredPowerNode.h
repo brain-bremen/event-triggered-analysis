@@ -106,8 +106,17 @@ private:
         Returns false if no usable baseline is configured. */
     bool getBaselineBinRange (int& firstBin, int& lastBin) const;
 
-    /** Applies the selected baseline normalisation in place. */
+    /** Applies the selected baseline normalisation in place, using the
+        pre-trigger *time bins* of the same spectrogram. */
     void applyBaseline (std::span<double> values, BaselineMode mode) const;
+
+    /** Applies normalisation against a separately estimated pre-trigger
+        spectrum. `baseline` is the mean pre-trigger power at this frequency and
+        `baselineSd` its spread across trials, used only for z-scoring. */
+    static void applyBaselineValue (std::span<double> values,
+                                    double baseline,
+                                    double baselineSd,
+                                    BaselineMode mode);
 
     TriggeredPowerCanvas* m_canvas = nullptr;
 
@@ -119,6 +128,11 @@ private:
 
     mutable juce::CriticalSection m_dataLock;
     std::unordered_map<TriggerSource*, PowerAccumulator> m_accumulators;
+
+    /** Pre-trigger spectra, Spectrum mode only. A line spectrum has no time axis
+        to average a baseline over, so it is estimated from its own window. */
+    std::unordered_map<TriggerSource*, PowerAccumulator> m_baselineAccumulators;
+    TfCoefficients m_baselineCoefficients;
     std::unordered_map<TriggerSource*, TrialSpectrumBuffer> m_trialBuffers;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)

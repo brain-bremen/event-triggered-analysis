@@ -23,6 +23,8 @@
 */
 #include "SpectralEngine.h"
 
+#include "FastSize.h"
+
 #include <algorithm>
 
 namespace TriggeredSpectra
@@ -84,8 +86,22 @@ bool SpectralEngine::prepare (const Settings& settings, int maxChannels)
     }
     else
     {
+        // With a separate baseline the analysis window is the post-trigger part
+        // only, and the pre-trigger part is estimated in parallel. Both are
+        // padded to a common FFT length so their frequency grids match exactly,
+        // which is what makes dividing one by the other meaningful.
+        m_hasSeparateBaseline =
+            settings.separateBaselineWindow && settings.preSamples > 1 && settings.postSamples > 1;
+
+        const int analysisLength = m_hasSeparateBaseline ? settings.postSamples : displayedSamples;
+        const int commonFftLength =
+            m_hasSeparateBaseline
+                ? nextFastSize (std::max (settings.preSamples, settings.postSamples))
+                : 0;
+
         TaperedPeriodogram::Config config;
-        config.windowLength = displayedSamples;
+        config.windowLength = analysisLength;
+        config.fftLength = commonFftLength;
         config.sampleRate = settings.sampleRate;
         config.minFrequency = settings.minFrequency;
         config.maxFrequency = settings.maxFrequency;
@@ -97,6 +113,24 @@ bool SpectralEngine::prepare (const Settings& settings, int maxChannels)
         if (! m_periodogram.prepare (config, maxChannels))
             return false;
 
+        if (m_hasSeparateBaseline)
+        {
+            auto baselineConfig = config;
+            baselineConfig.windowLength = settings.preSamples;
+
+            // A short pre-trigger window supports fewer tapers than the analysis
+            // window; asking for more than the length allows would fail outright.
+            baselineConfig.numTapers = std::min (config.numTapers, settings.preSamples);
+
+            if (! m_baselinePeriodogram.prepare (baselineConfig, maxChannels))
+            {
+                // Fall back to no baseline rather than failing the whole engine:
+                // the user still gets a usable spectrum.
+                DBG ("[TriggeredSpectra] pre-trigger window too short for a baseline spectrum");
+                m_hasSeparateBaseline = false;
+            }
+        }
+
         m_numFrequencies = m_periodogram.numOutputFrequencies();
 
         // Tapers are averaged away, so the accumulator sees a single bin.
@@ -104,7 +138,7 @@ bool SpectralEngine::prepare (const Settings& settings, int maxChannels)
 
         // The frequency axis is imposed by the FFT length, so read it back from
         // a zero trial rather than duplicating the bin arithmetic.
-        juce::AudioBuffer<float> probe (1, displayedSamples);
+        juce::AudioBuffer<float> probe (1, analysisLength);
         probe.clear();
 
         const int channel = 0;
@@ -135,24 +169,58 @@ void SpectralEngine::process (const juce::AudioBuffer<float>& trial,
     }
     else
     {
-        // The periodogram wants the displayed window only. The ring buffer hands
-        // over the padded one, so skip the leading pad.
-        if (m_settings.padSamples > 0)
-        {
-            const int displayedSamples = m_settings.preSamples + m_settings.postSamples;
+        // The ring buffer hands over the padded window; the periodogram wants a
+        // specific slice of it. With a separate baseline the analysis window
+        // starts at the trigger, otherwise at the start of the displayed window.
+        const int offset =
+            m_settings.padSamples + (m_hasSeparateBaseline ? m_settings.preSamples : 0);
+        const int length = m_hasSeparateBaseline
+                               ? m_settings.postSamples
+                               : m_settings.preSamples + m_settings.postSamples;
 
-            juce::AudioBuffer<float> window (trial.getNumChannels(), displayedSamples);
-
-            for (int ch = 0; ch < trial.getNumChannels(); ++ch)
-                window.copyFrom (ch, 0, trial, ch, m_settings.padSamples, displayedSamples);
-
-            m_periodogram.process (window, channelIndices, output);
-        }
-        else
-        {
-            m_periodogram.process (trial, channelIndices, output);
-        }
+        processSlice (trial, channelIndices, offset, length, m_periodogram, output);
     }
+}
+
+void SpectralEngine::processBaseline (const juce::AudioBuffer<float>& trial,
+                                      std::span<const int> channelIndices,
+                                      TfCoefficients& output)
+{
+    if (! m_prepared || ! m_hasSeparateBaseline)
+    {
+        output.setSize (0, 0, 0);
+        return;
+    }
+
+    processSlice (
+        trial, channelIndices, m_settings.padSamples, m_settings.preSamples, m_baselinePeriodogram, output);
+}
+
+void SpectralEngine::processSlice (const juce::AudioBuffer<float>& trial,
+                                   std::span<const int> channelIndices,
+                                   int offset,
+                                   int length,
+                                   TaperedPeriodogram& periodogram,
+                                   TfCoefficients& output)
+{
+    if (offset == 0 && length == trial.getNumSamples())
+    {
+        periodogram.process (trial, channelIndices, output);
+        return;
+    }
+
+    if (offset < 0 || length <= 0 || offset + length > trial.getNumSamples())
+    {
+        output.setSize (0, 0, 0);
+        return;
+    }
+
+    m_sliceScratch.setSize (trial.getNumChannels(), length, false, false, true);
+
+    for (int ch = 0; ch < trial.getNumChannels(); ++ch)
+        m_sliceScratch.copyFrom (ch, 0, trial, ch, offset, length);
+
+    periodogram.process (m_sliceScratch, channelIndices, output);
 }
 
 } // namespace TriggeredSpectra

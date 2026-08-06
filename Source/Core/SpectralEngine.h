@@ -79,6 +79,18 @@ public:
             from this: a few hundred bins is more than any panel can show, and
             keeping the full sample rate would dominate memory. */
         int maxTimeBins = 512;
+
+        /** Spectrum mode only: estimate a separate spectrum from the pre-trigger
+         *  window, so it can serve as a baseline.
+         *
+         *  A line spectrum has no time axis, so there are no pre-trigger bins to
+         *  average over the way a spectrogram can. Without this the baseline
+         *  controls have nothing to work with. When set, the analysis window
+         *  becomes the *post*-trigger window and the pre-trigger window is
+         *  estimated separately, both padded to a common FFT length so their
+         *  frequency grids line up exactly.
+         */
+        bool separateBaselineWindow = false;
     };
 
     SpectralEngine() = default;
@@ -92,6 +104,16 @@ public:
     void process (const juce::AudioBuffer<float>& trial,
                   std::span<const int> channelIndices,
                   TfCoefficients& output);
+
+    /** True when a separate pre-trigger spectrum is available, i.e. Spectrum mode
+        with separateBaselineWindow set and a non-empty pre-trigger window. */
+    bool hasSeparateBaseline() const noexcept { return m_hasSeparateBaseline; }
+
+    /** Transforms the pre-trigger portion of the same trial window. Output shares
+        the frequency grid of process(). No-op unless hasSeparateBaseline(). */
+    void processBaseline (const juce::AudioBuffer<float>& trial,
+                          std::span<const int> channelIndices,
+                          TfCoefficients& output);
 
     bool isPrepared() const noexcept { return m_prepared; }
 
@@ -108,6 +130,14 @@ public:
     const Settings& settings() const noexcept { return m_settings; }
 
 private:
+    /** Copies [offset, offset+length) out of the padded trial and transforms it. */
+    void processSlice (const juce::AudioBuffer<float>& trial,
+                       std::span<const int> channelIndices,
+                       int offset,
+                       int length,
+                       TaperedPeriodogram& periodogram,
+                       TfCoefficients& output);
+
     Settings m_settings;
     bool m_prepared = false;
 
@@ -117,8 +147,17 @@ private:
     std::vector<double> m_frequencies;
     std::vector<double> m_binTimes;
 
+    bool m_hasSeparateBaseline = false;
+
     MorletTransform m_morlet;
     TaperedPeriodogram m_periodogram;
+
+    /** Pre-trigger window in Spectrum mode. A separate instance because DPSS
+        tapers are length-specific and the two windows generally differ. */
+    TaperedPeriodogram m_baselinePeriodogram;
+
+    /** Reused so slicing a trial does not allocate per capture. */
+    juce::AudioBuffer<float> m_sliceScratch;
 };
 
 } // namespace TriggeredSpectra
