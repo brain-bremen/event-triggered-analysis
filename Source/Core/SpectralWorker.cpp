@@ -27,44 +27,27 @@
 namespace TriggeredSpectra
 {
 
-SpectralWorker::SpectralWorker (MultiChannelRingBuffer* ringBuffer, Client* client)
-    : juce::Thread ("TriggeredSpectra Worker"), m_ringBuffer (ringBuffer), m_client (client)
+SpectralWorker::SpectralWorker (MultiChannelRingBuffer* ringBuffer,
+                                WorkQueue* queue,
+                                Client* client)
+    : juce::Thread ("TriggeredSpectra Worker"),
+      m_ringBuffer (ringBuffer),
+      m_queue (queue),
+      m_client (client)
 {
 }
 
 SpectralWorker::~SpectralWorker()
 {
     signalThreadShouldExit();
-    m_newRequest.signal();
+
+    // Wake the thread whether it is parked in waitForWork() or in a retry wait,
+    // so stopThread() does not have to burn its whole timeout.
+    if (m_queue != nullptr)
+        m_queue->wake();
+
+    notify();
     stopThread (2000);
-}
-
-bool SpectralWorker::enqueue (const CaptureRequest& request)
-{
-    int startIndex1 = 0, blockSize1 = 0, startIndex2 = 0, blockSize2 = 0;
-    m_fifo.prepareToWrite (1, startIndex1, blockSize1, startIndex2, blockSize2);
-
-    if (blockSize1 + blockSize2 < 1)
-    {
-        // Queue full. Dropping is the right call on the audio thread: the
-        // alternative is blocking, and a trial is worth less than a glitch.
-        m_droppedRequests.fetch_add (1);
-        return false;
-    }
-
-    m_queue[static_cast<std::size_t> (blockSize1 > 0 ? startIndex1 : startIndex2)] = request;
-    m_fifo.finishedWrite (1);
-
-    m_newRequest.signal();
-    return true;
-}
-
-void SpectralWorker::clearQueue()
-{
-    int startIndex1 = 0, blockSize1 = 0, startIndex2 = 0, blockSize2 = 0;
-    const int ready = m_fifo.getNumReady();
-    m_fifo.prepareToRead (ready, startIndex1, blockSize1, startIndex2, blockSize2);
-    m_fifo.finishedRead (blockSize1 + blockSize2);
 }
 
 RingBufferReadResult SpectralWorker::captureWithRetries (const CaptureRequest& request)
@@ -116,40 +99,57 @@ RingBufferReadResult SpectralWorker::captureWithRetries (const CaptureRequest& r
 
 void SpectralWorker::run()
 {
-    if (m_ringBuffer == nullptr || m_client == nullptr)
+    if (m_ringBuffer == nullptr || m_queue == nullptr || m_client == nullptr)
         return;
 
     while (! threadShouldExit())
     {
-        if (! m_newRequest.wait (100))
+        if (! m_queue->waitForWork (100))
             continue;
 
         bool anythingCommitted = false;
+        WorkItem item;
 
         // Drain the whole queue before notifying, so a burst of triggers costs
         // one repaint rather than one per trial.
-        while (m_fifo.getNumReady() > 0 && ! threadShouldExit())
+        while (! threadShouldExit() && m_queue->pop (item))
         {
-            int startIndex1 = 0, blockSize1 = 0, startIndex2 = 0, blockSize2 = 0;
-            m_fifo.prepareToRead (1, startIndex1, blockSize1, startIndex2, blockSize2);
-
-            if (blockSize1 + blockSize2 < 1)
-                break;
-
-            const CaptureRequest request =
-                m_queue[static_cast<std::size_t> (blockSize1 > 0 ? startIndex1 : startIndex2)];
-            m_fifo.finishedRead (1);
-
-            const auto result = captureWithRetries (request);
-
-            if (result == RingBufferReadResult::Success)
+            switch (item.kind)
             {
-                if (m_client->processCapturedTrial (request, m_trialBuffer))
-                    anythingCommitted = true;
-            }
-            else
-            {
-                m_client->captureFailed (request, result);
+                case WorkItemKind::Capture:
+                {
+                    const CaptureRequest request { .triggerSource = item.triggerSource,
+                                                   .triggerSample = item.triggerSample,
+                                                   .preSamples = item.preSamples,
+                                                   .postSamples = item.postSamples };
+
+                    const auto result = captureWithRetries (request);
+
+                    if (result == RingBufferReadResult::Success)
+                    {
+                        if (m_client->processCapturedTrial (request, m_trialBuffer))
+                            anythingCommitted = true;
+                    }
+                    else
+                    {
+                        m_client->captureFailed (request, result);
+                    }
+
+                    break;
+                }
+
+                case WorkItemKind::Commit:
+                    if (m_client->commitCapture (item.triggerSource))
+                        anythingCommitted = true;
+                    break;
+
+                case WorkItemKind::Discard:
+                    m_client->discardCapture (item.triggerSource);
+                    break;
+
+                case WorkItemKind::DiscardExpired:
+                    m_client->discardExpiredCaptures (item.timeMs);
+                    break;
             }
         }
 

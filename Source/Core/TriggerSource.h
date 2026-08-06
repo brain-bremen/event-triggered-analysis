@@ -28,6 +28,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <atomic>
 #include <cstdint>
 
 namespace TriggeredSpectra
@@ -68,6 +69,12 @@ class TriggerSource
 public:
     TriggerSource (const juce::String& name, int line, TriggerType type);
 
+    /** Copyable, because this is the plain configuration value it looks like.
+        std::atomic is neither copyable nor movable, so the flag is transferred by
+        hand rather than letting the whole type become immovable. */
+    TriggerSource (const TriggerSource& other);
+    TriggerSource& operator= (const TriggerSource& other);
+
     /** Default palette entry for a TTL line, matching the GUI's event colours. */
     static juce::Colour getColourForLine (int line);
 
@@ -75,8 +82,14 @@ public:
     int line = -1;
     TriggerType type = TriggerType::TTL_TRIGGER;
 
-    /** False while a TTL_AND_MSG source waits to be armed. */
-    bool canTrigger = false;
+    /** False while a TTL_AND_MSG source waits to be armed.
+     *
+     *  Atomic because arming is applied on the audio thread — a message and the
+     *  TTL edge it gates can arrive in the same block, so arming cannot be
+     *  deferred to the worker without losing that edge — while the configuration
+     *  table resets it from the message thread. Relaxed ordering is enough: it
+     *  guards nothing but itself. */
+    std::atomic<bool> canTrigger { false };
 
     juce::Colour colour;
 
@@ -105,6 +118,13 @@ public:
         virtual ~Listener() = default;
 
         virtual void triggerSourceAdded (TriggerSource*) {}
+
+        /** About to be destroyed. Anything holding these pointers — a queued work
+         *  item, a running worker, a map keyed by them — must let go here, while
+         *  the objects are still alive. By the time triggerSourcesRemoved() runs
+         *  they have been deleted. */
+        virtual void triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>&) {}
+
         virtual void triggerSourcesRemoved() {}
         virtual void triggerSourceRenamed (TriggerSource*) {}
         virtual void triggerSourceColourChanged (TriggerSource*) {}
@@ -117,7 +137,14 @@ public:
 
     void setListener (Listener* listener) { m_listener = listener; }
 
+    /** Snapshot of the current sources. Allocates, so it is for the message
+        thread; use items() on the audio thread. */
     juce::Array<TriggerSource*> getAll() const;
+
+    /** Direct view of the sources, for iteration without allocating. Safe on the
+        audio thread only because the set is never mutated during acquisition. */
+    const juce::OwnedArray<TriggerSource>& items() const noexcept { return m_sources; }
+
     TriggerSource* getByIndex (int index) const;
     int getIndexOf (const TriggerSource* source) const { return m_sources.indexOf (source); }
 

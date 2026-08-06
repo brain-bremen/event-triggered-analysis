@@ -29,9 +29,11 @@
 #include "MultiChannelRingBuffer.h"
 #include "TriggerSource.h"
 #include "Types.h"
+#include "WorkQueue.h"
 
 #include <JuceHeader.h>
 #include <atomic>
+#include <cstdint>
 #include <vector>
 
 namespace TriggeredSpectra
@@ -46,21 +48,26 @@ struct CaptureRequest
     int postSamples = 0;
 };
 
-/** Background thread that turns trigger events into extracted trial windows.
+/** Background thread that drains the work queue: extracting trial windows,
+ *  transforming them, and applying message-driven commits.
  *
  *  All spectral work happens here rather than in process(), which is the whole
- *  point: the audio thread only appends to the ring buffer and enqueues a
- *  request.
+ *  point: the audio thread only appends to the ring buffer and pushes an item.
+ *  Everything that takes a lock or allocates lives on this side of the queue.
  *
  *  A trigger fires before its post-trigger data exists, so the worker retries the
  *  ring-buffer read until the window fills. It gives up if the stream stops
  *  advancing, which is what keeps a stopped acquisition or a looping FileReader
  *  from wedging the queue.
+ *
+ *  The queue is owned by the processor, not by this class, so the worker can be
+ *  destroyed and recreated during reconfiguration without the audio thread ever
+ *  observing a dangling or null pointer.
  */
 class SpectralWorker : public juce::Thread
 {
 public:
-    /** What to do with an extracted trial. Implemented by each plugin's node.
+    /** What to do with each kind of work item. Implemented by each plugin's node.
      *  Every method is called on the worker thread. */
     class Client
     {
@@ -75,27 +82,27 @@ public:
         virtual bool processCapturedTrial (const CaptureRequest& request,
                                            const juce::AudioBuffer<float>& trial) = 0;
 
-        /** Called once after a batch of requests has been drained, if at least one
-         *  processCapturedTrial() returned true. Coalescing repaints here keeps a
-         *  burst of triggers from causing a repaint storm. */
+        /** Called once after a batch of items has been drained, if at least one of
+         *  them changed the accumulators. Coalescing repaints here keeps a burst of
+         *  triggers from causing a repaint storm. */
         virtual void capturesCommitted() = 0;
 
         /** A request could not be satisfied. Default: ignore. */
         virtual void captureFailed (const CaptureRequest&, RingBufferReadResult) {}
+
+        /** Folds a parked capture into the accumulators.
+         *  @return true if there was one, i.e. the display should update. */
+        virtual bool commitCapture (TriggerSource*) { return false; }
+
+        /** Throws a parked capture away. */
+        virtual void discardCapture (TriggerSource*) {}
+
+        /** Drops parked captures whose timeout elapsed by `nowMs`. */
+        virtual void discardExpiredCaptures (std::int64_t /*nowMs*/) {}
     };
 
-    SpectralWorker (MultiChannelRingBuffer* ringBuffer, Client* client);
+    SpectralWorker (MultiChannelRingBuffer* ringBuffer, WorkQueue* queue, Client* client);
     ~SpectralWorker() override;
-
-    /** Queues a request. Called from the audio thread; wait-free.
-     *  Returns false if the queue is full, in which case the trial is dropped. */
-    bool enqueue (const CaptureRequest& request);
-
-    /** Discards everything queued but not yet processed. */
-    void clearQueue();
-
-    /** Number of requests dropped because the queue was full, since construction. */
-    int getNumDroppedRequests() const { return m_droppedRequests.load(); }
 
     void run() override;
 
@@ -104,7 +111,6 @@ private:
      *  future. Returns the terminal result. */
     RingBufferReadResult captureWithRetries (const CaptureRequest& request);
 
-    static constexpr int queueCapacity = 256;
     static constexpr int retryIntervalMs = 20;
 
     /** Long enough for a slow post window to fill, short enough that a stopped
@@ -113,16 +119,8 @@ private:
     static constexpr int maxRetries = 500;
 
     MultiChannelRingBuffer* m_ringBuffer = nullptr;
+    WorkQueue* m_queue = nullptr;
     Client* m_client = nullptr;
-
-    // Single-producer (audio thread) / single-consumer (this thread) queue.
-    // AbstractFifo gives a genuinely wait-free enqueue, unlike the mutex-guarded
-    // deque this was ported from.
-    juce::AbstractFifo m_fifo { queueCapacity };
-    std::vector<CaptureRequest> m_queue { static_cast<std::size_t> (queueCapacity) };
-
-    juce::WaitableEvent m_newRequest;
-    std::atomic<int> m_droppedRequests { 0 };
 
     juce::AudioBuffer<float> m_trialBuffer;
 

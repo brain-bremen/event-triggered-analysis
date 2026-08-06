@@ -12,6 +12,7 @@ set(SPECTRA_CORE_SOURCES
     TriggerSource.cpp
     TrialSpectrumBuffer.cpp
     SpectralWorker.cpp
+    WorkQueue.cpp
     FrequencyGrid.cpp
     Dpss.cpp
     MorletTransform.cpp
@@ -20,6 +21,7 @@ set(SPECTRA_CORE_SOURCES
     SpectralEngine.cpp
     TriggerMessaging.cpp
     Whitening.cpp
+    Baseline.cpp
     Ui/ColorMap.cpp
     Ui/SpectrumPanel.cpp
     Ui/PanelGrid.cpp
@@ -35,6 +37,7 @@ set(SPECTRA_CORE_HEADERS
     TriggerSource.h
     TrialSpectrumBuffer.h
     SpectralWorker.h
+    WorkQueue.h
     FrequencyGrid.h
     Tapers.h
     Dpss.h
@@ -45,6 +48,7 @@ set(SPECTRA_CORE_HEADERS
     SpectralEngine.h
     TriggerMessaging.h
     Whitening.h
+    Baseline.h
     Ui/ColorMap.h
     Ui/SpectrumPanel.h
     Ui/PanelGrid.h

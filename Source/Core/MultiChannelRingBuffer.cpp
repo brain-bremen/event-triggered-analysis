@@ -65,7 +65,7 @@ void MultiChannelRingBuffer::setSize (int numChannels, int capacitySamples)
     m_buffer.setSize (m_numChannels, m_capacity, false, true, false);
     m_buffer.clear();
 
-    m_origin = 0;
+    m_origin.store (0, std::memory_order_relaxed);
     m_nextSampleNumber.store (0, std::memory_order_relaxed);
 
     m_generation.fetch_add (1, std::memory_order_release); // -> even
@@ -76,7 +76,7 @@ void MultiChannelRingBuffer::reset()
     m_generation.fetch_add (1, std::memory_order_release);
 
     m_buffer.clear();
-    m_origin = 0;
+    m_origin.store (0, std::memory_order_relaxed);
     m_nextSampleNumber.store (0, std::memory_order_relaxed);
 
     m_generation.fetch_add (1, std::memory_order_release);
@@ -113,7 +113,7 @@ void MultiChannelRingBuffer::addData (const juce::AudioBuffer<float>& inputBuffe
     if (firstSampleNumber != next)
     {
         m_generation.fetch_add (1, std::memory_order_release); // -> odd
-        m_origin = firstSampleNumber;
+        m_origin.store (firstSampleNumber, std::memory_order_relaxed);
         m_nextSampleNumber.store (firstSampleNumber, std::memory_order_relaxed);
         m_generation.fetch_add (1, std::memory_order_release); // -> even
     }
@@ -123,7 +123,8 @@ void MultiChannelRingBuffer::addData (const juce::AudioBuffer<float>& inputBuffe
     const int inputOffset = numSamples - samplesToWrite;
     const SampleNumber writeStart = firstSampleNumber + inputOffset;
 
-    const int startIndex = static_cast<int> ((writeStart - m_origin) % m_capacity);
+    const int startIndex =
+        static_cast<int> ((writeStart - m_origin.load (std::memory_order_relaxed)) % m_capacity);
     const int firstChunk = std::min (samplesToWrite, m_capacity - startIndex);
     const int secondChunk = samplesToWrite - firstChunk;
 
@@ -164,7 +165,7 @@ bool MultiChannelRingBuffer::readSnapshot (SampleNumber& origin,
 
         if ((g & 1u) == 0u)
         {
-            origin = m_origin;
+            origin = m_origin.load (std::memory_order_relaxed);
             next = m_nextSampleNumber.load (std::memory_order_acquire);
 
             if (m_generation.load (std::memory_order_acquire) == g)

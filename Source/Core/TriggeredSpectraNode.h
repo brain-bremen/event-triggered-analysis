@@ -30,6 +30,7 @@
 #include "TriggerMessaging.h"
 #include "TriggerSource.h"
 #include "Types.h"
+#include "WorkQueue.h"
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
@@ -142,6 +143,7 @@ protected:
     // --- TriggerSources::Listener ------------------------------------------
 
     void triggerSourceAdded (TriggerSource* source) override;
+    void triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources) override;
     void triggerSourcesRemoved() override;
     void triggerSourceLineChanged (TriggerSource* source) override;
     void triggerSourceTypeChanged (TriggerSource* source) override;
@@ -164,18 +166,14 @@ protected:
         return source != nullptr && source->commitPattern.isNotEmpty();
     }
 
-    /** Folds a parked capture into the accumulators. Returns true if there was
-        one. Implemented by subclasses that hold pending captures. */
-    virtual bool commitPendingCapture (TriggerSource*) { return false; }
-
-    /** Throws a parked capture away. */
-    virtual void discardPendingCapture (TriggerSource*) {}
-
-    /** Drops parked captures whose timeout has elapsed. */
-    virtual void discardExpiredPendingCaptures() {}
-
     MultiChannelRingBuffer m_ringBuffer;
     TriggerSources m_triggerSources;
+
+    /** Audio thread -> worker. A value member with a lifetime matching the node's,
+     *  so the audio thread can push into it without ever checking whether a worker
+     *  currently exists. */
+    WorkQueue m_workQueue;
+
     std::unique_ptr<SpectralWorker> m_worker;
 
     TrialGeometry m_geometry;

@@ -88,7 +88,8 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `MultiChannelRingBuffer.{h,cpp}` | **[done]** rewritten, see below |
 | `TriggerSource.{h,cpp}` | **[done]** decoupled from any concrete node |
 | `TrialSpectrumBuffer.{h,cpp}` | **[done]** ported from `SingleTrialBuffer` |
-| `SpectralWorker.{h,cpp}` | **[done]** |
+| `SpectralWorker.{h,cpp}` | **[done]** consumes `WorkQueue`, dispatches by item kind |
+| `WorkQueue.{h,cpp}` | **[done]** **[changed]** — audio→worker handoff, see below |
 | `TriggeredSpectraNode.{h,cpp}` | **[done]** **[changed]** — see below |
 | `Dpss.{h,cpp}`, `Tapers.h` | **[done]** matches scipy to 1e-9 |
 | `FrequencyGrid.{h,cpp}` | **[done]** |
@@ -97,6 +98,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `StftTransform.{h,cpp}` | **[todo]** Morlet is used meanwhile |
 | `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
 | `Accumulators.{h,cpp}` | **[done]** |
+| `Baseline.{h,cpp}` | **[done]** **[changed]** — extracted from the Power node so it is testable |
 | `DataStore.{h,cpp}` | **[done]** folded into each node |
 | `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
 | `Ui/SpectrumPanel.{h,cpp}` | **[done]** heatmap + line modes |
@@ -118,23 +120,47 @@ estimator and the display.
 Identical in both plugins; only the accumulation step differs.
 
 ```
-process()  [audio thread, allocation-free]
+process()  [audio thread, allocation-free, lock-free]
    ringBuffer.addData(buffer, getFirstSampleNumberForBlock(streamId), nSamples)
-   checkForEvents(false)  ->  handleTTLEvent()  ->  worker.enqueue(CaptureRequest)
+   checkForEvents(false)
+       -> handleTTLEvent()         -> workQueue.push(Capture)
+       -> handleBroadcastMessage() -> arm/disarm (atomic store, immediate)
+                                      workQueue.push(Commit / Discard / DiscardExpired)
 
 SpectralWorker::run()  [background juce::Thread, Priority::high]
-   wait on WaitableEvent, drain the queue
-   ringBuffer.readAroundSample(trigger, pre + pad, post + pad, scratch)
-       retry every 20 ms while NotEnoughNewData  (post data hasn't arrived yet)
-       give up if the stream stops advancing or goes backwards
-   client->processCapturedTrial(request, trial)     <- SpectralEngine + accumulators
-   client->capturesCommitted()  -> triggerAsyncUpdate()
+   workQueue.waitForWork(100), then drain
+   Capture:        ringBuffer.readAroundSample(trigger, pre + pad, post + pad, scratch)
+                       retry every 20 ms while NotEnoughNewData
+                       give up if the stream stops advancing or goes backwards
+                   client->processCapturedTrial()   <- SpectralEngine + accumulators
+   Commit:         client->commitCapture()          <- takes the data lock
+   Discard:        client->discardCapture()
+   DiscardExpired: client->discardExpiredCaptures(timeStampedAtTheMessage)
+   client->capturesCommitted()  -> triggerAsyncUpdate()   (once per drained batch)
 
 handleAsyncUpdate()  [message thread]  ->  canvas->refresh()
 ```
 
 `checkForEvents` must follow `addData`: a trigger in this block needs its pre-trigger
-samples already present, and the worker may start reading the moment we enqueue.
+samples already present, and the worker may start reading the moment we push.
+
+### **[changed]** Broadcast messages arrive on the audio thread
+
+`handleBroadcastMessage` is **not** a message-thread callback. Its only dispatch site
+in the GUI is `GenericProcessor::checkForEvents` (`GenericProcessor.cpp:1482`), which
+`process()` calls — so it runs on the audio thread, exactly like `handleTTLEvent`.
+
+That was missed initially, and the first implementation committed parked captures
+straight from the handler: taking the data lock and allocating per channel, on the
+audio thread, behind a lock the message thread holds for the whole of a repaint
+(including a Theil–Sen aperiodic refit). Committing now goes through the queue.
+
+Arming deliberately stays on the audio thread. A message and the TTL edge it gates
+can arrive in the same block, so deferring the arm would drop that edge; it is only
+an atomic store on `TriggerSource::canTrigger`, which is why that flag is atomic.
+
+Captures and commits share **one** queue so a commit cannot overtake the capture it
+refers to.
 
 The canvas **does not poll**. `Visualizer`'s timer is left unstarted and
 `timerCallback()` is a no-op; redraws are driven entirely by `triggerAsyncUpdate()`.
@@ -602,6 +628,11 @@ and doing that from the base constructor is a pure-virtual call.
   ratios rather than a common gain.
 - Undo/redo (`ProcessorAction`) for trigger-source and pair edits.
 - Phase 5 profiling, which is only worth doing once the plugins can be run.
+- **Coherence ignores commit patterns.** `TriggeredCoherenceNode` overrides none of
+  the pending-capture hooks and never checks `requiresCommit`, so a source with a
+  commit pattern parks trials in TriggeredPower but accumulates immediately in
+  TriggeredCoherence. Since sources are shared configuration, the same trigger
+  behaves differently in the two plugins.
 
 ---
 
@@ -609,7 +640,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 110 tests passing:
+**[done]** — 155 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -647,10 +678,26 @@ and doing that from the base constructor is a pure-virtual call.
   disabled not wildcards; cancel beats commit; a plain TTL source is never
   disarmed; per-source timeout expiry; move-only payloads; the full
   arm → capture → commit / cancel / timeout sequences.
+- *Work queue*: push order preserved across item kinds; every field carried
+  through; dropping rather than blocking when full, and recovering after a drain;
+  flush discarding what was queued while letting later items through and reclaiming
+  the slots; a producer/consumer pair over 20 000 items losing nothing it accepted;
+  and a third thread flushing continuously without ever corrupting the order.
+- *Spectral worker*: window extraction; waiting for post-trigger data that has not
+  arrived yet, then succeeding; giving up on a stalled stream and still servicing
+  the next item; `DataTooOld`; dispatch of each item kind to its own handler;
+  capture/commit ordering; the message timestamp reaching expiry unchanged; one
+  repaint per drained batch rather than one per trial; flushed items never reaching
+  the client; and prompt shutdown both idle and mid-retry.
+- *Baseline*: bin-range selection including inverted, empty and out-of-range
+  windows; dB / percent / z-score against both a slice of the time axis and a
+  separately estimated pre-trigger spectrum; log(0) clamped instead of producing
+  -inf; z-score declining to act on a single bin or a flat baseline rather than
+  dividing by noise.
 
 **[todo]**: tests for the STFT alternative and for the display layer. The
-whitening, pre-trigger baseline and trigger-messaging paths are covered; the
-rendering path is not.
+whitening, pre-trigger baseline, trigger-messaging, queueing and worker paths are
+covered; the rendering path is not.
 
 ```sh
 cmake --build Build --config Release --target TriggeredSpectra_tests
