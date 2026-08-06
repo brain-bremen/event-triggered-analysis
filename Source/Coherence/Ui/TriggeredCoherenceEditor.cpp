@@ -24,6 +24,7 @@
 
 #include "../TriggeredCoherenceNode.h"
 #include "TriggeredCoherenceCanvas.h"
+#include "Core/Ui/TriggerSourceConfigWindow.h"
 
 namespace TriggeredSpectra
 {
@@ -31,10 +32,15 @@ namespace TriggeredSpectra
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
     : VisualizerEditor (parentNode, "TRIG COHER", 220)
 {
-    addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 30);
+    m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
+    m_configureButton->addListener (this);
+    m_configureButton->setBounds (15, 30, 190, 22);
+    addAndMakeVisible (m_configureButton.get());
 
-    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 70);
-    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 70);
+    addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
+
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
     for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
     {
@@ -46,7 +52,18 @@ TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode
         }
     }
 
-    addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 115);
+    addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+}
+
+void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
+{
+    if (button != m_configureButton.get())
+        return;
+
+    auto* node = static_cast<TriggeredSpectraNode*> (getProcessor());
+
+    CoreServices::getPopupManager()->showPopup (
+        std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive), button);
 }
 
 Visualizer* TriggeredCoherenceEditor::createNewCanvas()

@@ -94,6 +94,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
 | `Ui/SpectrumPanel.{h,cpp}` | **[done]** heatmap + line modes |
 | `Ui/PanelGrid.{h,cpp}` | **[done]** |
+| `Ui/TriggerSourceConfigWindow.{h,cpp}` | **[done]** shared by both plugins |
 
 ### **[changed]** A shared node base class was added
 
@@ -334,11 +335,14 @@ unimplemented fields still round-trip through XML.
 | TTL edge gated on `canTrigger`, auto-disarm after firing | **[done]** |
 | `commitPattern` — hold the capture pending, commit on message | **[todo]** |
 | `pendingTimeoutMs` — auto-discard a stale pending capture | **[todo]** |
-| `MSG_TRIGGER` — message-only triggering, no TTL | **[todo]** |
+| `MSG_TRIGGER` — message-only triggering, no TTL | **[todo]** selectable in the UI but never fires |
+| Config UI for sources and patterns | **[done]** |
 
-Captures currently commit to the accumulators **immediately** on the TTL edge. The
-workflow the reference plugin supports — capture on the edge, then keep or discard
-it once the trial outcome is known — does not exist yet.
+**[done]** — the pending stage, the message rules and the config table all exist.
+One correctness note found by comparing against `TriggeredAvg`: cancelling must
+**not** clear `canTrigger` on a plain `TTL_TRIGGER` source. That type is always
+live and expects no arm message, so disarming it silences it for the whole
+session. Only message-gated types are disarmable; see `isMessageGated()`.
 
 Implementing it means a pending stage between the worker and the accumulators:
 

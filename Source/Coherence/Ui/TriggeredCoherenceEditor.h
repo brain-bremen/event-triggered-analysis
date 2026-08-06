@@ -32,7 +32,7 @@ namespace TriggeredSpectra
 class TriggeredCoherenceNode;
 class TriggeredCoherenceCanvas;
 
-class TriggeredCoherenceEditor : public VisualizerEditor
+class TriggeredCoherenceEditor : public VisualizerEditor, public juce::Button::Listener
 {
 public:
     explicit TriggeredCoherenceEditor (GenericProcessor* parentNode);
@@ -40,7 +40,13 @@ public:
 
     Visualizer* createNewCanvas() override;
 
+    void buttonClicked (juce::Button* button) override;
+
 private:
+    /** Opens the trigger-source table. Without at least one source nothing is
+        ever captured, so this is the first thing a user needs. */
+    std::unique_ptr<UtilityButton> m_configureButton;
+
     TriggeredCoherenceCanvas* m_canvas = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceEditor)
