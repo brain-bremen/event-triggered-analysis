@@ -24,6 +24,8 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <array>
+#include <span>
 
 namespace TriggeredSpectra
 {

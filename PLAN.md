@@ -91,8 +91,9 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
 | `Accumulators.{h,cpp}` | **[done]** |
 | `DataStore.{h,cpp}` | **[done]** folded into each node |
-| `ColorMap.{h,cpp}` | **[todo]** |
-| `Ui/` shared widgets | **[todo]** |
+| `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
+| `Ui/SpectrumPanel.{h,cpp}` | **[done]** heatmap + line modes |
+| `Ui/PanelGrid.{h,cpp}` | **[done]** |
 
 ### **[changed]** A shared node base class was added
 
@@ -373,7 +374,7 @@ the accumulators.
 
 ---
 
-## UI **[todo]**
+## UI **[part done]**
 
 Grid of panels in a `Viewport`, reusing `GridDisplay` + `OptionsBar` from
 `TriggeredAvg`. Power: one panel per selected channel. Coherence: one panel per pair.
