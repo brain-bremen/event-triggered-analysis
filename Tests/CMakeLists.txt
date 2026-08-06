@@ -16,6 +16,8 @@ set(SPECTRA_TEST_SOURCES
     test_MultiChannelRingBuffer.cpp
     test_TrialSpectrumBuffer.cpp
     test_Fftw.cpp
+    test_Dpss.cpp
+    test_MorletTransform.cpp
 )
 
 enable_testing()

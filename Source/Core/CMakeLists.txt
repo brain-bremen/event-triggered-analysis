@@ -12,6 +12,9 @@ set(SPECTRA_CORE_SOURCES
     TriggerSource.cpp
     TrialSpectrumBuffer.cpp
     SpectralWorker.cpp
+    FrequencyGrid.cpp
+    Dpss.cpp
+    MorletTransform.cpp
     TriggeredSpectraNode.cpp
 )
 
@@ -23,6 +26,11 @@ set(SPECTRA_CORE_HEADERS
     TriggerSource.h
     TrialSpectrumBuffer.h
     SpectralWorker.h
+    FrequencyGrid.h
+    Tapers.h
+    Dpss.h
+    SpectralTransform.h
+    MorletTransform.h
     ParameterNames.h
     TriggeredSpectraNode.h
 )
