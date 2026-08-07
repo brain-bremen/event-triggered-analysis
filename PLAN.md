@@ -9,7 +9,7 @@ outstanding. Places where implementation diverged from this plan are marked
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 160 unit tests and a clean build/install: neither plugin
+Everything else rests on 165 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -107,6 +107,9 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `Ui/PanelGrid.{h,cpp}` | **[done]** |
 | `Ui/TriggerSourceConfigWindow.{h,cpp}` | **[done]** shared by both plugins |
 | `Ui/TriggerMonitorWindow.{h,cpp}` | **[done]** live trigger counters, see below |
+| `Ui/AnalysisSettingsWindow.{h,cpp}` | **[done]** every computation parameter |
+| `Ui/ParameterControl.{h,cpp}` | **[done]** one control bound to one Parameter |
+| `Ui/ParameterLayout.h` | **[done]** declares the editor/canvas split |
 
 ### **[changed]** A shared node base class was added
 
@@ -596,6 +599,53 @@ Two decisions matter more than the rest:
 The window turns those counts into one line of plain English (`diagnose()`) naming
 the most likely cause, rather than leaving the user to interpret the columns.
 
+### Parameter UI: editor computes, canvas draws **[done]**
+
+The rule, and the reason nineteen parameters had no control for so long: **a
+parameter that changes what is collected or computed is edited from the editor; a
+parameter that changes only how the result is drawn is edited on the canvas,
+beside the plot it changes.** That places every registered parameter exactly once,
+and the placement is declared in `Ui/ParameterLayout.h` rather than being implicit
+in the three UI files that consume it.
+
+| Where | What |
+|---|---|
+| Editor, inline | `channels`, `pre_ms`, `post_ms`, `mode` — the four most-edited |
+| Editor → **ANALYSIS** | frequency axis, Morlet, STFT, line/taper settings, `max_trials` |
+| Power canvas | `baseline_*`, `whitening_*` |
+| Coherence canvas | `coherence_display`, `smooth_time_bins`, `smooth_freq_bins` |
+| Neither | `trigger_line`, `trigger_type` — backing store for the trigger table |
+
+`Ui/ParameterControl.{h,cpp}` binds one control to one `Parameter`, chosen from the
+parameter's type, clamped to the parameter's own range, with the accepted value
+written back so a control can never misreport what is set. It is shared by all
+three panels; the GUI's own `ParameterEditor` was not used because it expects to be
+owned by a `ParameterEditorOwner` and rebound by `Visualizer::update()`, which is
+more ceremony than a plain option bar needs.
+
+Sections in the ANALYSIS window are greyed rather than hidden when the mode makes
+them irrelevant, and say what would have to change, so the window also documents
+which estimator is actually running.
+
+**Two hazards the split has to handle**, both of which would otherwise be
+destructive rather than merely untidy:
+
+- Every analysis parameter is `deactivateDuringAcquisition`, and
+  `rebuildConfiguration()` asserts acquisition is stopped before reallocating the
+  ring buffer under the audio thread. The ANALYSIS window is disabled while
+  running, and says why.
+- **`baseline_mode` is the one genuine exception to the rule.** It is display-time
+  in Spectrogram mode but analysis-time in Spectrum mode, where it splits the
+  trial. It is registered as editable during acquisition, so before this it was
+  simply unreachable; giving it a control made a latent assertion failure
+  reachable. The canvas therefore locks it during acquisition *in Spectrum mode
+  only*, and warns on both sides of that.
+
+`Tests/test_ParameterLayout.cpp` pins the split: every registered parameter has
+exactly one home, no name appears twice, no name is a typo, and the display groups
+hold nothing that reaches the estimator. That is what makes "registered, working,
+tested, and reachable from nowhere" a build failure rather than a discovery.
+
 **[todo]**: the pair-configuration window, and a shared colour bar showing the
 value scale.
 
@@ -634,22 +684,6 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 
 The estimation core is complete and tested; the controls that make it reachable are
 not. These are ordered by how much they block actual use.
-
-### Most analysis parameters have no UI control
-
-The editor exposes six things: **TRIGGERS**, **MONITOR**, channels, pre, post, mode.
-Everything else is registered, functional and tested, but has no control anywhere —
-so it can only ever run at its default:
-
-`freq_min`, `freq_max`, `num_freqs`, `freq_spacing`, `tf_method`, `n_cycles_low`,
-`n_cycles_high`, `stft_window_ms`, `stft_hop_ms`, `line_method`, `nw`, `n_tapers`,
-`max_trials`, `baseline_mode`, `baseline_start_ms`, `baseline_end_ms`,
-`whitening_mode`, `whitening_exponent`, `smooth_time_bins`, `smooth_freq_bins`,
-`coherence_display`.
-
-Nineteen parameters will not fit in a 220 px editor, so this wants a settings popup
-in the same style as the trigger table, with the two or three most-used promoted
-onto the editor itself.
 
 ### Coherence pairs cannot be created
 
@@ -695,7 +729,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 160 tests passing:
+**[done]** — 165 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -747,6 +781,9 @@ and doing that from the base constructor is a pure-virtual call.
 - *Trigger counters*: a successful capture counted against its source, a failed
   one not counted, a committed pending capture counted, `reset()` zeroing every
   field, and counts not surviving a copy.
+- *Parameter layout*: every registered parameter has exactly one home in the UI,
+  no name appears twice, no name is a typo, the display groups hold nothing that
+  reaches the estimator, and the editor covers every analysis parameter.
 - *Baseline*: bin-range selection including inverted, empty and out-of-range
   windows; dB / percent / z-score against both a slice of the time axis and a
   separately estimated pre-trigger spectrum; log(0) clamped instead of producing

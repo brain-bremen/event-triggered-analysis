@@ -23,6 +23,7 @@
 #include "TriggeredPowerCanvas.h"
 
 #include "../TriggeredPowerNode.h"
+#include "Core/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,7 +33,11 @@ namespace TriggeredSpectra
 
 namespace
 {
-constexpr int optionsBarHeight = 34;
+/** Two rows: plot appearance on top, normalisation below. Normalisation earns a
+    row of its own because it is what makes a spectrogram readable at all — a raw
+    1/f-dominated map shows nothing above ~30 Hz. */
+constexpr int optionsRowHeight = 34;
+constexpr int optionsBarHeight = optionsRowHeight * 2;
 } // namespace
 
 TriggeredPowerCanvas::TriggeredPowerCanvas (TriggeredPowerNode* node) : m_node (node)
@@ -77,7 +82,94 @@ TriggeredPowerCanvas::TriggeredPowerCanvas (TriggeredPowerNode* node) : m_node (
     m_grid.setColumns (2);
     m_grid.setPanelHeight (180);
 
+    buildDisplayControls();
     rebuildPanels();
+}
+
+void TriggeredPowerCanvas::buildDisplayControls()
+{
+    if (m_node == nullptr)
+        return;
+
+    // Display-time only: none of these invalidate the accumulators, so they can be
+    // changed freely mid-experiment. The one exception is baseline_mode in
+    // Spectrum mode, which splits the trial into pre- and post-trigger windows and
+    // so changes what is estimated; paint() warns when that is what is happening.
+    for (const auto* name : ParameterLayout::powerDisplay)
+    {
+        auto* parameter = m_node->getParameter (name);
+
+        if (parameter == nullptr)
+            continue;
+
+        const bool isMode = parameter->getType() == Parameter::CATEGORICAL_PARAM;
+
+        auto control = std::make_unique<ParameterControl> (
+            parameter, 58, isMode ? 116 : 54, isMode ? 0 : 22);
+
+        control->onChange = [this] { displayParameterChanged(); };
+
+        addAndMakeVisible (control.get());
+        m_displayControls.push_back (std::move (control));
+    }
+
+    applyDisplayControlState();
+}
+
+void TriggeredPowerCanvas::applyDisplayControlState()
+{
+    if (m_node == nullptr)
+        return;
+
+    const bool baselineActive = m_node->getBaselineMode() != BaselineMode::None;
+    const auto whitening = m_node->getWhiteningMode();
+
+    // In Spectrum mode a baseline is an *analysis* parameter, not a display one:
+    // it splits the trial, so changing it runs rebuildConfiguration(), which
+    // reallocates the ring buffer the audio thread is reading and asserts that
+    // acquisition is stopped. Everything else on this bar is genuinely free.
+    const bool baselineIsAnalysis = m_node->getEstimateMode() == EstimateMode::Spectrum;
+    const bool baselineLocked = baselineIsAnalysis && CoreServices::getAcquisitionStatus();
+
+    for (auto& control : m_displayControls)
+    {
+        const juce::String name = control->getParameter()->getName();
+        bool active = true;
+
+        if (name.equalsIgnoreCase (ParameterNames::baseline_mode))
+        {
+            active = ! baselineLocked;
+        }
+        else if (name.equalsIgnoreCase (ParameterNames::baseline_start_ms)
+                 || name.equalsIgnoreCase (ParameterNames::baseline_end_ms))
+        {
+            active = baselineActive;
+        }
+        else if (name.equalsIgnoreCase (ParameterNames::whitening_mode))
+        {
+            // A baseline divides out anything common to the pre- and post-trigger
+            // spectra, and 1/f is exactly that, so the node skips whitening
+            // entirely while a baseline is active. Showing the control as live
+            // would promise an effect that never happens.
+            active = ! baselineActive;
+        }
+        else if (name.equalsIgnoreCase (ParameterNames::whitening_exponent))
+        {
+            active = ! baselineActive && whitening == WhiteningMode::FixedExponent;
+        }
+
+        control->setActive (active);
+    }
+}
+
+void TriggeredPowerCanvas::displayParameterChanged()
+{
+    applyDisplayControlState();
+
+    // baseline_mode in Spectrum mode is an analysis parameter, so the node may
+    // have just cleared the accumulators and rebuilt. refresh() handles both that
+    // and the ordinary display-only case.
+    refresh();
 }
 
 void TriggeredPowerCanvas::refreshState() { rebuildPanels(); }
@@ -125,6 +217,15 @@ void TriggeredPowerCanvas::refresh()
         rebuildPanels();
     else
         updatePanelData();
+
+    // Values can change from outside this bar — loading a saved chain, or undo —
+    // so re-read them rather than assuming this canvas is the only writer. The
+    // mode may also have changed, which decides whether the baseline controls are
+    // display-time or analysis-time.
+    for (auto& control : m_displayControls)
+        control->refresh();
+
+    applyDisplayControlState();
 
     m_grid.repaintPanels();
     repaint();
@@ -329,38 +430,73 @@ void TriggeredPowerCanvas::paint (juce::Graphics& g)
                     12,
                     juce::Justification::right);
     }
+
+    // The one control down here that is not display-only. In Spectrum mode a
+    // baseline splits the trial into separately transformed pre- and post-trigger
+    // windows, so switching it re-estimates from scratch and discards what has
+    // accumulated. Worth saying, since every other control on this bar is free.
+    if (m_node->getEstimateMode() == EstimateMode::Spectrum)
+    {
+        const juce::String note =
+            CoreServices::getAcquisitionStatus()
+                ? "Baseline is locked while running: in Spectrum mode it splits the trial, so "
+                  "changing it re-estimates from scratch."
+                : "Baseline in Spectrum mode splits the trial: changing it re-estimates and "
+                  "clears accumulated trials.";
+
+        g.setColour (juce::Colours::orange.withAlpha (0.9f));
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (note,
+                    8,
+                    getHeight() - optionsBarHeight - 26,
+                    getWidth() - 16,
+                    12,
+                    juce::Justification::right);
+    }
 }
 
 void TriggeredPowerCanvas::resized()
 {
     auto bounds = getLocalBounds();
-    auto optionsBar = bounds.removeFromBottom (optionsBarHeight).reduced (6, 4);
+    auto optionsBar = bounds.removeFromBottom (optionsBarHeight);
 
     m_viewport.setBounds (bounds);
 
     const int gridWidth = m_viewport.getWidth() - m_viewport.getScrollBarThickness();
     m_grid.setBounds (0, 0, std::max (100, gridWidth), std::max (1, m_grid.getRequiredHeight()));
 
-    if (m_colorMapBox != nullptr)
-        m_colorMapBox->setBounds (optionsBar.removeFromLeft (110));
+    // --- Normalisation row (drawn above the appearance row) -----------------
+    auto normalisationRow = optionsBar.removeFromTop (optionsRowHeight).reduced (6, 4);
 
-    optionsBar.removeFromLeft (6);
+    for (auto& control : m_displayControls)
+    {
+        control->setBounds (normalisationRow.removeFromLeft (control->getDesiredWidth()));
+        normalisationRow.removeFromLeft (8);
+    }
+
+    // --- Appearance row ------------------------------------------------------
+    auto appearanceRow = optionsBar.reduced (6, 4);
+
+    if (m_colorMapBox != nullptr)
+        m_colorMapBox->setBounds (appearanceRow.removeFromLeft (110));
+
+    appearanceRow.removeFromLeft (6);
 
     if (m_columnsBox != nullptr)
-        m_columnsBox->setBounds (optionsBar.removeFromLeft (80));
+        m_columnsBox->setBounds (appearanceRow.removeFromLeft (80));
 
-    optionsBar.removeFromLeft (6);
+    appearanceRow.removeFromLeft (6);
 
     if (m_panelHeightBox != nullptr)
-        m_panelHeightBox->setBounds (optionsBar.removeFromLeft (90));
+        m_panelHeightBox->setBounds (appearanceRow.removeFromLeft (90));
 
-    optionsBar.removeFromLeft (10);
+    appearanceRow.removeFromLeft (10);
 
     if (m_sharedScaleButton != nullptr)
-        m_sharedScaleButton->setBounds (optionsBar.removeFromLeft (120));
+        m_sharedScaleButton->setBounds (appearanceRow.removeFromLeft (120));
 
     if (m_clearButton != nullptr)
-        m_clearButton->setBounds (optionsBar.removeFromRight (70));
+        m_clearButton->setBounds (appearanceRow.removeFromRight (70));
 }
 
 void TriggeredPowerCanvas::comboBoxChanged (juce::ComboBox* comboBox)

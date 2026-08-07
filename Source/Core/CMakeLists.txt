@@ -27,6 +27,8 @@ set(SPECTRA_CORE_SOURCES
     Ui/PanelGrid.cpp
     Ui/TriggerSourceConfigWindow.cpp
     Ui/TriggerMonitorWindow.cpp
+    Ui/AnalysisSettingsWindow.cpp
+    Ui/ParameterControl.cpp
     TriggeredSpectraNode.cpp
 )
 
@@ -55,6 +57,8 @@ set(SPECTRA_CORE_HEADERS
     Ui/PanelGrid.h
     Ui/TriggerSourceConfigWindow.h
     Ui/TriggerMonitorWindow.h
+    Ui/AnalysisSettingsWindow.h
+    Ui/ParameterControl.h
     ParameterNames.h
     TriggeredSpectraNode.h
 )

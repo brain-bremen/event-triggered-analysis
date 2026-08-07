@@ -26,6 +26,7 @@ set(SPECTRA_TEST_SOURCES
     test_Baseline.cpp
     test_WorkQueue.cpp
     test_SpectralWorker.cpp
+    test_ParameterLayout.cpp
 )
 
 enable_testing()

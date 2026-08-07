@@ -24,6 +24,7 @@
 
 #include "../TriggeredCoherenceNode.h"
 #include "TriggeredCoherenceCanvas.h"
+#include "Core/Ui/AnalysisSettingsWindow.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
 
@@ -31,16 +32,23 @@ namespace TriggeredSpectra
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG COHER", 220)
+    : VisualizerEditor (parentNode, "TRIG COHER", 250)
 {
+    // See TriggeredPowerEditor: the editor carries collection and computation,
+    // the canvas carries display.
     m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     m_configureButton->addListener (this);
-    m_configureButton->setBounds (15, 30, 120, 22);
+    m_configureButton->setBounds (15, 30, 70, 22);
     addAndMakeVisible (m_configureButton.get());
+
+    m_analysisButton = std::make_unique<UtilityButton> ("ANALYSIS");
+    m_analysisButton->addListener (this);
+    m_analysisButton->setBounds (90, 30, 70, 22);
+    addAndMakeVisible (m_analysisButton.get());
 
     m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     m_monitorButton->addListener (this);
-    m_monitorButton->setBounds (139, 30, 66, 22);
+    m_monitorButton->setBounds (165, 30, 70, 22);
     addAndMakeVisible (m_monitorButton.get());
 
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
@@ -70,6 +78,11 @@ void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button),
             button);
+    }
+    else if (button == m_analysisButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<AnalysisSettingsWindow> (node, acquisitionIsActive, button), button);
     }
     else if (button == m_monitorButton.get())
     {

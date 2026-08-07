@@ -24,6 +24,7 @@
 
 #include "Core/TriggerSource.h"
 #include "Core/Ui/PanelGrid.h"
+#include "Core/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
 #include <VisualizerWindowHeaders.h>
@@ -51,7 +52,14 @@ public:
     void refreshState() override;
     void updateSettings() override;
 
-    /** Visualizer's polling timer is unused; see the class comment. */
+    /** Visualizer's polling timer is unused; see the class comment. Overriding
+        these rather than calling the base also keeps that promise literally true:
+        the default implementations start and stop the timer. They are the only
+        notification the canvas gets that acquisition started, which decides
+        whether the baseline control is safe to touch. */
+    void beginAnimation() override { applyDisplayControlState(); }
+    void endAnimation() override { applyDisplayControlState(); }
+
     void timerCallback() override {}
 
     void paint (juce::Graphics& g) override;
@@ -75,6 +83,21 @@ private:
         compared by eye. */
     void applySharedScale();
 
+    /** Builds the display-parameter row. These are the parameters that change how
+        the accumulated data is drawn rather than what is accumulated, which is
+        why they belong here and not in the editor's ANALYSIS window. */
+    void buildDisplayControls();
+
+    /** Greys the display controls the current settings make irrelevant — the
+        baseline window when no baseline mode is chosen, the whitening controls
+        when a baseline is active (a baseline already removes 1/f, so whitening on
+        top would be applied to the response but not to what it is compared
+        against), and the exponent outside fixed-exponent mode. */
+    void applyDisplayControlState();
+
+    /** Repaints after a display parameter changed. */
+    void displayParameterChanged();
+
     TriggeredPowerNode* m_node = nullptr;
 
     juce::Viewport m_viewport;
@@ -86,6 +109,9 @@ private:
     std::unique_ptr<juce::ComboBox> m_panelHeightBox;
     std::unique_ptr<juce::ToggleButton> m_sharedScaleButton;
     std::unique_ptr<juce::TextButton> m_clearButton;
+
+    /** Display-time parameters, in the order they are laid out. */
+    std::vector<std::unique_ptr<ParameterControl>> m_displayControls;
 
     /** Panel index -> (trigger source, channel) it shows. */
     struct PanelKey

@@ -23,6 +23,7 @@
 #include "TriggeredCoherenceCanvas.h"
 
 #include "../TriggeredCoherenceNode.h"
+#include "Core/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,7 +33,9 @@ namespace TriggeredSpectra
 
 namespace
 {
-constexpr int optionsBarHeight = 34;
+/** Two rows: plot appearance on top, what-is-shown below. */
+constexpr int optionsRowHeight = 34;
+constexpr int optionsBarHeight = optionsRowHeight * 2;
 } // namespace
 
 TriggeredCoherenceCanvas::TriggeredCoherenceCanvas (TriggeredCoherenceNode* node) : m_node (node)
@@ -77,7 +80,43 @@ TriggeredCoherenceCanvas::TriggeredCoherenceCanvas (TriggeredCoherenceNode* node
     m_grid.setColumns (2);
     m_grid.setPanelHeight (180);
 
+    buildDisplayControls();
     rebuildPanels();
+}
+
+void TriggeredCoherenceCanvas::buildDisplayControls()
+{
+    if (m_node == nullptr)
+        return;
+
+    // All three are applied when the display reads the accumulators, so none of
+    // them discards a trial. Whitening is deliberately absent: coherence is a
+    // normalised ratio, so any per-frequency gain cancels exactly and a whitening
+    // control here would promise an effect that is mathematically a no-op.
+    for (const auto* name : ParameterLayout::coherenceDisplay)
+    {
+        auto* parameter = m_node->getParameter (name);
+
+        if (parameter == nullptr)
+            continue;
+
+        const bool isMode = parameter->getType() == Parameter::CATEGORICAL_PARAM;
+
+        auto control = std::make_unique<ParameterControl> (parameter, 62, isMode ? 110 : 46);
+        control->onChange = [this] { displayParameterChanged(); };
+
+        addAndMakeVisible (control.get());
+        m_displayControls.push_back (std::move (control));
+    }
+}
+
+void TriggeredCoherenceCanvas::displayParameterChanged()
+{
+    // Switching between coherence and phase changes the colour map a panel wants,
+    // which is decided in rebuildPanels() rather than updatePanelData().
+    rebuildPanels();
+    m_grid.repaintPanels();
+    repaint();
 }
 
 void TriggeredCoherenceCanvas::refreshState() { rebuildPanels(); }
@@ -112,6 +151,11 @@ void TriggeredCoherenceCanvas::refresh()
         rebuildPanels();
     else
         updatePanelData();
+
+    // Values can change from outside this bar — loading a saved chain, or undo —
+    // so re-read them rather than assuming this canvas is the only writer.
+    for (auto& control : m_displayControls)
+        control->refresh();
 
     m_grid.repaintPanels();
     repaint();
@@ -292,33 +336,45 @@ void TriggeredCoherenceCanvas::paint (juce::Graphics& g)
 void TriggeredCoherenceCanvas::resized()
 {
     auto bounds = getLocalBounds();
-    auto optionsBar = bounds.removeFromBottom (optionsBarHeight).reduced (6, 4);
+    auto optionsBar = bounds.removeFromBottom (optionsBarHeight);
 
     m_viewport.setBounds (bounds);
 
     const int gridWidth = m_viewport.getWidth() - m_viewport.getScrollBarThickness();
     m_grid.setBounds (0, 0, std::max (100, gridWidth), std::max (1, m_grid.getRequiredHeight()));
 
-    if (m_colorMapBox != nullptr)
-        m_colorMapBox->setBounds (optionsBar.removeFromLeft (110));
+    // --- Display row ---------------------------------------------------------
+    auto displayRow = optionsBar.removeFromTop (optionsRowHeight).reduced (6, 4);
 
-    optionsBar.removeFromLeft (6);
+    for (auto& control : m_displayControls)
+    {
+        control->setBounds (displayRow.removeFromLeft (control->getDesiredWidth()));
+        displayRow.removeFromLeft (8);
+    }
+
+    // --- Appearance row ------------------------------------------------------
+    auto appearanceRow = optionsBar.reduced (6, 4);
+
+    if (m_colorMapBox != nullptr)
+        m_colorMapBox->setBounds (appearanceRow.removeFromLeft (110));
+
+    appearanceRow.removeFromLeft (6);
 
     if (m_columnsBox != nullptr)
-        m_columnsBox->setBounds (optionsBar.removeFromLeft (80));
+        m_columnsBox->setBounds (appearanceRow.removeFromLeft (80));
 
-    optionsBar.removeFromLeft (6);
+    appearanceRow.removeFromLeft (6);
 
     if (m_panelHeightBox != nullptr)
-        m_panelHeightBox->setBounds (optionsBar.removeFromLeft (90));
+        m_panelHeightBox->setBounds (appearanceRow.removeFromLeft (90));
 
-    optionsBar.removeFromLeft (10);
+    appearanceRow.removeFromLeft (10);
 
     if (m_sharedScaleButton != nullptr)
-        m_sharedScaleButton->setBounds (optionsBar.removeFromLeft (120));
+        m_sharedScaleButton->setBounds (appearanceRow.removeFromLeft (120));
 
     if (m_clearButton != nullptr)
-        m_clearButton->setBounds (optionsBar.removeFromRight (70));
+        m_clearButton->setBounds (appearanceRow.removeFromRight (70));
 }
 
 void TriggeredCoherenceCanvas::comboBoxChanged (juce::ComboBox* comboBox)

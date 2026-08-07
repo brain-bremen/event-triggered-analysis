@@ -47,6 +47,10 @@ private:
         ever captured, so this is the first thing a user needs. */
     std::unique_ptr<UtilityButton> m_configureButton;
 
+    /** Opens every parameter that changes what is computed. Display-only settings
+        deliberately live on the canvas instead. */
+    std::unique_ptr<UtilityButton> m_analysisButton;
+
     /** Opens the live trigger counters, for when a source is configured but no
         trials appear. */
     std::unique_ptr<UtilityButton> m_monitorButton;

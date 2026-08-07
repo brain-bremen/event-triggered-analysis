@@ -24,6 +24,7 @@
 
 #include "Core/TriggerSource.h"
 #include "Core/Ui/PanelGrid.h"
+#include "Core/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
 #include <VisualizerWindowHeaders.h>
@@ -76,6 +77,15 @@ private:
         compared by eye. */
     void applySharedScale();
 
+    /** Builds the display-parameter row: what to show, and how much neighbouring
+        bins are pooled. Smoothing is display-time here because it is applied to
+        the accumulated cross-spectra at read time, not folded into them — so it
+        can be turned up and down freely without discarding trials. */
+    void buildDisplayControls();
+
+    /** Repaints after a display parameter changed. */
+    void displayParameterChanged();
+
     TriggeredCoherenceNode* m_node = nullptr;
 
     juce::Viewport m_viewport;
@@ -87,6 +97,9 @@ private:
     std::unique_ptr<juce::ComboBox> m_panelHeightBox;
     std::unique_ptr<juce::ToggleButton> m_sharedScaleButton;
     std::unique_ptr<juce::TextButton> m_clearButton;
+
+    /** Display-time parameters, in the order they are laid out. */
+    std::vector<std::unique_ptr<ParameterControl>> m_displayControls;
 
     /** Panel index -> (trigger source, pair) it shows. */
     struct PanelKey
