@@ -30,9 +30,11 @@
 #include "TriggerMessaging.h"
 #include "TriggerSource.h"
 #include "Types.h"
+#include "WorkQueue.h"
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
+#include <atomic>
 #include <memory>
 
 namespace TriggeredSpectra
@@ -119,6 +121,22 @@ public:
      *  an overloaded worker is visible rather than silent. */
     int getNumDroppedRequests() const;
 
+    // --- Trigger diagnostics ------------------------------------------------
+    //
+    // Counted per line rather than per source, because the question these answer
+    // is "are any TTL events reaching this plugin at all, and on which line?" — a
+    // source configured for the wrong line produces no per-source count at all,
+    // which is indistinguishable from no events arriving.
+
+    /** Rising TTL edges seen on any line since acquisition started. */
+    int getNumTtlEdgesSeen() const { return m_ttlEdgesSeen.load (std::memory_order_relaxed); }
+
+    /** Line of the most recent rising edge, or -1 if none has arrived. */
+    int getLastTtlLine() const { return m_lastTtlLine.load (std::memory_order_relaxed); }
+
+    /** Zeroes every counter, node-wide and per source. */
+    void resetTriggerCounters();
+
 protected:
     // --- Hooks for subclasses ----------------------------------------------
 
@@ -142,6 +160,7 @@ protected:
     // --- TriggerSources::Listener ------------------------------------------
 
     void triggerSourceAdded (TriggerSource* source) override;
+    void triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources) override;
     void triggerSourcesRemoved() override;
     void triggerSourceLineChanged (TriggerSource* source) override;
     void triggerSourceTypeChanged (TriggerSource* source) override;
@@ -164,18 +183,14 @@ protected:
         return source != nullptr && source->commitPattern.isNotEmpty();
     }
 
-    /** Folds a parked capture into the accumulators. Returns true if there was
-        one. Implemented by subclasses that hold pending captures. */
-    virtual bool commitPendingCapture (TriggerSource*) { return false; }
-
-    /** Throws a parked capture away. */
-    virtual void discardPendingCapture (TriggerSource*) {}
-
-    /** Drops parked captures whose timeout has elapsed. */
-    virtual void discardExpiredPendingCaptures() {}
-
     MultiChannelRingBuffer m_ringBuffer;
     TriggerSources m_triggerSources;
+
+    /** Audio thread -> worker. A value member with a lifetime matching the node's,
+     *  so the audio thread can push into it without ever checking whether a worker
+     *  currently exists. */
+    WorkQueue m_workQueue;
+
     std::unique_ptr<SpectralWorker> m_worker;
 
     TrialGeometry m_geometry;
@@ -183,6 +198,10 @@ protected:
 
     /** Index into getDataStreams() of the stream being analysed. */
     int m_streamIndex = 0;
+
+    /** Written on the audio thread, read on the message thread. See the getters. */
+    std::atomic<int> m_ttlEdgesSeen { 0 };
+    std::atomic<int> m_lastTtlLine { -1 };
 
 private:
     /** Recomputes m_geometry and m_selectedChannels from the current parameters

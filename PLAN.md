@@ -7,9 +7,11 @@ the pair-configuration UI is missing, so no pairs can be created. Phase 5 is
 outstanding. Places where implementation diverged from this plan are marked
 **[changed]**; each says why.
 
-**Nothing here has been verified visually.** Every claim below rests on 110 unit
-tests and a clean build/install. Neither plugin has been watched rendering, and the
-display layer has no test coverage at all.
+**Almost nothing here has been verified visually.** Both plugins now load, and the
+trigger-source table opens and creates sources — that much has been seen working.
+Everything else rests on 160 unit tests and a clean build/install: neither plugin
+has been watched rendering a spectrum, and the display layer has no test coverage
+at all.
 
 See *Known gaps* near the end for what is unreachable from the UI today.
 
@@ -88,7 +90,8 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `MultiChannelRingBuffer.{h,cpp}` | **[done]** rewritten, see below |
 | `TriggerSource.{h,cpp}` | **[done]** decoupled from any concrete node |
 | `TrialSpectrumBuffer.{h,cpp}` | **[done]** ported from `SingleTrialBuffer` |
-| `SpectralWorker.{h,cpp}` | **[done]** |
+| `SpectralWorker.{h,cpp}` | **[done]** consumes `WorkQueue`, dispatches by item kind |
+| `WorkQueue.{h,cpp}` | **[done]** **[changed]** — audio→worker handoff, see below |
 | `TriggeredSpectraNode.{h,cpp}` | **[done]** **[changed]** — see below |
 | `Dpss.{h,cpp}`, `Tapers.h` | **[done]** matches scipy to 1e-9 |
 | `FrequencyGrid.{h,cpp}` | **[done]** |
@@ -97,11 +100,13 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `StftTransform.{h,cpp}` | **[todo]** Morlet is used meanwhile |
 | `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
 | `Accumulators.{h,cpp}` | **[done]** |
+| `Baseline.{h,cpp}` | **[done]** **[changed]** — extracted from the Power node so it is testable |
 | `DataStore.{h,cpp}` | **[done]** folded into each node |
 | `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
 | `Ui/SpectrumPanel.{h,cpp}` | **[done]** heatmap + line modes |
 | `Ui/PanelGrid.{h,cpp}` | **[done]** |
 | `Ui/TriggerSourceConfigWindow.{h,cpp}` | **[done]** shared by both plugins |
+| `Ui/TriggerMonitorWindow.{h,cpp}` | **[done]** live trigger counters, see below |
 
 ### **[changed]** A shared node base class was added
 
@@ -118,23 +123,47 @@ estimator and the display.
 Identical in both plugins; only the accumulation step differs.
 
 ```
-process()  [audio thread, allocation-free]
+process()  [audio thread, allocation-free, lock-free]
    ringBuffer.addData(buffer, getFirstSampleNumberForBlock(streamId), nSamples)
-   checkForEvents(false)  ->  handleTTLEvent()  ->  worker.enqueue(CaptureRequest)
+   checkForEvents(false)
+       -> handleTTLEvent()         -> workQueue.push(Capture)
+       -> handleBroadcastMessage() -> arm/disarm (atomic store, immediate)
+                                      workQueue.push(Commit / Discard / DiscardExpired)
 
 SpectralWorker::run()  [background juce::Thread, Priority::high]
-   wait on WaitableEvent, drain the queue
-   ringBuffer.readAroundSample(trigger, pre + pad, post + pad, scratch)
-       retry every 20 ms while NotEnoughNewData  (post data hasn't arrived yet)
-       give up if the stream stops advancing or goes backwards
-   client->processCapturedTrial(request, trial)     <- SpectralEngine + accumulators
-   client->capturesCommitted()  -> triggerAsyncUpdate()
+   workQueue.waitForWork(100), then drain
+   Capture:        ringBuffer.readAroundSample(trigger, pre + pad, post + pad, scratch)
+                       retry every 20 ms while NotEnoughNewData
+                       give up if the stream stops advancing or goes backwards
+                   client->processCapturedTrial()   <- SpectralEngine + accumulators
+   Commit:         client->commitCapture()          <- takes the data lock
+   Discard:        client->discardCapture()
+   DiscardExpired: client->discardExpiredCaptures(timeStampedAtTheMessage)
+   client->capturesCommitted()  -> triggerAsyncUpdate()   (once per drained batch)
 
 handleAsyncUpdate()  [message thread]  ->  canvas->refresh()
 ```
 
 `checkForEvents` must follow `addData`: a trigger in this block needs its pre-trigger
-samples already present, and the worker may start reading the moment we enqueue.
+samples already present, and the worker may start reading the moment we push.
+
+### **[changed]** Broadcast messages arrive on the audio thread
+
+`handleBroadcastMessage` is **not** a message-thread callback. Its only dispatch site
+in the GUI is `GenericProcessor::checkForEvents` (`GenericProcessor.cpp:1482`), which
+`process()` calls — so it runs on the audio thread, exactly like `handleTTLEvent`.
+
+That was missed initially, and the first implementation committed parked captures
+straight from the handler: taking the data lock and allocating per channel, on the
+audio thread, behind a lock the message thread holds for the whole of a repaint
+(including a Theil–Sen aperiodic refit). Committing now goes through the queue.
+
+Arming deliberately stays on the audio thread. A message and the TTL edge it gates
+can arrive in the same block, so deferring the arm would drop that edge; it is only
+an atomic store on `TriggerSource::canTrigger`, which is why that flag is atomic.
+
+Captures and commits share **one** queue so a commit cannot overtake the capture it
+refers to.
 
 The canvas **does not poll**. `Visualizer`'s timer is left unstarted and
 `timerCallback()` is a no-op; redraws are driven entirely by `triggerAsyncUpdate()`.
@@ -505,6 +534,26 @@ carry assumptions that do not survive a frequency axis.
 - Coherence panels draw the significance threshold as a dashed line (line mode) or a
   transparency mask on sub-threshold pixels (spectrogram mode).
 
+### **[changed]** `refresh()` has to detect a stale panel set
+
+The panel set is (sources × channels), and both change while the canvas is open.
+Neither change had any path that rebuilt it: `triggerSourceAdded()` and a
+channel-selection change both reach the canvas through `triggerAsyncUpdate()`,
+which lands in `refresh()`, and `refresh()` only copied fresh values into whatever
+panels already existed. `rebuildPanels()` was reachable only from the constructor,
+`refreshState()` (which the GUI calls on a *tab change*) and XML load.
+
+Since the canvas is constructed the first time the visualizer is opened, and a
+fresh drop has neither channels nor sources, the usual outcome was a grid stuck at
+zero panels: "Select channels and add a trigger source to begin" stayed on screen
+while trials accumulated behind it, and only switching tabs brought the plot back.
+That is the whole of "I configured a trigger and nothing appears" on the display
+side, and it applied to both canvases.
+
+`refresh()` now compares the built key list against what the configuration calls
+for and rebuilds when they differ. Detecting staleness beats adding another
+notification: no future caller can forget to announce itself.
+
 **Pair configuration** — port `TriggeredAvg`'s `PopupConfigurationWindow`
 `TableListBoxModel`: channel A, channel B, name, colour, delete — plus a **seed mode**
 button generating "seed × all selected" pairs in one click, which is how these are
@@ -513,7 +562,39 @@ used in practice. Mutations wrapped in `ProcessorAction` subclasses for undo/red
 **[done]**: `ColorMap` (viridis / magma / diverging / greyscale via a 256-entry LUT),
 `SpectrumPanel` (heatmap and line modes, cached image and paths, log-aware frequency
 axis), `PanelGrid`, both canvases with an options bar (colormap, columns, panel
-height, shared scale, clear), and `TriggerSourceConfigWindow`.
+height, shared scale, clear), `TriggerSourceConfigWindow`, and `TriggerMonitorWindow`.
+
+### Trigger monitor **[done]**
+
+A configured trigger that produces nothing gives the user no information at all:
+the canvas is empty either way. `TriggerMonitorWindow` (editor button **MONITOR**,
+both plugins) follows an edge through the pipeline and shows where it stops.
+
+```
+edges -> queued -> trials -> (committed)
+     \-> dropped        \-> failed
+```
+
+Counts live on `TriggerSource::counters` as relaxed atomics, incremented on the
+audio thread (edges, enqueues) and the worker thread (trials, commits), read on
+the message thread. They are diagnostic only — nothing branches on them — and are
+reset at `startAcquisition` so a stale tally cannot be mistaken for live triggers.
+They are deliberately *not* carried across a `TriggerSource` copy, being runtime
+state rather than configuration.
+
+Two decisions matter more than the rest:
+
+- **Edges are counted per line, node-wide, not only per source.** A source
+  listening to the wrong TTL line leaves every per-source count at zero, which is
+  indistinguishable from no events arriving at all. The line total and the
+  last-seen line number separate those two cases, and in practice that is the
+  common misconfiguration.
+- **Edges are counted before the geometry check and before the arm/type gate.** An
+  edge that arrived and was rejected must read as "arrived, rejected", not as
+  silence — the whole failure mode being diagnosed is silence.
+
+The window turns those counts into one line of plain English (`diagnose()`) naming
+the most likely cause, rather than leaving the user to interpret the columns.
 
 **[todo]**: the pair-configuration window, and a shared colour bar showing the
 value scale.
@@ -556,9 +637,9 @@ not. These are ordered by how much they block actual use.
 
 ### Most analysis parameters have no UI control
 
-The editor exposes five things: **TRIGGERS**, channels, pre, post, mode. Everything
-else is registered, functional and tested, but has no control anywhere — so it can
-only ever run at its default:
+The editor exposes six things: **TRIGGERS**, **MONITOR**, channels, pre, post, mode.
+Everything else is registered, functional and tested, but has no control anywhere —
+so it can only ever run at its default:
 
 `freq_min`, `freq_max`, `num_freqs`, `freq_spacing`, `tf_method`, `n_cycles_low`,
 `n_cycles_high`, `stft_window_ms`, `stft_hop_ms`, `line_method`, `nw`, `n_tapers`,
@@ -602,6 +683,11 @@ and doing that from the base constructor is a pure-virtual call.
   ratios rather than a common gain.
 - Undo/redo (`ProcessorAction`) for trigger-source and pair edits.
 - Phase 5 profiling, which is only worth doing once the plugins can be run.
+- **Coherence ignores commit patterns.** `TriggeredCoherenceNode` overrides none of
+  the pending-capture hooks and never checks `requiresCommit`, so a source with a
+  commit pattern parks trials in TriggeredPower but accumulates immediately in
+  TriggeredCoherence. Since sources are shared configuration, the same trigger
+  behaves differently in the two plugins.
 
 ---
 
@@ -609,7 +695,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 110 tests passing:
+**[done]** — 160 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -647,10 +733,29 @@ and doing that from the base constructor is a pure-virtual call.
   disabled not wildcards; cancel beats commit; a plain TTL source is never
   disarmed; per-source timeout expiry; move-only payloads; the full
   arm → capture → commit / cancel / timeout sequences.
+- *Work queue*: push order preserved across item kinds; every field carried
+  through; dropping rather than blocking when full, and recovering after a drain;
+  flush discarding what was queued while letting later items through and reclaiming
+  the slots; a producer/consumer pair over 20 000 items losing nothing it accepted;
+  and a third thread flushing continuously without ever corrupting the order.
+- *Spectral worker*: window extraction; waiting for post-trigger data that has not
+  arrived yet, then succeeding; giving up on a stalled stream and still servicing
+  the next item; `DataTooOld`; dispatch of each item kind to its own handler;
+  capture/commit ordering; the message timestamp reaching expiry unchanged; one
+  repaint per drained batch rather than one per trial; flushed items never reaching
+  the client; and prompt shutdown both idle and mid-retry.
+- *Trigger counters*: a successful capture counted against its source, a failed
+  one not counted, a committed pending capture counted, `reset()` zeroing every
+  field, and counts not surviving a copy.
+- *Baseline*: bin-range selection including inverted, empty and out-of-range
+  windows; dB / percent / z-score against both a slice of the time axis and a
+  separately estimated pre-trigger spectrum; log(0) clamped instead of producing
+  -inf; z-score declining to act on a single bin or a flat baseline rather than
+  dividing by noise.
 
 **[todo]**: tests for the STFT alternative and for the display layer. The
-whitening, pre-trigger baseline and trigger-messaging paths are covered; the
-rendering path is not.
+whitening, pre-trigger baseline, trigger-messaging, queueing and worker paths are
+covered; the rendering path is not.
 
 ```sh
 cmake --build Build --config Release --target TriggeredSpectra_tests

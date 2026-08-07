@@ -23,6 +23,7 @@
 #pragma once
 
 #include "Core/Accumulators.h"
+#include "Core/Baseline.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TrialSpectrumBuffer.h"
 #include "Core/Whitening.h"
@@ -30,6 +31,7 @@
 #include "Core/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
+#include <cstdint>
 #include <memory>
 #include <map>
 #include <unordered_map>
@@ -38,18 +40,6 @@ namespace TriggeredSpectra
 {
 
 class TriggeredPowerCanvas;
-
-/** How accumulated power is normalised for display. */
-enum class BaselineMode
-{
-    None = 0,
-    /** 10 log10(power / baseline). The usual choice for a spectrogram. */
-    Decibel = 1,
-    /** 100 (power - baseline) / baseline. */
-    PercentChange = 2,
-    /** (power - baseline) / sd(baseline over time). */
-    ZScore = 3
-};
 
 /** Event-triggered power spectra: a spectrogram or a line spectrum per channel,
  *  accumulated across trials and split by trigger source.
@@ -120,9 +110,10 @@ protected:
 
     void refreshDisplay() override;
 
-    bool commitPendingCapture (TriggerSource* source) override;
-    void discardPendingCapture (TriggerSource* source) override;
-    void discardExpiredPendingCaptures() override;
+    // Called on the worker thread, in queue order with the captures themselves.
+    bool commitCapture (TriggerSource* source) override;
+    void discardCapture (TriggerSource* source) override;
+    void discardExpiredCaptures (std::int64_t nowMs) override;
 
 private:
     /** Everything a parked capture needs to be folded in later. Holding the
@@ -155,6 +146,13 @@ private:
                                    int frequencyIndex,
                                    std::span<double> values) const;
 
+    /** Across-trial SD of the accumulated pre-trigger baseline, which is what
+        z-scoring needs; the accumulator reports SEM. Zero when there is nothing
+        to estimate from. */
+    static double baselineStandardDeviation (const PowerAccumulator& accumulator,
+                                             int channelIndex,
+                                             int frequencyIndex);
+
     /** Removes the 1/f background from a line spectrum, in place. Spectrum mode
         only: a spectrogram is whitened per frequency across all its time bins,
         which needs the whole grid rather than one frequency's worth. */
@@ -163,14 +161,6 @@ private:
     /** Recomputes the aperiodic fits from the current accumulators. Called when
         the display asks for data and the fits are stale. */
     void refreshAperiodicFits() const;
-
-    /** Applies normalisation against a separately estimated pre-trigger
-        spectrum. `baseline` is the mean pre-trigger power at this frequency and
-        `baselineSd` its spread across trials, used only for z-scoring. */
-    static void applyBaselineValue (std::span<double> values,
-                                    double baseline,
-                                    double baselineSd,
-                                    BaselineMode mode);
 
     TriggeredPowerCanvas* m_canvas = nullptr;
 

@@ -251,9 +251,15 @@ float TriggeredSpectraNode::getPostWindowMs() const
     return parameter != nullptr ? static_cast<float> (parameter->getValue()) : 0.0f;
 }
 
-int TriggeredSpectraNode::getNumDroppedRequests() const
+int TriggeredSpectraNode::getNumDroppedRequests() const { return m_workQueue.getNumDropped(); }
+
+void TriggeredSpectraNode::resetTriggerCounters()
 {
-    return m_worker != nullptr ? m_worker->getNumDroppedRequests() : 0;
+    m_ttlEdgesSeen.store (0, std::memory_order_relaxed);
+    m_lastTtlLine.store (-1, std::memory_order_relaxed);
+
+    for (auto* source : m_triggerSources.items())
+        source->counters.reset();
 }
 
 bool TriggeredSpectraNode::isAnalysisParameter (const juce::String& parameterName) const
@@ -323,7 +329,19 @@ void TriggeredSpectraNode::rebuildConfiguration()
 {
     const juce::ScopedLock lock (m_configurationLock);
 
+    // Every path into here is gated on acquisition being stopped: all analysis
+    // parameters are registered deactivateDuringAcquisition, and the trigger
+    // table disables editing while running. That invariant is what makes it safe
+    // to reallocate the ring buffer and rewrite m_geometry below, both of which
+    // the audio thread reads unsynchronised. Assert it rather than trusting it
+    // silently — if a parameter is ever added without the flag, this is what says
+    // so, instead of a rare crash in the field.
+    jassert (! CoreServices::getAcquisitionStatus());
+
     stopWorker();
+
+    // Anything queued refers to the configuration being replaced.
+    m_workQueue.flush();
 
     m_geometry = {};
     m_selectedChannels.clear();
@@ -395,7 +413,7 @@ void TriggeredSpectraNode::startWorker()
     if (m_worker != nullptr || ! m_geometry.isValid() || getNumInputs() <= 0)
         return;
 
-    m_worker = std::make_unique<SpectralWorker> (&m_ringBuffer, this);
+    m_worker = std::make_unique<SpectralWorker> (&m_ringBuffer, &m_workQueue, this);
     m_worker->startThread (juce::Thread::Priority::high);
 }
 
@@ -405,8 +423,14 @@ bool TriggeredSpectraNode::startAcquisition()
 {
     m_ringBuffer.reset();
 
-    if (m_worker != nullptr)
-        m_worker->clearQueue();
+    // Discard anything left from the previous run. Safe from this thread because
+    // flushing only bumps a generation counter; it does not touch the queue
+    // cursors, which belong to the audio and worker threads.
+    m_workQueue.flush();
+
+    // Counts are per acquisition run, so a stale tally from the last run cannot be
+    // mistaken for triggers arriving in this one.
+    resetTriggerCounters();
 
     if (auto* visualizerEditor = dynamic_cast<VisualizerEditor*> (getEditor()))
         visualizerEditor->enable();
@@ -444,45 +468,92 @@ void TriggeredSpectraNode::process (juce::AudioBuffer<float>& buffer)
 
 void TriggeredSpectraNode::handleTTLEvent (TTLEventPtr event)
 {
-    if (m_worker == nullptr || ! m_geometry.isValid())
-        return;
-
     // Rising edges only.
     if (! event->getState())
         return;
 
     const int line = event->getLine();
 
-    for (auto* source : m_triggerSources.getAll())
+    // Counted per line, before matching any source: this is what distinguishes
+    // "no events are arriving" from "events are arriving on a line no source is
+    // listening to", which look identical from the per-source counts alone.
+    //
+    // Counted before the geometry check too, so that an unusable configuration
+    // reads as "edges arrive, nothing is captured" rather than as silence.
+    m_ttlEdgesSeen.fetch_add (1, std::memory_order_relaxed);
+    m_lastTtlLine.store (line, std::memory_order_relaxed);
+
+    if (! m_geometry.isValid())
+        return;
+
+    // items() rather than getAll(): the latter builds a juce::Array, and this runs
+    // on the audio thread.
+    for (auto* source : m_triggerSources.items())
     {
-        if (source->line != line || ! source->canTrigger)
+        if (source->line != line)
+            continue;
+
+        // Counted before the gate, so an edge that arrived at a disarmed source is
+        // still visible as an edge rather than vanishing.
+        source->counters.ttlEdges.fetch_add (1, std::memory_order_relaxed);
+
+        if (! source->canTrigger.load (std::memory_order_relaxed))
             continue;
 
         if (source->type == TriggerType::MSG_TRIGGER)
             continue;
 
-        m_worker->enqueue (CaptureRequest {
-            .triggerSource = source,
-            .triggerSample = event->getSampleNumber(),
-            .preSamples = m_geometry.preSamples + m_geometry.padSamples,
-            .postSamples = m_geometry.postSamples + m_geometry.padSamples });
+        const bool queued = m_workQueue.push (
+            { .kind = WorkItemKind::Capture,
+              .triggerSource = source,
+              .triggerSample = event->getSampleNumber(),
+              .preSamples = m_geometry.preSamples + m_geometry.padSamples,
+              .postSamples = m_geometry.postSamples + m_geometry.padSamples });
+
+        if (queued)
+            source->counters.capturesQueued.fetch_add (1, std::memory_order_relaxed);
+        else
+            source->counters.capturesDropped.fetch_add (1, std::memory_order_relaxed);
 
         // A message-gated source fires once per arming.
         if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
-            source->canTrigger = false;
+            source->canTrigger.store (false, std::memory_order_relaxed);
     }
 }
 
 void TriggeredSpectraNode::handleBroadcastMessage (const juce::String& message,
                                                    int64 /*systemTimeMillis*/)
 {
-    // Sweep stale captures first, so a commit message cannot resurrect one that
-    // should already have timed out.
-    discardExpiredPendingCaptures();
+    // This runs on the AUDIO thread: broadcast text events are delivered through
+    // checkForEvents(), not on the message thread. So nothing here may take the
+    // data lock or allocate.
+    //
+    // Arming stays here because it must be immediate — a message and the TTL edge
+    // it gates can arrive in the same block, and deferring the arm would drop that
+    // edge. It is only an atomic store, so it costs nothing.
+    //
+    // Committing is the expensive half: it touches the accumulators under a lock
+    // the message thread also holds while repainting. That goes to the worker.
 
-    bool anythingCommitted = false;
+    // Sweeping stale captures has to be queued *before* any commit, or a commit
+    // could resurrect a trial that should already have timed out. Only worth a
+    // queue slot when some source parks captures at all.
+    bool anySourceParksCaptures = false;
 
-    for (auto* source : m_triggerSources.getAll())
+    for (auto* source : m_triggerSources.items())
+    {
+        if (source->commitPattern.isNotEmpty())
+        {
+            anySourceParksCaptures = true;
+            break;
+        }
+    }
+
+    if (anySourceParksCaptures)
+        m_workQueue.push ({ .kind = WorkItemKind::DiscardExpired,
+                            .timeMs = juce::Time::currentTimeMillis() });
+
+    for (auto* source : m_triggerSources.items())
     {
         const auto actions = matchTriggerMessage (*source, message);
 
@@ -492,14 +563,14 @@ void TriggeredSpectraNode::handleBroadcastMessage (const juce::String& message,
         const auto change = applyTriggerMessage (*source, actions);
 
         if (change.discardPending)
-            discardPendingCapture (source);
+            m_workQueue.push ({ .kind = WorkItemKind::Discard, .triggerSource = source });
 
-        if (change.commitPending && commitPendingCapture (source))
-            anythingCommitted = true;
+        if (change.commitPending)
+            m_workQueue.push ({ .kind = WorkItemKind::Commit, .triggerSource = source });
     }
 
-    if (anythingCommitted)
-        triggerAsyncUpdate();
+    // The repaint is triggered by the worker once it has actually committed
+    // something, via capturesCommitted().
 }
 
 // --- Worker callbacks ------------------------------------------------------
@@ -509,6 +580,9 @@ void TriggeredSpectraNode::capturesCommitted() { triggerAsyncUpdate(); }
 void TriggeredSpectraNode::captureFailed (const CaptureRequest& request,
                                           RingBufferReadResult result)
 {
+    if (request.triggerSource != nullptr)
+        request.triggerSource->counters.capturesFailed.fetch_add (1, std::memory_order_relaxed);
+
     // Not an error worth interrupting the user over: a trigger too close to the
     // start of acquisition, or one whose post window never arrived because
     // acquisition stopped, is expected.
@@ -531,6 +605,19 @@ void TriggeredSpectraNode::triggerSourceAdded (TriggerSource* /*source*/)
 {
     rebuildConfiguration();
     triggerAsyncUpdate();
+}
+
+void TriggeredSpectraNode::triggerSourcesAboutToBeRemoved (
+    const juce::Array<TriggerSource*>& /*sources*/)
+{
+    // These pointers are about to dangle. The worker may be holding one in a
+    // capture it is transforming right now, and the queue may hold more, so join
+    // the thread and invalidate the queue before the objects go away.
+    //
+    // The per-source maps keyed by these pointers are emptied moments later by
+    // analysisConfigurationChanged(), reached through triggerSourcesRemoved().
+    stopWorker();
+    m_workQueue.flush();
 }
 
 void TriggeredSpectraNode::triggerSourcesRemoved()

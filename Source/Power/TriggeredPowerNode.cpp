@@ -31,13 +31,6 @@
 namespace TriggeredSpectra
 {
 
-namespace
-{
-/** Guards the log and the divisions in the baseline modes. Power is a
-    non-negative density, so anything at or below this is numerically zero. */
-constexpr double minimumPower = 1e-30;
-} // namespace
-
 TriggeredPowerNode::TriggeredPowerNode() : TriggeredSpectraNode ("Triggered Power") {}
 
 TriggeredPowerNode::~TriggeredPowerNode() = default;
@@ -463,7 +456,7 @@ bool TriggeredPowerNode::accumulateTrial (TriggerSource* source,
     return true;
 }
 
-bool TriggeredPowerNode::commitPendingCapture (TriggerSource* source)
+bool TriggeredPowerNode::commitCapture (TriggerSource* source)
 {
     const juce::ScopedLock lock (m_dataLock);
 
@@ -476,53 +469,33 @@ bool TriggeredPowerNode::commitPendingCapture (TriggerSource* source)
         source, pending->response, pending->hasBaseline ? &pending->baseline : nullptr);
 }
 
-void TriggeredPowerNode::discardPendingCapture (TriggerSource* source)
+void TriggeredPowerNode::discardCapture (TriggerSource* source)
 {
     const juce::ScopedLock lock (m_dataLock);
     m_pendingCaptures.discard (source);
 }
 
-void TriggeredPowerNode::discardExpiredPendingCaptures()
+void TriggeredPowerNode::discardExpiredCaptures (std::int64_t nowMs)
 {
+    // nowMs is stamped where the message arrived, not here: the worker may be a
+    // few trials behind, and a timeout should be measured from the message.
     const juce::ScopedLock lock (m_dataLock);
-    m_pendingCaptures.discardExpired (juce::Time::currentTimeMillis());
+    m_pendingCaptures.discardExpired (nowMs);
 }
 
 bool TriggeredPowerNode::getBaselineBinRange (int& firstBin, int& lastBin) const
 {
-    const auto binTimes = m_engine.binTimes();
-
-    if (binTimes.empty())
-        return false;
-
     auto* startParameter = getParameter (ParameterNames::baseline_start_ms);
     auto* endParameter = getParameter (ParameterNames::baseline_end_ms);
 
     if (startParameter == nullptr || endParameter == nullptr)
         return false;
 
-    const double startSeconds = static_cast<double> (startParameter->getValue()) / 1000.0;
-    const double endSeconds = static_cast<double> (endParameter->getValue()) / 1000.0;
-
-    if (! (endSeconds > startSeconds))
-        return false;
-
-    firstBin = -1;
-    lastBin = -1;
-
-    for (int bin = 0; bin < static_cast<int> (binTimes.size()); ++bin)
-    {
-        const double t = binTimes[static_cast<std::size_t> (bin)];
-
-        if (t >= startSeconds && t <= endSeconds)
-        {
-            if (firstBin < 0)
-                firstBin = bin;
-            lastBin = bin;
-        }
-    }
-
-    return firstBin >= 0;
+    return findBaselineBinRange (m_engine.binTimes(),
+                                 static_cast<double> (startParameter->getValue()) / 1000.0,
+                                 static_cast<double> (endParameter->getValue()) / 1000.0,
+                                 firstBin,
+                                 lastBin);
 }
 
 void TriggeredPowerNode::applyBaseline (std::span<double> values, BaselineMode mode) const
@@ -533,62 +506,18 @@ void TriggeredPowerNode::applyBaseline (std::span<double> values, BaselineMode m
     if (! getBaselineBinRange (firstBin, lastBin))
         return;
 
-    if (lastBin >= static_cast<int> (values.size()))
-        lastBin = static_cast<int> (values.size()) - 1;
+    applyBaselineFromBins (values, firstBin, lastBin, mode);
+}
 
-    if (firstBin > lastBin)
-        return;
+double TriggeredPowerNode::baselineStandardDeviation (const PowerAccumulator& accumulator,
+                                                      int channelIndex,
+                                                      int frequencyIndex)
+{
+    // The accumulator reports SEM; z-scoring wants the across-trial SD.
+    double sem = 0.0;
+    accumulator.standardError (channelIndex, frequencyIndex, std::span<double> (&sem, 1));
 
-    const int count = lastBin - firstBin + 1;
-
-    double baseline = 0.0;
-    for (int bin = firstBin; bin <= lastBin; ++bin)
-        baseline += values[static_cast<std::size_t> (bin)];
-    baseline /= count;
-
-    if (baseline < minimumPower)
-        baseline = minimumPower;
-
-    switch (mode)
-    {
-        case BaselineMode::Decibel:
-            for (auto& value : values)
-                value = 10.0 * std::log10 (std::max (value, minimumPower) / baseline);
-            break;
-
-        case BaselineMode::PercentChange:
-            for (auto& value : values)
-                value = 100.0 * (value - baseline) / baseline;
-            break;
-
-        case BaselineMode::ZScore:
-        {
-            // Spread of the baseline window itself. With a single baseline bin
-            // there is nothing to estimate, so fall back to leaving it alone.
-            double variance = 0.0;
-            for (int bin = firstBin; bin <= lastBin; ++bin)
-            {
-                const double difference = values[static_cast<std::size_t> (bin)] - baseline;
-                variance += difference * difference;
-            }
-
-            if (count < 2)
-                return;
-
-            const double standardDeviation = std::sqrt (variance / (count - 1));
-
-            if (standardDeviation < minimumPower)
-                return;
-
-            for (auto& value : values)
-                value = (value - baseline) / standardDeviation;
-            break;
-        }
-
-        case BaselineMode::None:
-        default:
-            break;
-    }
+    return sem * std::sqrt (static_cast<double> (accumulator.numTrials()));
 }
 
 void TriggeredPowerNode::applyBaselineToFrequency (TriggerSource* source,
@@ -613,14 +542,10 @@ void TriggeredPowerNode::applyBaselineToFrequency (TriggerSource* source,
         if (baselineMean.empty())
             return;
 
-        double baselineSd = 0.0;
-
-        if (mode == BaselineMode::ZScore)
-        {
-            double sem = 0.0;
-            baseline->second.standardError (channelIndex, frequencyIndex, std::span<double> (&sem, 1));
-            baselineSd = sem * std::sqrt (static_cast<double> (baseline->second.numTrials()));
-        }
+        const double baselineSd =
+            mode == BaselineMode::ZScore
+                ? baselineStandardDeviation (baseline->second, channelIndex, frequencyIndex)
+                : 0.0;
 
         applyBaselineValue (values, baselineMean[0], baselineSd, mode);
         return;
@@ -665,15 +590,10 @@ bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
         if (baselineMean.empty())
             return true;
 
-        double baselineSd = 0.0;
-
-        if (mode == BaselineMode::ZScore)
-        {
-            // standardError is SEM; z-scoring wants the across-trial SD.
-            double sem = 0.0;
-            baseline->second.standardError (channelIndex, frequencyIndex, std::span<double> (&sem, 1));
-            baselineSd = sem * std::sqrt (static_cast<double> (baseline->second.numTrials()));
-        }
+        const double baselineSd =
+            mode == BaselineMode::ZScore
+                ? baselineStandardDeviation (baseline->second, channelIndex, frequencyIndex)
+                : 0.0;
 
         applyBaselineValue (destination.subspan (0, mean.size()), baselineMean[0], baselineSd, mode);
         return true;
@@ -682,42 +602,6 @@ bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
     applyBaseline (destination.subspan (0, mean.size()), mode);
 
     return true;
-}
-
-void TriggeredPowerNode::applyBaselineValue (std::span<double> values,
-                                             double baseline,
-                                             double baselineSd,
-                                             BaselineMode mode)
-{
-    if (baseline < minimumPower)
-        baseline = minimumPower;
-
-    switch (mode)
-    {
-        case BaselineMode::Decibel:
-            for (auto& value : values)
-                value = 10.0 * std::log10 (std::max (value, minimumPower) / baseline);
-            break;
-
-        case BaselineMode::PercentChange:
-            for (auto& value : values)
-                value = 100.0 * (value - baseline) / baseline;
-            break;
-
-        case BaselineMode::ZScore:
-            // Needs at least two trials for the spread to mean anything; with
-            // fewer, leave the values alone rather than dividing by noise.
-            if (baselineSd < minimumPower)
-                return;
-
-            for (auto& value : values)
-                value = (value - baseline) / baselineSd;
-            break;
-
-        case BaselineMode::None:
-        default:
-            break;
-    }
 }
 
 bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,

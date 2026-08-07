@@ -23,6 +23,9 @@ set(SPECTRA_TEST_SOURCES
     test_SpectralPipeline.cpp
     test_TriggerMessaging.cpp
     test_Whitening.cpp
+    test_Baseline.cpp
+    test_WorkQueue.cpp
+    test_SpectralWorker.cpp
 )
 
 enable_testing()

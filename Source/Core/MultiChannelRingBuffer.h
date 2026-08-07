@@ -151,8 +151,14 @@ private:
     int m_capacity = 0;
 
     /** Sample number mapped to ring index 0. Written by the producer only, and
-        only inside an odd generation window. */
-    SampleNumber m_origin = 0;
+     *  only inside an odd generation window.
+     *
+     *  Atomic with relaxed ordering rather than a plain int64: the seqlock makes
+     *  a torn value *detectable*, but two threads touching a non-atomic object
+     *  concurrently is a data race by the language's definition regardless, and
+     *  that is a licence for the optimiser rather than a merely theoretical
+     *  concern. The generation counter still provides the actual ordering. */
+    std::atomic<SampleNumber> m_origin { 0 };
 
     /** One past the newest sample written. Sole publication point of the
         common path; release-stored after the sample data is in place. */

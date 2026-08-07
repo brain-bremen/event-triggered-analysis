@@ -35,6 +35,38 @@ TriggerSource::TriggerSource (const juce::String& name_, int line_, TriggerType 
     colour = getColourForLine (line);
 }
 
+TriggerSource::TriggerSource (const TriggerSource& other)
+    : name (other.name),
+      line (other.line),
+      type (other.type),
+      canTrigger (other.canTrigger.load (std::memory_order_relaxed)),
+      colour (other.colour),
+      armPattern (other.armPattern),
+      cancelPattern (other.cancelPattern),
+      commitPattern (other.commitPattern),
+      pendingTimeoutMs (other.pendingTimeoutMs)
+{
+}
+
+TriggerSource& TriggerSource::operator= (const TriggerSource& other)
+{
+    if (this == &other)
+        return *this;
+
+    name = other.name;
+    line = other.line;
+    type = other.type;
+    canTrigger.store (other.canTrigger.load (std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+    colour = other.colour;
+    armPattern = other.armPattern;
+    cancelPattern = other.cancelPattern;
+    commitPattern = other.commitPattern;
+    pendingTimeoutMs = other.pendingTimeoutMs;
+
+    return *this;
+}
+
 juce::Colour TriggerSource::getColourForLine (int line)
 {
     static const juce::Colour eventColours[] = {
@@ -94,6 +126,12 @@ TriggerSource* TriggerSources::addTriggerSource (int line, TriggerType type, int
 
 void TriggerSources::removeTriggerSources (const juce::Array<TriggerSource*>& sources)
 {
+    // Warn before deleting, not after. The worker thread and the work queue both
+    // hold raw TriggerSource pointers; the listener uses this callback to stop the
+    // one and flush the other while the objects are still alive.
+    if (m_listener != nullptr)
+        m_listener->triggerSourcesAboutToBeRemoved (sources);
+
     for (auto* source : sources)
     {
         if (source == m_currentSource)
@@ -111,7 +149,12 @@ void TriggerSources::removeTriggerSource (int indexToRemove)
     if (indexToRemove < 0 || indexToRemove >= m_sources.size())
         return;
 
-    if (m_sources[indexToRemove] == m_currentSource)
+    auto* source = m_sources[indexToRemove];
+
+    if (m_listener != nullptr)
+        m_listener->triggerSourcesAboutToBeRemoved (juce::Array<TriggerSource*> { source });
+
+    if (source == m_currentSource)
         m_currentSource = nullptr;
 
     m_sources.remove (indexToRemove);
@@ -207,6 +250,12 @@ void TriggerSources::setCommitPattern (TriggerSource* source, const juce::String
 
 void TriggerSources::clear()
 {
+    // Same contract as removeTriggerSources(): let go of the pointers before the
+    // objects behind them are destroyed. Reached when a saved chain is loaded over
+    // a configured one, so it is not a rare path.
+    if (m_listener != nullptr && ! m_sources.isEmpty())
+        m_listener->triggerSourcesAboutToBeRemoved (getAll());
+
     m_sources.clear();
     m_currentSource = nullptr;
     m_nextConditionIndex = 1;

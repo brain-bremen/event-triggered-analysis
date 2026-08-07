@@ -28,6 +28,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <atomic>
 #include <cstdint>
 
 namespace TriggeredSpectra
@@ -58,6 +59,50 @@ constexpr const char* toString (TriggerType type)
     }
 }
 
+/** Running tally of what happened to one trigger source.
+ *
+ *  Purely diagnostic — nothing reads these to make a decision. They exist so that
+ *  "I configured a trigger and nothing happened" is answerable: the stage where
+ *  the count stops advancing is the stage that is broken.
+ *
+ *  Written from the audio thread (edges, enqueues) and the worker thread (trials,
+ *  failures), read from the message thread, so every field is atomic. Relaxed
+ *  ordering throughout: these are independent tallies, not a coherent snapshot,
+ *  and a display that is one trial stale for a few milliseconds is fine.
+ */
+struct TriggerCounters
+{
+    /** Rising edges seen on this source's line, counted before the arm/type gate
+        so an edge that arrived but did *not* fire is still visible. */
+    std::atomic<int> ttlEdges { 0 };
+
+    /** Edges that passed the gate and were handed to the worker. */
+    std::atomic<int> capturesQueued { 0 };
+
+    /** Edges dropped because the work queue was full. */
+    std::atomic<int> capturesDropped { 0 };
+
+    /** Trial windows the worker extracted and transformed. */
+    std::atomic<int> trialsCaptured { 0 };
+
+    /** Windows the worker gave up on — too old, or the stream stopped advancing. */
+    std::atomic<int> capturesFailed { 0 };
+
+    /** Parked captures folded in by a commit message. */
+    std::atomic<int> pendingCommitted { 0 };
+
+    void reset()
+    {
+        for (auto* c : { &ttlEdges,
+                         &capturesQueued,
+                         &capturesDropped,
+                         &trialsCaptured,
+                         &capturesFailed,
+                         &pendingCommitted })
+            c->store (0, std::memory_order_relaxed);
+    }
+};
+
 /** One experimental condition: what fires it, and how it is drawn.
  *
  *  Trials captured for a given source are accumulated into that source's own
@@ -68,6 +113,12 @@ class TriggerSource
 public:
     TriggerSource (const juce::String& name, int line, TriggerType type);
 
+    /** Copyable, because this is the plain configuration value it looks like.
+        std::atomic is neither copyable nor movable, so the flag is transferred by
+        hand rather than letting the whole type become immovable. */
+    TriggerSource (const TriggerSource& other);
+    TriggerSource& operator= (const TriggerSource& other);
+
     /** Default palette entry for a TTL line, matching the GUI's event colours. */
     static juce::Colour getColourForLine (int line);
 
@@ -75,8 +126,14 @@ public:
     int line = -1;
     TriggerType type = TriggerType::TTL_TRIGGER;
 
-    /** False while a TTL_AND_MSG source waits to be armed. */
-    bool canTrigger = false;
+    /** False while a TTL_AND_MSG source waits to be armed.
+     *
+     *  Atomic because arming is applied on the audio thread — a message and the
+     *  TTL edge it gates can arrive in the same block, so arming cannot be
+     *  deferred to the worker without losing that edge — while the configuration
+     *  table resets it from the message thread. Relaxed ordering is enough: it
+     *  guards nothing but itself. */
+    std::atomic<bool> canTrigger { false };
 
     juce::Colour colour;
 
@@ -88,6 +145,13 @@ public:
     /** How long an uncommitted capture is held before being discarded, in ms.
         Zero means it never expires. */
     int pendingTimeoutMs = 2000;
+
+    /** Diagnostic counts, shown in the trigger monitor.
+     *
+     *  Deliberately *not* carried across a copy: unlike everything above this is
+     *  runtime state rather than configuration, and a copy is a new source whose
+     *  tally starts at zero. */
+    TriggerCounters counters;
 };
 
 /** Owns the set of trigger sources and notifies a listener about edits.
@@ -105,6 +169,13 @@ public:
         virtual ~Listener() = default;
 
         virtual void triggerSourceAdded (TriggerSource*) {}
+
+        /** About to be destroyed. Anything holding these pointers — a queued work
+         *  item, a running worker, a map keyed by them — must let go here, while
+         *  the objects are still alive. By the time triggerSourcesRemoved() runs
+         *  they have been deleted. */
+        virtual void triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>&) {}
+
         virtual void triggerSourcesRemoved() {}
         virtual void triggerSourceRenamed (TriggerSource*) {}
         virtual void triggerSourceColourChanged (TriggerSource*) {}
@@ -117,7 +188,14 @@ public:
 
     void setListener (Listener* listener) { m_listener = listener; }
 
+    /** Snapshot of the current sources. Allocates, so it is for the message
+        thread; use items() on the audio thread. */
     juce::Array<TriggerSource*> getAll() const;
+
+    /** Direct view of the sources, for iteration without allocating. Safe on the
+        audio thread only because the set is never mutated during acquisition. */
+    const juce::OwnedArray<TriggerSource>& items() const noexcept { return m_sources; }
+
     TriggerSource* getByIndex (int index) const;
     int getIndexOf (const TriggerSource* source) const { return m_sources.indexOf (source); }
 

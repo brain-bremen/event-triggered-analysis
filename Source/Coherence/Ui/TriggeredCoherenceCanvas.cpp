@@ -84,16 +84,42 @@ void TriggeredCoherenceCanvas::refreshState() { rebuildPanels(); }
 
 void TriggeredCoherenceCanvas::updateSettings() { rebuildPanels(); }
 
+std::vector<TriggeredCoherenceCanvas::PanelKey> TriggeredCoherenceCanvas::currentPanelKeys() const
+{
+    std::vector<PanelKey> keys;
+
+    if (m_node == nullptr)
+        return keys;
+
+    const auto sources = m_node->getTriggerSources().getAll();
+    const auto& pairs = m_node->getPairs();
+
+    keys.reserve (pairs.size() * static_cast<std::size_t> (sources.size()));
+
+    for (int pairIndex = 0; pairIndex < static_cast<int> (pairs.size()); ++pairIndex)
+        for (auto* source : sources)
+            keys.push_back ({ source, pairIndex });
+
+    return keys;
+}
+
 void TriggeredCoherenceCanvas::refresh()
 {
-    updatePanelData();
+    // See TriggeredPowerCanvas::refresh(): adding a trigger source or a pair
+    // reaches the canvas only through triggerAsyncUpdate(), which lands here, so
+    // a stale panel set would otherwise never be rebuilt.
+    if (m_panelKeys != currentPanelKeys())
+        rebuildPanels();
+    else
+        updatePanelData();
+
     m_grid.repaintPanels();
     repaint();
 }
 
 void TriggeredCoherenceCanvas::rebuildPanels()
 {
-    m_panelKeys.clear();
+    m_panelKeys = currentPanelKeys();
 
     if (m_node == nullptr)
     {
@@ -103,10 +129,6 @@ void TriggeredCoherenceCanvas::rebuildPanels()
 
     const auto sources = m_node->getTriggerSources().getAll();
     const auto& pairs = m_node->getPairs();
-
-    for (int pairIndex = 0; pairIndex < static_cast<int> (pairs.size()); ++pairIndex)
-        for (auto* source : sources)
-            m_panelKeys.push_back ({ source, pairIndex });
 
     m_grid.setNumPanels (static_cast<int> (m_panelKeys.size()));
 
