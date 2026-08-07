@@ -139,7 +139,7 @@ void AnalysisSettingsWindow::applyEnablement()
         bool active = true;
 
         if (section->title == "Spectrogram - Morlet")
-            active = spectrogram;
+            active = spectrogram && usingMorlet;
         else if (section->title == "Spectrogram - Hann STFT")
             active = spectrogram && ! usingMorlet;
         else if (section->title == "Spectrum - line" || section->title == "Per-trial storage")

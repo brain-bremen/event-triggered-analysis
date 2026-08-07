@@ -134,7 +134,8 @@ bool TriggerMonitorWindow::refreshRows()
                                                      && a.failed == b.failed
                                                      && a.committed == b.committed
                                                      && a.state == b.state && a.line == b.line
-                                                     && a.name == b.name;
+                                                     && a.name == b.name
+                                                     && a.colour == b.colour;
                                           });
 
     m_rows = std::move (rows);

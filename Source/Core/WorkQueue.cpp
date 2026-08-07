@@ -57,8 +57,6 @@ bool WorkQueue::push (const WorkItem& item)
 
 bool WorkQueue::pop (WorkItem& item)
 {
-    const std::uint32_t generation = m_generation.load (std::memory_order_acquire);
-
     // Loop rather than return on the first stale item: a flush can leave a run of
     // them, and the caller asked for the next *live* one.
     while (m_fifo.getNumReady() > 0)
@@ -72,7 +70,9 @@ bool WorkQueue::pop (WorkItem& item)
         const auto& slot =
             m_slots[static_cast<std::size_t> (blockSize1 > 0 ? startIndex1 : startIndex2)];
 
-        const bool live = (slot.generation == generation);
+        // Load the generation at the point of comparison so items pushed after a
+        // concurrent flush (stamped with the new generation) are not dropped.
+        const bool live = (slot.generation == m_generation.load (std::memory_order_acquire));
 
         if (live)
             item = slot.item;
