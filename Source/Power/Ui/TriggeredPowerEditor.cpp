@@ -25,6 +25,7 @@
 #include "../TriggeredPowerNode.h"
 #include "TriggeredPowerCanvas.h"
 #include "Core/Ui/AnalysisSettingsWindow.h"
+#include "Core/Ui/EditorLayout.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
 
@@ -40,35 +41,37 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
     // are behind ANALYSIS.
     m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     m_configureButton->addListener (this);
-    m_configureButton->setBounds (15, 30, 70, 22);
     addAndMakeVisible (m_configureButton.get());
 
     m_analysisButton = std::make_unique<UtilityButton> ("ANALYSIS");
     m_analysisButton->addListener (this);
-    m_analysisButton->setBounds (90, 30, 70, 22);
     addAndMakeVisible (m_analysisButton.get());
 
     m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     m_monitorButton->addListener (this);
-    m_monitorButton->setBounds (165, 30, 70, 22);
     addAndMakeVisible (m_monitorButton.get());
 
+    // Positions come from resized(); the coordinates here only decide creation
+    // order, which is the order they are stacked in.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
     for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-    {
         if (auto* parameterEditor = getParameterEditor (name))
-        {
             parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
-            parameterEditor->setBounds (
-                parameterEditor->getX(), parameterEditor->getY(), 90, 36);
-        }
-    }
 
     addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+}
+
+void TriggeredPowerEditor::resized()
+{
+    VisualizerEditor::resized();
+    layoutEditorContents (*this,
+                          m_configureButton.get(),
+                          m_analysisButton.get(),
+                          m_monitorButton.get());
 }
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)

@@ -59,6 +59,8 @@ set(SPECTRA_CORE_HEADERS
     Ui/TriggerMonitorWindow.h
     Ui/AnalysisSettingsWindow.h
     Ui/ParameterControl.h
+    Ui/ParameterLayout.h
+    Ui/EditorLayout.h
     ParameterNames.h
     TriggeredSpectraNode.h
 )

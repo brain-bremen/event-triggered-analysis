@@ -42,6 +42,10 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
+    /** Lays the inline controls out from the editor's measured height. Fixed
+        coordinates put the mode selector below the visible area. */
+    void resized() override;
+
 private:
     /** Opens the trigger-source table. Without at least one source nothing is
         ever captured, so this is the first thing a user needs. */
