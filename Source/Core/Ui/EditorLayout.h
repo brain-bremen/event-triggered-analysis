@@ -48,10 +48,10 @@ namespace TriggeredSpectra
 inline void layoutEditorContents (GenericEditor& editor,
                                   juce::Component* triggersButton,
                                   juce::Component* analysisButton,
-                                  juce::Component* monitorButton)
+                                  juce::Component* monitorButton,
+                                  juce::Component* pairsButton = nullptr)
 {
     constexpr int left = 15;
-    constexpr int contentWidth = 220; // 250 px desired width, 15 px either side
     constexpr int gap = 4;
     constexpr int buttonHeight = 20;
     constexpr int windowRowHeight = 34;
@@ -60,19 +60,31 @@ inline void layoutEditorContents (GenericEditor& editor,
     constexpr int top = 28;
     constexpr int bottomMargin = 6;
 
+    // Derived rather than fixed, so an editor that asks for more width gets it.
+    // TriggeredCoherence does: it has a fourth button, and four buttons squeezed
+    // into 220 px are too narrow to read.
+    const int contentWidth = juce::jmax (180, editor.getWidth() - 2 * left);
     const int bottom = editor.getHeight() - bottomMargin;
 
     int y = top;
 
-    const int buttonWidth = (contentWidth - 2 * gap) / 3;
+    // Only the buttons this editor actually has, spread across the full width.
+    // TriggeredPower has no pair list, so it gets three wider buttons rather
+    // than three narrow ones and a hole.
+    juce::Array<juce::Component*> buttons;
 
-    if (triggersButton != nullptr)
-        triggersButton->setBounds (left, y, buttonWidth, buttonHeight);
-    if (analysisButton != nullptr)
-        analysisButton->setBounds (left + buttonWidth + gap, y, buttonWidth, buttonHeight);
-    if (monitorButton != nullptr)
-        monitorButton->setBounds (
-            left + 2 * (buttonWidth + gap), y, buttonWidth, buttonHeight);
+    for (auto* button : { triggersButton, analysisButton, monitorButton, pairsButton })
+        if (button != nullptr)
+            buttons.add (button);
+
+    if (! buttons.isEmpty())
+    {
+        const int count = buttons.size();
+        const int buttonWidth = (contentWidth - (count - 1) * gap) / count;
+
+        for (int i = 0; i < count; ++i)
+            buttons[i]->setBounds (left + i * (buttonWidth + gap), y, buttonWidth, buttonHeight);
+    }
 
     y += buttonHeight + gap;
 

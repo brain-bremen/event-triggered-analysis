@@ -203,12 +203,19 @@ protected:
     std::atomic<int> m_ttlEdgesSeen { 0 };
     std::atomic<int> m_lastTtlLine { -1 };
 
-private:
+protected:
     /** Recomputes m_geometry and m_selectedChannels from the current parameters
      *  and stream, then notifies the subclass. Stops the worker for the duration
-     *  so it cannot observe a half-rebuilt configuration. */
+     *  so it cannot observe a half-rebuilt configuration.
+     *
+     *  Protected rather than private because a subclass can own configuration the
+     *  base knows nothing about — TriggeredCoherence's pair list decides how many
+     *  accumulators there are, so editing it has to come through here. Asserts
+     *  acquisition is stopped, which is what makes it safe to reallocate under
+     *  the audio thread; every caller must be gated on that. */
     void rebuildConfiguration();
 
+private:
     /** Ring capacity: the trial window plus padding, doubled for headroom, and
      *  never less than four seconds so that a long pre-trigger window still works
      *  right after acquisition starts. */

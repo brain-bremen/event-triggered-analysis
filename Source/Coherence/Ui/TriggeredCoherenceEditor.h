@@ -59,6 +59,11 @@ private:
         trials appear. */
     std::unique_ptr<UtilityButton> m_monitorButton;
 
+    /** Opens the channel-pair table. Coherence is defined on pairs, so with an
+        empty list this plugin transforms every trial and then has nowhere to put
+        the result. */
+    std::unique_ptr<UtilityButton> m_pairsButton;
+
     TriggeredCoherenceCanvas* m_canvas = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceEditor)

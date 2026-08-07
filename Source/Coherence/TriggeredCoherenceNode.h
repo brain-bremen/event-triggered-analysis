@@ -23,6 +23,7 @@
 #pragma once
 
 #include "Core/Accumulators.h"
+#include "Core/PairRules.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TriggeredSpectraNode.h"
 
@@ -95,6 +96,12 @@ public:
 
     // --- Pairs -------------------------------------------------------------
 
+    // Every mutator here rebuilds the accumulators, which **discards accumulated
+    // trials**: the pair set decides how many cross-spectra there are, so it
+    // cannot change underneath them. rebuildConfiguration() also asserts
+    // acquisition is stopped, which is why the pair window is read-only while
+    // running, exactly like the trigger table.
+
     /** Adds a pair by global channel index. Returns false if it duplicates an
         existing pair, pairs a channel with itself, or exceeds the cap. */
     bool addPair (int globalA, int globalB, const juce::String& name = {});
@@ -105,6 +112,12 @@ public:
     /** Replaces the pair list with `seed` against every other selected channel —
         the common case, and tedious to build one pair at a time. */
     void generateSeedPairs (int globalSeedChannel);
+
+    // These two only change how a pair is labelled, so they deliberately do
+    // *not* rebuild: renaming a pair must never cost you the trials behind it.
+
+    void setPairName (int index, const juce::String& name);
+    void setPairColour (int index, juce::Colour colour);
 
     const std::vector<ChannelPair>& getPairs() const { return m_pairs; }
     int getMaxPairs() const { return maxPairs; }
@@ -180,6 +193,14 @@ protected:
 private:
     /** Recomputes selectedA/selectedB from the current channel selection. */
     void resolvePairs();
+
+    /** Adds without announcing it. Used where a batch is being built — seed
+        generation and XML load — so the configuration is rebuilt once at the
+        end rather than once per pair. */
+    bool addPairWithoutNotifying (int globalA, int globalB, const juce::String& name);
+
+    /** Resizes the accumulators to the current pair list and repaints. */
+    void pairsChanged();
 
     int getSmoothTimeBins() const;
     int getSmoothFreqBins() const;

@@ -23,6 +23,7 @@
 #include "TriggeredCoherenceEditor.h"
 
 #include "../TriggeredCoherenceNode.h"
+#include "PairConfigWindow.h"
 #include "TriggeredCoherenceCanvas.h"
 #include "Core/Ui/AnalysisSettingsWindow.h"
 #include "Core/Ui/EditorLayout.h"
@@ -33,7 +34,9 @@ namespace TriggeredSpectra
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG COHER", 250)
+    // Wider than TriggeredPower's 250: there is a fourth button, and four
+    // buttons in 220 px of content are too narrow to read.
+    : VisualizerEditor (parentNode, "TRIG COHER", 310)
 {
     // See TriggeredPowerEditor: the editor carries collection and computation,
     // the canvas carries display.
@@ -48,6 +51,10 @@ TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode
     m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     m_monitorButton->addListener (this);
     addAndMakeVisible (m_monitorButton.get());
+
+    m_pairsButton = std::make_unique<UtilityButton> ("PAIRS");
+    m_pairsButton->addListener (this);
+    addAndMakeVisible (m_pairsButton.get());
 
     // Positions come from resized(); the coordinates here only decide creation
     // order, which is the order they are stacked in.
@@ -69,7 +76,8 @@ void TriggeredCoherenceEditor::resized()
     layoutEditorContents (*this,
                           m_configureButton.get(),
                           m_analysisButton.get(),
-                          m_monitorButton.get());
+                          m_monitorButton.get(),
+                          m_pairsButton.get());
 }
 
 void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
@@ -91,6 +99,13 @@ void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
     {
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<TriggerMonitorWindow> (node, button), button);
+    }
+    else if (button == m_pairsButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<PairConfigWindow> (
+                static_cast<TriggeredCoherenceNode*> (getProcessor()), acquisitionIsActive, button),
+            button);
     }
 }
 
