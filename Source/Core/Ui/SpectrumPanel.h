@@ -91,6 +91,15 @@ public:
         Not drawn when the value is NaN. */
     void setThreshold (float value) { m_threshold = value; }
 
+    /** A second curve drawn dashed over the data, in the same units and on the
+        same axes: the aperiodic background that whitening removes.
+     *
+     *  Separate from the values rather than another trial curve, because it is
+     *  a model rather than a measurement and has to read as one. Same length as
+     *  the values; empty removes it. Line mode only — a slope drawn over a
+     *  heat map would mean nothing. */
+    void setReferenceCurve (std::span<const float> curve);
+
     /** Text drawn in the corner, e.g. the trial count. */
     void setSubtitle (const juce::String& subtitle);
 
@@ -126,6 +135,7 @@ private:
     std::vector<double> m_binTimes;
     std::vector<float> m_values;
     std::vector<float> m_errors;
+    std::vector<float> m_reference;
     std::vector<std::vector<float>> m_trials;
 
     int m_numFrequencies = 0;
@@ -145,6 +155,7 @@ private:
     juce::Image m_image;
     juce::Path m_meanPath;
     juce::Path m_errorPath;
+    juce::Path m_referencePath;
     std::vector<juce::Path> m_trialPaths;
     bool m_cacheValid = false;
 

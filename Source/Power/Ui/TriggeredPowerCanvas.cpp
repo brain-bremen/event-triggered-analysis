@@ -104,8 +104,18 @@ void TriggeredPowerCanvas::buildDisplayControls()
 
         const bool isMode = parameter->getType() == Parameter::CATEGORICAL_PARAM;
 
+        // The exponent is the one value here that is *tuned* rather than set:
+        // you move it against the overlay until the line lies on the background.
+        // A 0.1-step text field cannot do that, so it gets a slider.
+        const bool isTuned =
+            juce::String (name).equalsIgnoreCase (ParameterNames::whitening_exponent);
+
         auto control = std::make_unique<ParameterControl> (
-            parameter, 58, isMode ? 116 : 54, isMode ? 0 : 22);
+            parameter,
+            58,
+            isTuned ? 132 : (isMode ? 116 : 54),
+            isMode ? 0 : 22,
+            isTuned ? ParameterControl::Style::Slider : ParameterControl::Style::Field);
 
         control->onChange = [this] { displayParameterChanged(); };
 
@@ -156,6 +166,14 @@ void TriggeredPowerCanvas::applyDisplayControlState()
         else if (name.equalsIgnoreCase (ParameterNames::whitening_exponent))
         {
             active = ! baselineActive && whitening == WhiteningMode::FixedExponent;
+        }
+        else if (name.equalsIgnoreCase (ParameterNames::whitening_overlay))
+        {
+            // A slope drawn across a heat map would mean nothing, so the overlay
+            // is a Spectrum-mode affordance only. Greyed rather than hidden, so
+            // the bar still says the option exists and why it does not apply.
+            active = ! baselineActive && whitening != WhiteningMode::None
+                     && m_node->getEstimateMode() == EstimateMode::Spectrum;
         }
 
         control->setActive (active);
@@ -292,14 +310,24 @@ void TriggeredPowerCanvas::updatePanelData()
     const auto mode = m_node->getBaselineMode();
     const auto whitening = m_node->getWhiteningMode();
 
+    // The tuning view: plot the spectrum with its 1/f background still in it and
+    // draw the line that would be removed, so the exponent slider has something
+    // to aim at. Meaningless over a heat map, and meaningless once a baseline has
+    // taken whitening out of the picture, so it is gated on both.
+    const bool overlay = ! spectrogram && mode == BaselineMode::None
+                         && whitening != WhiteningMode::None
+                         && m_node->isWhiteningOverlayEnabled();
+
     // dB / percent / z-score are already signed and comparable; whitened power is
     // a ratio around 1, which reads best in dB. Only raw power needs the log to
-    // compress its decades.
+    // compress its decades — and the overlay view is raw power by definition.
     const bool plotInDecibels = (mode == BaselineMode::None);
 
     // In dB / percent / z-score the data is signed and centred on zero, so a
-    // diverging map is the honest default; raw power is one-sided.
-    const bool signedQuantity = (mode != BaselineMode::None) || (whitening != WhiteningMode::None);
+    // diverging map is the honest default; raw power is one-sided. So is the
+    // un-whitened spectrum the overlay shows.
+    const bool signedQuantity =
+        (mode != BaselineMode::None) || (whitening != WhiteningMode::None && ! overlay);
 
     const ColorMapType effectiveMap =
         (signedQuantity && m_colorMapType == ColorMapType::Viridis) ? ColorMapType::Diverging
@@ -316,11 +344,27 @@ void TriggeredPowerCanvas::updatePanelData()
         panel->setColorMap (effectiveMap);
 
         const int numTrials = m_node->getNumTrials (key.source);
-        panel->setSubtitle (juce::String (numTrials) + (numTrials == 1 ? " trial" : " trials"));
+
+        juce::String subtitle =
+            juce::String (numTrials) + (numTrials == 1 ? " trial" : " trials");
+
+        // chi is a result, not just a nuisance parameter: it is what the fit
+        // recovered, and in manual mode it is what the exponent should be aimed
+        // at. Either way it belongs on the panel rather than nowhere.
+        if (whitening == WhiteningMode::FittedAperiodic && mode == BaselineMode::None)
+        {
+            const double chi = m_node->getFittedExponent (key.source, key.channelIndex);
+
+            if (chi > 0.0)
+                subtitle += "   chi " + juce::String (chi, 2);
+        }
+
+        panel->setSubtitle (subtitle);
 
         if (numTrials == 0)
         {
             panel->setValues ({}, 0, 0);
+            panel->setReferenceCurve ({});
             continue;
         }
 
@@ -328,10 +372,40 @@ void TriggeredPowerCanvas::updatePanelData()
         // at once, so it cannot go through the per-frequency accessor.
         m_gridScratch.resize (static_cast<std::size_t> (numFrequencies) * numBins);
 
-        if (! m_node->getPowerGridForDisplay (key.source, key.channelIndex, m_gridScratch))
+        if (! m_node->getPowerGridForDisplay (
+                key.source, key.channelIndex, m_gridScratch, overlay))
         {
             panel->setValues ({}, 0, 0);
+            panel->setReferenceCurve ({});
             continue;
+        }
+
+        if (overlay)
+        {
+            m_referenceScratch.resize (static_cast<std::size_t> (numFrequencies));
+            m_referenceCurve.resize (static_cast<std::size_t> (numFrequencies));
+
+            if (m_node->getAperiodicCurveForDisplay (
+                    key.source, key.channelIndex, m_referenceScratch))
+            {
+                // Same transform the data goes through, or the line would sit in
+                // different units from the curve it is meant to trace.
+                for (int f = 0; f < numFrequencies; ++f)
+                    m_referenceCurve[static_cast<std::size_t> (f)] = static_cast<float> (
+                        10.0
+                        * std::log10 (std::max (m_referenceScratch[static_cast<std::size_t> (f)],
+                                                1e-30)));
+
+                panel->setReferenceCurve (m_referenceCurve);
+            }
+            else
+            {
+                panel->setReferenceCurve ({});
+            }
+        }
+        else
+        {
+            panel->setReferenceCurve ({});
         }
 
         for (int f = 0; f < numFrequencies; ++f)

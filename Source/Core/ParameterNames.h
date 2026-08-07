@@ -70,6 +70,10 @@ inline constexpr auto baseline_end_ms = "baseline_end_ms";
 inline constexpr auto whitening_mode = "whitening_mode";
 inline constexpr auto whitening_exponent = "whitening_exponent";
 
+/** Draw the aperiodic background over the un-whitened spectrum instead of
+    plotting the whitened result. The tuning view for `whitening_exponent`. */
+inline constexpr auto whitening_overlay = "whitening_overlay";
+
 // --- TriggeredCoherence only -----------------------------------------------
 
 inline constexpr auto smooth_time_bins = "smooth_time_bins";
@@ -93,7 +97,8 @@ inline constexpr const char* all[] = {
     stft_hop_ms,     line_method,      nw,                n_tapers,
     trigger_line,    trigger_type,     max_trials,        baseline_mode,
     baseline_start_ms, baseline_end_ms, whitening_mode,   whitening_exponent,
-    smooth_time_bins, smooth_freq_bins, coherence_display, shift_predictor
+    whitening_overlay, smooth_time_bins, smooth_freq_bins, coherence_display,
+    shift_predictor
 };
 
 } // namespace TriggeredSpectra::ParameterNames

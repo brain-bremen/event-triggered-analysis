@@ -29,7 +29,8 @@ namespace TriggeredSpectra
 ParameterControl::ParameterControl (Parameter* parameter,
                                     int nameWidth,
                                     int controlWidth,
-                                    int unitWidth)
+                                    int unitWidth,
+                                    Style style)
     : m_parameter (parameter),
       m_nameWidth (nameWidth),
       m_controlWidth (controlWidth),
@@ -60,6 +61,36 @@ ParameterControl::ParameterControl (Parameter* parameter,
         m_combo->onChange = [this] { commit(); };
 
         addAndMakeVisible (m_combo.get());
+    }
+    else if (style == Style::Slider
+             && (parameter->getType() == Parameter::FLOAT_PARAM
+                 || parameter->getType() == Parameter::INT_PARAM))
+    {
+        const bool isFloat = (parameter->getType() == Parameter::FLOAT_PARAM);
+
+        m_slider = std::make_unique<juce::Slider> (juce::Slider::LinearHorizontal,
+                                                   juce::Slider::TextBoxRight);
+
+        if (isFloat)
+        {
+            auto* floatParameter = static_cast<FloatParameter*> (parameter);
+            m_slider->setRange (floatParameter->getMinValue(), floatParameter->getMaxValue(), 0.01);
+        }
+        else
+        {
+            auto* intParameter = static_cast<IntParameter*> (parameter);
+            m_slider->setRange (intParameter->getMinValue(), intParameter->getMaxValue(), 1.0);
+        }
+
+        // Finer than the parameter's declared step on purpose: the step is a
+        // sensible increment for typing, but tuning by eye wants the slider to
+        // move continuously. The range is still the parameter's, so nothing
+        // out of bounds can be produced.
+        m_slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, 46, 18);
+        m_slider->setTooltip (parameter->getDescription());
+        m_slider->onValueChange = [this] { commit(); };
+
+        addAndMakeVisible (m_slider.get());
     }
     else if (parameter->getType() == Parameter::FLOAT_PARAM
              || parameter->getType() == Parameter::INT_PARAM)
@@ -107,6 +138,10 @@ void ParameterControl::refresh()
         const int index = static_cast<CategoricalParameter*> (m_parameter)->getSelectedIndex();
         m_combo->setSelectedId (index + 1, juce::dontSendNotification);
     }
+    else if (m_slider != nullptr)
+    {
+        m_slider->setValue (m_parameter->getValue(), juce::dontSendNotification);
+    }
     else if (m_valueLabel != nullptr)
     {
         m_valueLabel->setText (m_parameter->getValueAsString(), juce::dontSendNotification);
@@ -129,6 +164,29 @@ void ParameterControl::commit()
         {
             m_parameter->setNextValue (index);
             changed = true;
+        }
+    }
+    else if (m_slider != nullptr)
+    {
+        if (m_parameter->getType() == Parameter::FLOAT_PARAM)
+        {
+            auto* parameter = static_cast<FloatParameter*> (m_parameter);
+            const auto value = static_cast<float> (m_slider->getValue());
+
+            changed = ! juce::approximatelyEqual (value, parameter->getFloatValue());
+
+            if (changed)
+                m_parameter->setNextValue (value);
+        }
+        else
+        {
+            auto* parameter = static_cast<IntParameter*> (m_parameter);
+            const auto value = static_cast<int> (std::lround (m_slider->getValue()));
+
+            changed = value != parameter->getIntValue();
+
+            if (changed)
+                m_parameter->setNextValue (value);
         }
     }
     else if (m_valueLabel != nullptr)
@@ -180,6 +238,12 @@ void ParameterControl::setActive (bool active)
     if (m_combo != nullptr)
         m_combo->setEnabled (active);
 
+    if (m_slider != nullptr)
+    {
+        m_slider->setEnabled (active);
+        m_slider->setAlpha (active ? 1.0f : 0.4f);
+    }
+
     if (m_valueLabel != nullptr)
     {
         m_valueLabel->setEnabled (active);
@@ -211,6 +275,8 @@ void ParameterControl::resized()
 
     if (m_combo != nullptr)
         m_combo->setBounds (bounds.removeFromLeft (m_controlWidth));
+    else if (m_slider != nullptr)
+        m_slider->setBounds (bounds.removeFromLeft (m_controlWidth));
     else if (m_valueLabel != nullptr)
         m_valueLabel->setBounds (bounds.removeFromLeft (m_controlWidth));
 

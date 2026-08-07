@@ -136,6 +136,10 @@ private:
     std::vector<double> m_gridScratch;
     std::vector<float> m_valueScratch;
 
+    /** The aperiodic overlay, in linear power and then in the panel's dB. */
+    std::vector<double> m_referenceScratch;
+    std::vector<float> m_referenceCurve;
+
     ColorMapType m_colorMapType = ColorMapType::Viridis;
     bool m_sharedScale = true;
 

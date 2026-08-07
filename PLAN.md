@@ -9,7 +9,7 @@ outstanding. Places where implementation diverged from this plan are marked
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 179 unit tests and a clean build/install: neither plugin
+Everything else rests on 185 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -610,12 +610,48 @@ trials with an adjustable time constant, and reports `P(f) / R(f)`. It adapts to
 drift and needs no functional form, at the cost of also suppressing sustained genuine
 effects — a trade-off the user has to be told about, not hidden.
 
+### Manual whitening: the tuning view **[done]**
+
+Fixed-exponent whitening is the manual mode — the user names χ instead of
+letting the fit find it. Two things made it unusable in practice, and neither
+was visible from inside:
+
+1. **There was nothing to aim at.** Setting an exponent against an
+   already-whitened spectrum is guesswork: the background you are trying to
+   match has been divided out by the time you see it.
+2. **The control was a type-in field with a 0.1 step.** You cannot see a
+   spectrum respond while you type a number into it.
+
+`whitening_overlay` {Off, On} is the fix. With it on the panel plots the
+**un-whitened** spectrum and draws the aperiodic background over it as a dashed
+line, so the slider has a target; with it off you see the whitened result. And
+`whitening_exponent` gets a **slider** (`ParameterControl::Style::Slider`,
+committing continuously) rather than a field, so the line moves with the drag.
+
+Drawing the line needs an intercept, which fixed-exponent whitening does not
+supply — it names only a slope. `anchorFixedExponent()` picks one, as the median
+of `log10 P + χ·log10 f`. Median rather than mean for the same reason
+`fitAperiodic` avoids least squares: oscillatory peaks are one-sided and a mean
+would let them lift the whole line off the background it is meant to trace. **The
+exponent itself is never adjusted** — a control that silently fits what it was
+told to set is a control that does nothing, and a test pins that.
+
+Gated to **Spectrum mode**: a slope drawn across a heat map means nothing. Also
+gated on no baseline being active, since a baseline takes whitening out of the
+picture entirely. Greyed rather than hidden in both cases, so the bar still
+documents that the option exists.
+
+In fitted mode the panel subtitle now carries **χ** as well. It is a result, not
+a nuisance parameter, and it is what the manual exponent should be aimed at —
+it was computed and displayed nowhere.
+
 ### Parameters (Power only)
 
 | Name | Type | Default | Notes |
 |---|---|---|---|
 | `whitening_mode` | Categorical | `None` | None / Fixed exponent / Fitted aperiodic / Running reference |
-| `whitening_exponent` | Float | 1.0 | fixed-exponent mode only, 0–4 |
+| `whitening_exponent` | Float | 1.0 | fixed-exponent mode only, 0–4; slider, tuned against the overlay |
+| `whitening_overlay` | Categorical | `Off` | plot un-whitened with the background drawn over it |
 | `whitening_fit_knee` | Boolean | false | fitted mode only |
 | `whitening_time_constant` | Float | 30 s | running-reference mode only |
 
@@ -852,7 +888,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 179 tests passing:
+**[done]** — 185 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -899,7 +935,10 @@ and doing that from the base constructor is a pure-virtual call.
 - *Whitening*: exponent recovery on a pure power law and under noise; a realistic
   alpha peak leaves χ intact; the ~29% breakdown point is pinned rather than
   hidden; fitted whitening flattens the background and leaves the peak proud;
-  peak frequency never moves.
+  peak frequency never moves. Plus the drawn overlay: an anchored line lies on a
+  matching power law exactly, a peak eight times the background moves its
+  intercept by under 1%, the requested exponent is never quietly corrected, and
+  a wrong exponent diverges from the background at both ends of the axis.
 - *Trigger messaging*: substring/case-insensitive matching; empty patterns are
   disabled not wildcards; cancel beats commit; a plain TTL source is never
   disarmed; per-source timeout expiry; move-only payloads; the full

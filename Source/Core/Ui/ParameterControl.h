@@ -50,10 +50,31 @@ namespace TriggeredSpectra
 class ParameterControl : public juce::Component
 {
 public:
+    /** How a numeric parameter is presented. Ignored for categorical ones, which
+        are always a combo box. */
+    enum class Style
+    {
+        /** Type-in field. Right for a value that is set once and left alone. */
+        Field,
+        /** Drag slider with the value beside it, committing continuously.
+         *
+         *  For parameters that are *tuned* by eye against what is on screen —
+         *  the whitening exponent being the case this exists for. A 0.1-step
+         *  text field cannot do that: you cannot see the spectrum respond while
+         *  you type. Only offered for display-time parameters, since committing
+         *  on every drag step would otherwise reconfigure the analysis at frame
+         *  rate. */
+        Slider
+    };
+
     /** @param nameWidth     width of the parameter's display name; 0 omits it
-        @param controlWidth  width of the combo box or editable field
+        @param controlWidth  width of the combo box, editable field or slider
         @param unitWidth     width of the trailing unit; 0 omits it */
-    ParameterControl (Parameter* parameter, int nameWidth, int controlWidth, int unitWidth = 0);
+    ParameterControl (Parameter* parameter,
+                      int nameWidth,
+                      int controlWidth,
+                      int unitWidth = 0,
+                      Style style = Style::Field);
     ~ParameterControl() override;
 
     /** Re-reads the control from the parameter. Never fires onChange. */
@@ -87,6 +108,7 @@ private:
     std::unique_ptr<juce::ComboBox> m_combo;
     std::unique_ptr<juce::Label> m_valueLabel;
     std::unique_ptr<juce::Label> m_unitLabel;
+    std::unique_ptr<juce::Slider> m_slider;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParameterControl)
 };

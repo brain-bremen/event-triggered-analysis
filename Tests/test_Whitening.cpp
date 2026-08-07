@@ -333,6 +333,127 @@ TEST (Whitening, InvalidFitIsANoOp)
         EXPECT_DOUBLE_EQ (power[i], original[i]);
 }
 
+// --- The drawn overlay -----------------------------------------------------
+//
+// Fixed-exponent whitening names a slope but no intercept, so there is nothing
+// to draw until one is chosen. anchorFixedExponent picks it; these pin what it
+// picks, because a line that does not sit on the data is worse than no line -
+// the user would tune the exponent against a reference that is simply offset.
+
+TEST (Whitening, AnchoredLineLiesOnAMatchingPowerLaw)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 60);
+    const auto power = makeSpectrum (frequencies, 5.0, 1.7);
+
+    const auto anchored = anchorFixedExponent (frequencies, power, 1.7);
+
+    ASSERT_TRUE (anchored.valid);
+    EXPECT_DOUBLE_EQ (anchored.exponent, 1.7);
+
+    // Exponent matches the data exactly, so the anchored line must reproduce it.
+    for (std::size_t i = 0; i < frequencies.size(); ++i)
+        EXPECT_NEAR (anchored.evaluate (frequencies[i]), power[i], power[i] * 1e-9);
+}
+
+/** The exponent is the user's and must never be quietly corrected: a control
+    that silently fits what it was told to set is a control that does nothing. */
+TEST (Whitening, AnchoringNeverAdjustsTheExponent)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 60);
+    const auto power = makeSpectrum (frequencies, 5.0, 2.5);
+
+    for (const double requested : { 0.0, 0.5, 1.0, 3.0, 4.0 })
+    {
+        const auto anchored = anchorFixedExponent (frequencies, power, requested);
+
+        ASSERT_TRUE (anchored.valid);
+        EXPECT_DOUBLE_EQ (anchored.exponent, requested);
+    }
+}
+
+/** Median rather than mean, for the same reason the fit avoids least squares:
+    a one-sided peak must not lift the whole line off the background. */
+TEST (Whitening, PeaksDoNotLiftTheAnchoredLine)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 60);
+
+    const auto clean = makeSpectrum (frequencies, 5.0, 1.5);
+    const auto withPeak = makeSpectrum (frequencies, 5.0, 1.5, 10.0, 8.0, 1.5);
+
+    const auto cleanFit = anchorFixedExponent (frequencies, clean, 1.5);
+    const auto peakedFit = anchorFixedExponent (frequencies, withPeak, 1.5);
+
+    ASSERT_TRUE (cleanFit.valid);
+    ASSERT_TRUE (peakedFit.valid);
+
+    // A peak eight times the background over a fifth of the grid moves the
+    // intercept by under 1% in log10 power.
+    EXPECT_NEAR (peakedFit.offset, cleanFit.offset, 0.01);
+}
+
+TEST (Whitening, AnchoringRejectsUnusableInput)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 10);
+
+    EXPECT_FALSE (anchorFixedExponent ({}, {}, 1.0).valid);
+
+    // All non-positive power: nothing to take a logarithm of.
+    const std::vector<double> zeros (frequencies.size(), 0.0);
+    EXPECT_FALSE (anchorFixedExponent (frequencies, zeros, 1.0).valid);
+}
+
+TEST (Whitening, AperiodicCurveMatchesTheFitItCameFrom)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 40);
+    const auto power = makeSpectrum (frequencies, 3.0, 2.0);
+
+    const auto fit = fitAperiodic (frequencies, power);
+    ASSERT_TRUE (fit.valid);
+
+    std::vector<double> curve (frequencies.size(), -1.0);
+    aperiodicCurve (frequencies, fit, curve);
+
+    for (std::size_t i = 0; i < frequencies.size(); ++i)
+        EXPECT_DOUBLE_EQ (curve[i], fit.evaluate (frequencies[i]));
+
+    // An invalid fit must leave the destination alone rather than writing zeros,
+    // which the panel would draw as a line along the bottom of the plot.
+    std::vector<double> untouched (frequencies.size(), 42.0);
+    aperiodicCurve (frequencies, AperiodicFit {}, untouched);
+
+    for (const double value : untouched)
+        EXPECT_DOUBLE_EQ (value, 42.0);
+}
+
+/** What the overlay is for: with the right exponent the drawn line tracks the
+    background, and with the wrong one it visibly diverges across the axis. */
+TEST (Whitening, WrongExponentDivergesFromTheBackground)
+{
+    const auto frequencies = logGrid (2.0, 200.0, 60);
+    const auto power = makeSpectrum (frequencies, 5.0, 2.0);
+
+    const auto correct = anchorFixedExponent (frequencies, power, 2.0);
+    const auto wrong = anchorFixedExponent (frequencies, power, 1.0);
+
+    ASSERT_TRUE (correct.valid);
+    ASSERT_TRUE (wrong.valid);
+
+    const auto logError = [&] (const AperiodicFit& fit, std::size_t index)
+    {
+        return std::abs (std::log10 (fit.evaluate (frequencies[index])) - std::log10 (power[index]));
+    };
+
+    const std::size_t last = frequencies.size() - 1;
+
+    EXPECT_LT (logError (correct, 0), 1e-9);
+    EXPECT_LT (logError (correct, last), 1e-9);
+
+    // One decade of exponent error over two decades of frequency: the ends of
+    // the line are off by about a decade of power each, in opposite directions.
+    EXPECT_GT (logError (wrong, 0), 0.8);
+    EXPECT_GT (logError (wrong, last), 0.8);
+}
+
 TEST (Whitening, ZeroExponentIsANoOp)
 {
     const auto frequencies = logGrid (2.0, 200.0, 20);

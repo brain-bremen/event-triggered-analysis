@@ -107,6 +107,7 @@ inline const std::vector<const char*> powerDisplay {
     ParameterNames::baseline_end_ms,
     ParameterNames::whitening_mode,
     ParameterNames::whitening_exponent,
+    ParameterNames::whitening_overlay,
 };
 
 /** On the TriggeredCoherence canvas. No whitening control: coherence is a
