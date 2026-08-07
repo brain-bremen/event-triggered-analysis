@@ -34,6 +34,7 @@
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
+#include <atomic>
 #include <memory>
 
 namespace TriggeredSpectra
@@ -120,6 +121,22 @@ public:
      *  an overloaded worker is visible rather than silent. */
     int getNumDroppedRequests() const;
 
+    // --- Trigger diagnostics ------------------------------------------------
+    //
+    // Counted per line rather than per source, because the question these answer
+    // is "are any TTL events reaching this plugin at all, and on which line?" — a
+    // source configured for the wrong line produces no per-source count at all,
+    // which is indistinguishable from no events arriving.
+
+    /** Rising TTL edges seen on any line since acquisition started. */
+    int getNumTtlEdgesSeen() const { return m_ttlEdgesSeen.load (std::memory_order_relaxed); }
+
+    /** Line of the most recent rising edge, or -1 if none has arrived. */
+    int getLastTtlLine() const { return m_lastTtlLine.load (std::memory_order_relaxed); }
+
+    /** Zeroes every counter, node-wide and per source. */
+    void resetTriggerCounters();
+
 protected:
     // --- Hooks for subclasses ----------------------------------------------
 
@@ -181,6 +198,10 @@ protected:
 
     /** Index into getDataStreams() of the stream being analysed. */
     int m_streamIndex = 0;
+
+    /** Written on the audio thread, read on the message thread. See the getters. */
+    std::atomic<int> m_ttlEdgesSeen { 0 };
+    std::atomic<int> m_lastTtlLine { -1 };
 
 private:
     /** Recomputes m_geometry and m_selectedChannels from the current parameters

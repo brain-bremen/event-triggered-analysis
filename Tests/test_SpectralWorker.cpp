@@ -488,3 +488,98 @@ TEST (SpectralWorker, StopsPromptlyWhenIdle)
 
     EXPECT_LT (elapsed, 1000) << "worker took " << elapsed << " ms to stop";
 }
+
+// --- Diagnostic counters ---------------------------------------------------
+//
+// These feed the trigger monitor, whose whole purpose is to answer "I configured
+// a trigger and nothing happened". A counter that silently stops being
+// incremented would make that window confidently wrong, which is worse than not
+// having it, so the worker-side increments are pinned here.
+
+TEST (SpectralWorker, CountsASuccessfulCaptureOnItsTriggerSource)
+{
+    WorkerFixture fixture;
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
+
+    writeBlock (fixture.ring, 0, 2000);
+
+    fixture.queue.push ({ .kind = WorkItemKind::Capture,
+                          .triggerSource = &source,
+                          .triggerSample = 1000,
+                          .preSamples = 100,
+                          .postSamples = 200 });
+
+    ASSERT_TRUE (waitFor ([&] { return fixture.client.captureCount() == 1; }));
+
+    EXPECT_EQ (source.counters.trialsCaptured.load(), 1);
+    EXPECT_EQ (source.counters.capturesFailed.load(), 0);
+}
+
+/** A window that will never arrive must leave trialsCaptured alone — otherwise
+    the monitor would show trials being captured while the display stayed empty,
+    which is exactly the confusion it exists to remove. */
+TEST (SpectralWorker, DoesNotCountACaptureThatFailed)
+{
+    WorkerFixture fixture;
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
+
+    writeBlock (fixture.ring, 0, 2000);
+
+    // Far enough back that the ring has already overwritten it.
+    fixture.queue.push ({ .kind = WorkItemKind::Capture,
+                          .triggerSource = &source,
+                          .triggerSample = 10,
+                          .preSamples = 100,
+                          .postSamples = 100 });
+
+    ASSERT_TRUE (waitFor ([&] { return fixture.client.failureCount() == 1; }));
+
+    EXPECT_EQ (source.counters.trialsCaptured.load(), 0);
+}
+
+TEST (SpectralWorker, CountsACommittedPendingCapture)
+{
+    WorkerFixture fixture;
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_AND_MSG_TRIGGER);
+
+    // RecordingClient::commitCapture always reports that it committed something.
+    fixture.queue.push ({ .kind = WorkItemKind::Commit, .triggerSource = &source });
+
+    ASSERT_TRUE (waitFor ([&] { return source.counters.pendingCommitted.load() == 1; }));
+}
+
+TEST (TriggerCounters, ResetZeroesEveryField)
+{
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
+
+    source.counters.ttlEdges = 4;
+    source.counters.capturesQueued = 3;
+    source.counters.capturesDropped = 1;
+    source.counters.trialsCaptured = 2;
+    source.counters.capturesFailed = 1;
+    source.counters.pendingCommitted = 2;
+
+    source.counters.reset();
+
+    EXPECT_EQ (source.counters.ttlEdges.load(), 0);
+    EXPECT_EQ (source.counters.capturesQueued.load(), 0);
+    EXPECT_EQ (source.counters.capturesDropped.load(), 0);
+    EXPECT_EQ (source.counters.trialsCaptured.load(), 0);
+    EXPECT_EQ (source.counters.capturesFailed.load(), 0);
+    EXPECT_EQ (source.counters.pendingCommitted.load(), 0);
+}
+
+/** Counts are runtime state, not configuration: a copied source is a new source
+    and starts its tally at zero. */
+TEST (TriggerCounters, AreNotCarriedAcrossACopy)
+{
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
+    source.counters.ttlEdges = 7;
+    source.counters.trialsCaptured = 5;
+
+    const TriggerSource copy (source);
+
+    EXPECT_EQ (copy.counters.ttlEdges.load(), 0);
+    EXPECT_EQ (copy.counters.trialsCaptured.load(), 0);
+    EXPECT_EQ (source.counters.ttlEdges.load(), 7) << "the original must be untouched";
+}

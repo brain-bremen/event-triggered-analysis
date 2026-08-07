@@ -24,6 +24,7 @@
 
 #include "../TriggeredPowerNode.h"
 #include "TriggeredPowerCanvas.h"
+#include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
 
 namespace TriggeredSpectra
@@ -34,8 +35,13 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
 {
     m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     m_configureButton->addListener (this);
-    m_configureButton->setBounds (15, 30, 190, 22);
+    m_configureButton->setBounds (15, 30, 120, 22);
     addAndMakeVisible (m_configureButton.get());
+
+    m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
+    m_monitorButton->addListener (this);
+    m_monitorButton->setBounds (139, 30, 66, 22);
+    addAndMakeVisible (m_monitorButton.get());
 
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
@@ -57,13 +63,19 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)
 {
-    if (button != m_configureButton.get())
-        return;
-
     auto* node = static_cast<TriggeredSpectraNode*> (getProcessor());
 
-    CoreServices::getPopupManager()->showPopup (
-        std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button), button);
+    if (button == m_configureButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button),
+            button);
+    }
+    else if (button == m_monitorButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<TriggerMonitorWindow> (node, button), button);
+    }
 }
 
 Visualizer* TriggeredPowerEditor::createNewCanvas()

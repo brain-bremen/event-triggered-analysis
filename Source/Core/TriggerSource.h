@@ -59,6 +59,50 @@ constexpr const char* toString (TriggerType type)
     }
 }
 
+/** Running tally of what happened to one trigger source.
+ *
+ *  Purely diagnostic — nothing reads these to make a decision. They exist so that
+ *  "I configured a trigger and nothing happened" is answerable: the stage where
+ *  the count stops advancing is the stage that is broken.
+ *
+ *  Written from the audio thread (edges, enqueues) and the worker thread (trials,
+ *  failures), read from the message thread, so every field is atomic. Relaxed
+ *  ordering throughout: these are independent tallies, not a coherent snapshot,
+ *  and a display that is one trial stale for a few milliseconds is fine.
+ */
+struct TriggerCounters
+{
+    /** Rising edges seen on this source's line, counted before the arm/type gate
+        so an edge that arrived but did *not* fire is still visible. */
+    std::atomic<int> ttlEdges { 0 };
+
+    /** Edges that passed the gate and were handed to the worker. */
+    std::atomic<int> capturesQueued { 0 };
+
+    /** Edges dropped because the work queue was full. */
+    std::atomic<int> capturesDropped { 0 };
+
+    /** Trial windows the worker extracted and transformed. */
+    std::atomic<int> trialsCaptured { 0 };
+
+    /** Windows the worker gave up on — too old, or the stream stopped advancing. */
+    std::atomic<int> capturesFailed { 0 };
+
+    /** Parked captures folded in by a commit message. */
+    std::atomic<int> pendingCommitted { 0 };
+
+    void reset()
+    {
+        for (auto* c : { &ttlEdges,
+                         &capturesQueued,
+                         &capturesDropped,
+                         &trialsCaptured,
+                         &capturesFailed,
+                         &pendingCommitted })
+            c->store (0, std::memory_order_relaxed);
+    }
+};
+
 /** One experimental condition: what fires it, and how it is drawn.
  *
  *  Trials captured for a given source are accumulated into that source's own
@@ -101,6 +145,13 @@ public:
     /** How long an uncommitted capture is held before being discarded, in ms.
         Zero means it never expires. */
     int pendingTimeoutMs = 2000;
+
+    /** Diagnostic counts, shown in the trigger monitor.
+     *
+     *  Deliberately *not* carried across a copy: unlike everything above this is
+     *  runtime state rather than configuration, and a copy is a new source whose
+     *  tally starts at zero. */
+    TriggerCounters counters;
 };
 
 /** Owns the set of trigger sources and notifies a listener about edits.

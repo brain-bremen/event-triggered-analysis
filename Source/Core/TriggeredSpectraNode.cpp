@@ -253,6 +253,15 @@ float TriggeredSpectraNode::getPostWindowMs() const
 
 int TriggeredSpectraNode::getNumDroppedRequests() const { return m_workQueue.getNumDropped(); }
 
+void TriggeredSpectraNode::resetTriggerCounters()
+{
+    m_ttlEdgesSeen.store (0, std::memory_order_relaxed);
+    m_lastTtlLine.store (-1, std::memory_order_relaxed);
+
+    for (auto* source : m_triggerSources.items())
+        source->counters.reset();
+}
+
 bool TriggeredSpectraNode::isAnalysisParameter (const juce::String& parameterName) const
 {
     static const juce::StringArray analysisParameters {
@@ -419,6 +428,10 @@ bool TriggeredSpectraNode::startAcquisition()
     // cursors, which belong to the audio and worker threads.
     m_workQueue.flush();
 
+    // Counts are per acquisition run, so a stale tally from the last run cannot be
+    // mistaken for triggers arriving in this one.
+    resetTriggerCounters();
+
     if (auto* visualizerEditor = dynamic_cast<VisualizerEditor*> (getEditor()))
         visualizerEditor->enable();
 
@@ -455,31 +468,52 @@ void TriggeredSpectraNode::process (juce::AudioBuffer<float>& buffer)
 
 void TriggeredSpectraNode::handleTTLEvent (TTLEventPtr event)
 {
-    if (! m_geometry.isValid())
-        return;
-
     // Rising edges only.
     if (! event->getState())
         return;
 
     const int line = event->getLine();
 
+    // Counted per line, before matching any source: this is what distinguishes
+    // "no events are arriving" from "events are arriving on a line no source is
+    // listening to", which look identical from the per-source counts alone.
+    //
+    // Counted before the geometry check too, so that an unusable configuration
+    // reads as "edges arrive, nothing is captured" rather than as silence.
+    m_ttlEdgesSeen.fetch_add (1, std::memory_order_relaxed);
+    m_lastTtlLine.store (line, std::memory_order_relaxed);
+
+    if (! m_geometry.isValid())
+        return;
+
     // items() rather than getAll(): the latter builds a juce::Array, and this runs
     // on the audio thread.
     for (auto* source : m_triggerSources.items())
     {
-        if (source->line != line || ! source->canTrigger.load (std::memory_order_relaxed))
+        if (source->line != line)
+            continue;
+
+        // Counted before the gate, so an edge that arrived at a disarmed source is
+        // still visible as an edge rather than vanishing.
+        source->counters.ttlEdges.fetch_add (1, std::memory_order_relaxed);
+
+        if (! source->canTrigger.load (std::memory_order_relaxed))
             continue;
 
         if (source->type == TriggerType::MSG_TRIGGER)
             continue;
 
-        m_workQueue.push (
+        const bool queued = m_workQueue.push (
             { .kind = WorkItemKind::Capture,
               .triggerSource = source,
               .triggerSample = event->getSampleNumber(),
               .preSamples = m_geometry.preSamples + m_geometry.padSamples,
               .postSamples = m_geometry.postSamples + m_geometry.padSamples });
+
+        if (queued)
+            source->counters.capturesQueued.fetch_add (1, std::memory_order_relaxed);
+        else
+            source->counters.capturesDropped.fetch_add (1, std::memory_order_relaxed);
 
         // A message-gated source fires once per arming.
         if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
@@ -546,6 +580,9 @@ void TriggeredSpectraNode::capturesCommitted() { triggerAsyncUpdate(); }
 void TriggeredSpectraNode::captureFailed (const CaptureRequest& request,
                                           RingBufferReadResult result)
 {
+    if (request.triggerSource != nullptr)
+        request.triggerSource->counters.capturesFailed.fetch_add (1, std::memory_order_relaxed);
+
     // Not an error worth interrupting the user over: a trigger too close to the
     // start of acquisition, or one whose post window never arrived because
     // acquisition stopped, is expected.

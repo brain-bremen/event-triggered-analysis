@@ -47,6 +47,10 @@ private:
         ever captured, so this is the first thing a user needs. */
     std::unique_ptr<UtilityButton> m_configureButton;
 
+    /** Opens the live trigger counters, for when a source is configured but no
+        trials appear. */
+    std::unique_ptr<UtilityButton> m_monitorButton;
+
     TriggeredPowerCanvas* m_canvas = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerEditor)

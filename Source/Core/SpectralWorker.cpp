@@ -127,6 +127,10 @@ void SpectralWorker::run()
 
                     if (result == RingBufferReadResult::Success)
                     {
+                        if (item.triggerSource != nullptr)
+                            item.triggerSource->counters.trialsCaptured.fetch_add (
+                                1, std::memory_order_relaxed);
+
                         if (m_client->processCapturedTrial (request, m_trialBuffer))
                             anythingCommitted = true;
                     }
@@ -140,7 +144,13 @@ void SpectralWorker::run()
 
                 case WorkItemKind::Commit:
                     if (m_client->commitCapture (item.triggerSource))
+                    {
                         anythingCommitted = true;
+
+                        if (item.triggerSource != nullptr)
+                            item.triggerSource->counters.pendingCommitted.fetch_add (
+                                1, std::memory_order_relaxed);
+                    }
                     break;
 
                 case WorkItemKind::Discard:

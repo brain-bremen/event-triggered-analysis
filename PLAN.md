@@ -7,9 +7,11 @@ the pair-configuration UI is missing, so no pairs can be created. Phase 5 is
 outstanding. Places where implementation diverged from this plan are marked
 **[changed]**; each says why.
 
-**Nothing here has been verified visually.** Every claim below rests on 110 unit
-tests and a clean build/install. Neither plugin has been watched rendering, and the
-display layer has no test coverage at all.
+**Almost nothing here has been verified visually.** Both plugins now load, and the
+trigger-source table opens and creates sources — that much has been seen working.
+Everything else rests on 160 unit tests and a clean build/install: neither plugin
+has been watched rendering a spectrum, and the display layer has no test coverage
+at all.
 
 See *Known gaps* near the end for what is unreachable from the UI today.
 
@@ -104,6 +106,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `Ui/SpectrumPanel.{h,cpp}` | **[done]** heatmap + line modes |
 | `Ui/PanelGrid.{h,cpp}` | **[done]** |
 | `Ui/TriggerSourceConfigWindow.{h,cpp}` | **[done]** shared by both plugins |
+| `Ui/TriggerMonitorWindow.{h,cpp}` | **[done]** live trigger counters, see below |
 
 ### **[changed]** A shared node base class was added
 
@@ -539,7 +542,39 @@ used in practice. Mutations wrapped in `ProcessorAction` subclasses for undo/red
 **[done]**: `ColorMap` (viridis / magma / diverging / greyscale via a 256-entry LUT),
 `SpectrumPanel` (heatmap and line modes, cached image and paths, log-aware frequency
 axis), `PanelGrid`, both canvases with an options bar (colormap, columns, panel
-height, shared scale, clear), and `TriggerSourceConfigWindow`.
+height, shared scale, clear), `TriggerSourceConfigWindow`, and `TriggerMonitorWindow`.
+
+### Trigger monitor **[done]**
+
+A configured trigger that produces nothing gives the user no information at all:
+the canvas is empty either way. `TriggerMonitorWindow` (editor button **MONITOR**,
+both plugins) follows an edge through the pipeline and shows where it stops.
+
+```
+edges -> queued -> trials -> (committed)
+     \-> dropped        \-> failed
+```
+
+Counts live on `TriggerSource::counters` as relaxed atomics, incremented on the
+audio thread (edges, enqueues) and the worker thread (trials, commits), read on
+the message thread. They are diagnostic only — nothing branches on them — and are
+reset at `startAcquisition` so a stale tally cannot be mistaken for live triggers.
+They are deliberately *not* carried across a `TriggerSource` copy, being runtime
+state rather than configuration.
+
+Two decisions matter more than the rest:
+
+- **Edges are counted per line, node-wide, not only per source.** A source
+  listening to the wrong TTL line leaves every per-source count at zero, which is
+  indistinguishable from no events arriving at all. The line total and the
+  last-seen line number separate those two cases, and in practice that is the
+  common misconfiguration.
+- **Edges are counted before the geometry check and before the arm/type gate.** An
+  edge that arrived and was rejected must read as "arrived, rejected", not as
+  silence — the whole failure mode being diagnosed is silence.
+
+The window turns those counts into one line of plain English (`diagnose()`) naming
+the most likely cause, rather than leaving the user to interpret the columns.
 
 **[todo]**: the pair-configuration window, and a shared colour bar showing the
 value scale.
@@ -582,9 +617,9 @@ not. These are ordered by how much they block actual use.
 
 ### Most analysis parameters have no UI control
 
-The editor exposes five things: **TRIGGERS**, channels, pre, post, mode. Everything
-else is registered, functional and tested, but has no control anywhere — so it can
-only ever run at its default:
+The editor exposes six things: **TRIGGERS**, **MONITOR**, channels, pre, post, mode.
+Everything else is registered, functional and tested, but has no control anywhere —
+so it can only ever run at its default:
 
 `freq_min`, `freq_max`, `num_freqs`, `freq_spacing`, `tf_method`, `n_cycles_low`,
 `n_cycles_high`, `stft_window_ms`, `stft_hop_ms`, `line_method`, `nw`, `n_tapers`,
@@ -640,7 +675,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 155 tests passing:
+**[done]** — 160 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -689,6 +724,9 @@ and doing that from the base constructor is a pure-virtual call.
   capture/commit ordering; the message timestamp reaching expiry unchanged; one
   repaint per drained batch rather than one per trial; flushed items never reaching
   the client; and prompt shutdown both idle and mid-retry.
+- *Trigger counters*: a successful capture counted against its source, a failed
+  one not counted, a committed pending capture counted, `reset()` zeroing every
+  field, and counts not surviving a copy.
 - *Baseline*: bin-range selection including inverted, empty and out-of-range
   windows; dB / percent / z-score against both a slice of the time axis and a
   separately estimated pre-trigger spectrum; log(0) clamped instead of producing
