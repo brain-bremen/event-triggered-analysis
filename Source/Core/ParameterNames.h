@@ -76,6 +76,10 @@ inline constexpr auto smooth_time_bins = "smooth_time_bins";
 inline constexpr auto smooth_freq_bins = "smooth_freq_bins";
 inline constexpr auto coherence_display = "coherence_display";
 
+/** Accumulate the trial-shifted null alongside the real estimate. Analysis-time:
+    it needs its own accumulator per pair and the previous trial held back. */
+inline constexpr auto shift_predictor = "shift_predictor";
+
 // --- Every name above ------------------------------------------------------
 
 /** The full set, so that "does this parameter have a control anywhere?" can be
@@ -89,7 +93,7 @@ inline constexpr const char* all[] = {
     stft_hop_ms,     line_method,      nw,                n_tapers,
     trigger_line,    trigger_type,     max_trials,        baseline_mode,
     baseline_start_ms, baseline_end_ms, whitening_mode,   whitening_exponent,
-    smooth_time_bins, smooth_freq_bins, coherence_display
+    smooth_time_bins, smooth_freq_bins, coherence_display, shift_predictor
 };
 
 } // namespace TriggeredSpectra::ParameterNames

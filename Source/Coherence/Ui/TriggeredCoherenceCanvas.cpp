@@ -228,7 +228,9 @@ void TriggeredCoherenceCanvas::updatePanelData()
     m_valueScratch.resize (static_cast<std::size_t> (numFrequencies) * numBins);
 
     const bool spectrogram = (m_node->getEstimateMode() == EstimateMode::Spectrogram);
-    const bool showPhase = (m_node->getDisplayMode() == CoherenceDisplay::Phase);
+    const auto displayMode = m_node->getDisplayMode();
+    const bool showPhase = (displayMode == CoherenceDisplay::Phase);
+    const bool showShiftPredictor = (displayMode == CoherenceDisplay::ShiftPredictor);
 
     const auto lock = m_node->lockData();
 
@@ -237,14 +239,18 @@ void TriggeredCoherenceCanvas::updatePanelData()
         auto* panel = m_grid.getPanel (i);
         const auto& key = m_panelKeys[static_cast<std::size_t> (i)];
 
-        const int numTrials = m_node->getNumTrials (key.source);
+        const int numTrials = showShiftPredictor
+                                  ? m_node->getNumShiftPredictorTrials (key.source)
+                                  : m_node->getNumTrials (key.source);
         const int dof = m_node->getDegreesOfFreedom (key.source);
         const double threshold = m_node->getSignificanceThreshold (key.source);
 
         // The trial count and the significance level are not decoration here:
         // coherence from a handful of trials is biased high enough to look like
-        // a real effect, so the panel must always say what it is based on.
-        panel->setSubtitle (juce::String (numTrials) + " trials, dof " + juce::String (dof));
+        // a real effect, so the panel must always say what it is based on. The
+        // shift-predictor view says so too, or it reads as the real estimate.
+        panel->setSubtitle ((showShiftPredictor ? "SHIFTED: " : "") + juce::String (numTrials)
+                            + " trials, dof " + juce::String (dof));
 
         panel->setThreshold (
             (! showPhase && dof >= 2) ? static_cast<float> (threshold)

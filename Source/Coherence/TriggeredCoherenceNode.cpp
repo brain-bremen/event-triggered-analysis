@@ -70,10 +70,42 @@ void TriggeredCoherenceNode::registerAdditionalParameters()
     addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
                              ParameterNames::coherence_display,
                              "Show",
-                             "Coherence magnitude or the phase of the coherency",
-                             { "Coherence", "Phase" },
+                             "Coherence magnitude, the phase of the coherency, or the "
+                             "trial-shifted null",
+                             { "Coherence", "Phase", "Shift predictor" },
                              0,
                              false);
+
+    // Defaults to on. It doubles the accumulator memory for a pair, which is
+    // small, and without it there is no way to tell coherence driven by a shared
+    // evoked response or a common reference from a real interaction — both look
+    // identical on the plot.
+    addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
+                             ParameterNames::shift_predictor,
+                             "Shift pred",
+                             "Also accumulate the trial-shifted null: channel A of each "
+                             "trial against channel B of the previous one",
+                             { "Off", "On" },
+                             1,
+                             true);
+}
+
+bool TriggeredCoherenceNode::isAnalysisParameter (const juce::String& parameterName) const
+{
+    if (parameterName.equalsIgnoreCase (ParameterNames::shift_predictor))
+        return true;
+
+    return TriggeredSpectraNode::isAnalysisParameter (parameterName);
+}
+
+bool TriggeredCoherenceNode::isShiftPredictorEnabled() const
+{
+    auto* parameter = getParameter (ParameterNames::shift_predictor);
+
+    if (parameter == nullptr)
+        return false;
+
+    return static_cast<CategoricalParameter*> (parameter)->getSelectedIndex() == 1;
 }
 
 CoherenceDisplay TriggeredCoherenceNode::getDisplayMode() const
@@ -173,6 +205,12 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
 
     m_accumulators.clear();
 
+    // The held trial belongs to the shape that is being torn down. Keeping it
+    // would pair the first trial of the new configuration against a stale one;
+    // the shape check in addTrial would reject that, but silently, so drop it
+    // here where the reason is visible.
+    m_previousTrial.clear();
+
     const auto& geometry = getTrialGeometry();
     const auto& channels = getSelectedChannels();
 
@@ -219,12 +257,23 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
         return;
     }
 
+    const bool shiftPredictor = isShiftPredictorEnabled();
+
     for (auto* source : m_triggerSources.getAll())
     {
         for (int pairIndex = 0; pairIndex < static_cast<int> (m_pairs.size()); ++pairIndex)
         {
-            auto& accumulator = m_accumulators[{ source, pairIndex }];
-            accumulator.setSize (m_engine.numFrequencies(), m_engine.numAccumulatorBins());
+            auto& accumulators = m_accumulators[{ source, pairIndex }];
+            accumulators.observed.setSize (m_engine.numFrequencies(),
+                                           m_engine.numAccumulatorBins());
+
+            // Sized to zero when off, so the memory is not paid for and
+            // addTrial() rejects anything that reaches it by mistake.
+            if (shiftPredictor)
+                accumulators.shifted.setSize (m_engine.numFrequencies(),
+                                              m_engine.numAccumulatorBins());
+            else
+                accumulators.shifted.setSize (0, 0);
         }
     }
 }
@@ -234,8 +283,15 @@ void TriggeredCoherenceNode::clearAllData()
     {
         const juce::ScopedLock lock (m_dataLock);
 
-        for (auto& [key, accumulator] : m_accumulators)
-            accumulator.reset();
+        for (auto& [key, accumulators] : m_accumulators)
+        {
+            accumulators.observed.reset();
+            accumulators.shifted.reset();
+        }
+
+        // Otherwise the first trial after a clear would be paired against one
+        // from before it, which is exactly the data the user asked to discard.
+        m_previousTrial.clear();
     }
 
     triggerAsyncUpdate();
@@ -264,6 +320,20 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 
     const juce::ScopedLock lock (m_dataLock);
 
+    const bool shiftPredictor = isShiftPredictorEnabled();
+
+    // The trial before this one, from this same source. Absent for the first
+    // trial of a run, and after a clear or a reconfiguration.
+    TfCoefficients* previous = nullptr;
+
+    if (shiftPredictor)
+    {
+        const auto held = m_previousTrial.find (request.triggerSource);
+
+        if (held != m_previousTrial.end() && ! held->second.empty())
+            previous = &held->second;
+    }
+
     bool anyAdded = false;
 
     for (int pairIndex = 0; pairIndex < static_cast<int> (m_pairs.size()); ++pairIndex)
@@ -280,8 +350,24 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
         if (accumulator == m_accumulators.end())
             continue;
 
-        if (accumulator->second.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
+        if (accumulator->second.observed.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
             anyAdded = true;
+
+        // Channel A from this trial against channel B from the last one. The
+        // shift is one-directional on purpose: swapping which side is delayed
+        // would estimate the same null twice over rather than differently.
+        if (previous != nullptr)
+            accumulator->second.shifted.addTrial (
+                m_coefficients, pair.selectedA, *previous, pair.selectedB);
+    }
+
+    if (shiftPredictor)
+    {
+        // Hand this trial to the next one. Swapping rather than copying is free
+        // and safe: every transform begins with TfCoefficients::setSize(), which
+        // reassigns the whole block, so whatever m_coefficients is left holding
+        // is overwritten before it is read again.
+        std::swap (m_previousTrial[request.triggerSource], m_coefficients);
     }
 
     return anyAdded;
@@ -292,7 +378,13 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 int TriggeredCoherenceNode::getNumTrials (TriggerSource* source) const
 {
     const auto it = m_accumulators.find ({ source, 0 });
-    return it != m_accumulators.end() ? it->second.numTrials() : 0;
+    return it != m_accumulators.end() ? it->second.observed.numTrials() : 0;
+}
+
+int TriggeredCoherenceNode::getNumShiftPredictorTrials (TriggerSource* source) const
+{
+    const auto it = m_accumulators.find ({ source, 0 });
+    return it != m_accumulators.end() ? it->second.shifted.numTrials() : 0;
 }
 
 int TriggeredCoherenceNode::getDegreesOfFreedom (TriggerSource* source) const
@@ -302,7 +394,7 @@ int TriggeredCoherenceNode::getDegreesOfFreedom (TriggerSource* source) const
     if (it == m_accumulators.end())
         return 0;
 
-    return it->second.degreesOfFreedom (getSmoothTimeBins(), getSmoothFreqBins());
+    return it->second.observed.degreesOfFreedom (getSmoothTimeBins(), getSmoothFreqBins());
 }
 
 double TriggeredCoherenceNode::getSignificanceThreshold (TriggerSource* source) const
@@ -315,21 +407,47 @@ bool TriggeredCoherenceNode::getCoherenceForDisplay (TriggerSource* source,
                                                      int frequencyIndex,
                                                      std::span<double> destination) const
 {
+    const auto mode = getDisplayMode();
+
+    if (mode == CoherenceDisplay::ShiftPredictor)
+        return getShiftPredictorForDisplay (source, pairIndex, frequencyIndex, destination);
+
     const auto it = m_accumulators.find ({ source, pairIndex });
 
-    if (it == m_accumulators.end() || it->second.numTrials() == 0)
+    if (it == m_accumulators.end() || it->second.observed.numTrials() == 0)
         return false;
 
-    if (destination.size() < static_cast<std::size_t> (it->second.numBins()))
+    if (destination.size() < static_cast<std::size_t> (it->second.observed.numBins()))
         return false;
 
     const int smoothTime = getSmoothTimeBins();
     const int smoothFrequency = getSmoothFreqBins();
 
-    if (getDisplayMode() == CoherenceDisplay::Phase)
-        it->second.phase (frequencyIndex, destination, smoothTime, smoothFrequency);
+    if (mode == CoherenceDisplay::Phase)
+        it->second.observed.phase (frequencyIndex, destination, smoothTime, smoothFrequency);
     else
-        it->second.coherence (frequencyIndex, destination, smoothTime, smoothFrequency);
+        it->second.observed.coherence (frequencyIndex, destination, smoothTime, smoothFrequency);
+
+    return true;
+}
+
+bool TriggeredCoherenceNode::getShiftPredictorForDisplay (TriggerSource* source,
+                                                          int pairIndex,
+                                                          int frequencyIndex,
+                                                          std::span<double> destination) const
+{
+    const auto it = m_accumulators.find ({ source, pairIndex });
+
+    if (it == m_accumulators.end() || it->second.shifted.numTrials() == 0)
+        return false;
+
+    if (destination.size() < static_cast<std::size_t> (it->second.shifted.numBins()))
+        return false;
+
+    // Deliberately the same smoothing as the real estimate. A null drawn with
+    // different degrees of freedom is not comparable to what it is a null for.
+    it->second.shifted.coherence (
+        frequencyIndex, destination, getSmoothTimeBins(), getSmoothFreqBins());
 
     return true;
 }

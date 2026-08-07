@@ -124,6 +124,25 @@ public:
         Returns false if the indices or shape do not fit. */
     bool addTrial (const TfCoefficients& coefficients, int channelA, int channelB);
 
+    /** Adds one trial whose two channels come from *different* coefficient
+     *  blocks: channel A out of one, channel B out of the other.
+     *
+     *  This is what the shift predictor is built from — channel A of trial n
+     *  against channel B of trial n-1. Anything locked to the trigger is present
+     *  in both trials and survives the re-pairing; anything genuinely
+     *  trial-by-trial does not. So an accumulator fed this way estimates how much
+     *  of the observed coherence the trigger alone accounts for, which is the
+     *  only way to tell a shared evoked response from an interaction.
+     *
+     *  Both blocks must carry the accumulator's shape and the same bin axis.
+     *  That is checked rather than assumed: the second block was produced by an
+     *  earlier trial, and a reconfiguration may have changed the shape since.
+     */
+    bool addTrial (const TfCoefficients& coefficientsA,
+                   int channelA,
+                   const TfCoefficients& coefficientsB,
+                   int channelB);
+
     /** Magnitude-squared coherence in [0, 1], for one frequency.
      *
      *  @param smoothTimeBins   pool +/- this many neighbouring bins

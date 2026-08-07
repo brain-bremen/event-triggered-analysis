@@ -9,7 +9,7 @@ outstanding. Places where implementation diverged from this plan are marked
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 165 unit tests and a clean build/install: neither plugin
+Everything else rests on 170 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -285,6 +285,65 @@ UI must show `nTrials` and the null threshold `1 − 0.05^(1/(ν−1))` with
 neighbouring bins into the sums before the ratio, raising `ν` — the main stabiliser
 for wavelet coherence.
 
+### Shift predictor **[done]**
+
+Coherence cannot tell two channels that interact from two channels that merely
+share a stimulus-locked response. Both fix the phase difference across trials,
+which is the only thing the estimate looks at:
+
+```
+ΣSxy = Σ Aₙ Bₙ · e^{i(αₙ − βₙ)}
+```
+
+and a shared evoked response, or a common reference, pins `αₙ − βₙ` by
+construction. Triggered coherence is the design in which that confound is
+*maximal*, so it cannot be left to a footnote.
+
+The shift predictor re-pairs channel A of trial *n* with channel B of trial
+*n−1*, both at the same latency relative to their own triggers. Anything locked
+to the trigger is present in both trials and survives; anything genuinely
+trial-by-trial does not. The gap between the two curves is the part of the
+coherence that the trigger does not explain.
+
+It was chosen over subtracting the ERP, which addresses the same confound:
+
+- It **measures** the confound rather than modelling it. ERP subtraction assumes
+  the evoked response is additive with fixed latency and amplitude; under latency
+  jitter the mean is a smeared version of every trial, so subtracting it leaves
+  time-locked residuals *and* carves a notch that was in no single trial.
+- It is non-destructive. ERP subtraction happens per trial before the transform,
+  so it cannot be a display-time toggle the way baseline and whitening are —
+  turning it on or off has to discard the accumulators.
+- It doubles as an **empirical null**, which matters because the analytic
+  threshold assumes independent estimates. That is false once `smooth_time_bins`
+  pools overlapping Morlet kernels, where the analytic line is anticonservative.
+  The predictor inherits the same ν, leakage and smoothing dependence.
+
+Implementation: `CrossSpectrumAccumulator::addTrial` gained an overload taking
+the two channels from *different* coefficient blocks, and the node keeps one
+`PairAccumulators { observed, shifted }` per (source, pair) plus the previous
+trial's coefficients **per trigger source** — crossing sources would pair two
+different conditions. The held trial is swapped rather than copied, which is free
+and safe because every transform begins with `TfCoefficients::setSize()`, which
+reassigns the whole block.
+
+Held trials are dropped on reconfiguration and on CLEAR, so the first trial after
+either is never paired across the boundary.
+
+Two consequences worth knowing:
+
+- The shifted estimate always has **one fewer trial**, since the first has no
+  predecessor. The panel says so rather than reusing the observed count.
+- `shift_predictor` is an *analysis* parameter, not a display one. It allocates a
+  second accumulator and accumulates as trials arrive, so it cannot be applied
+  retroactively — toggling it resets, like everything else in the ANALYSIS
+  window.
+
+**[todo]**: drawing the predictor *beside* the real estimate rather than as a
+separate display mode. `getShiftPredictorForDisplay()` exists for exactly that
+and is not yet called; it belongs with the pair-configuration window, which is
+where the ν and threshold readouts also live.
+
 ---
 
 ## Parameters **[done]**
@@ -312,11 +371,14 @@ mandatory for a readable spectrogram, and is applied at *display* time so changi
 does not discard accumulated spectra. Plus the whitening parameters below.
 
 **Coherence only:** `smooth_time_bins`, `smooth_freq_bins`, `coherence_display`
-{Coherence, Phase}, plus the pair table. Same rule: none of these invalidate the
-accumulators.
+{Coherence, Phase, Shift predictor}, plus the pair table. Same rule: none of these
+invalidate the accumulators. `shift_predictor` {Off, On} is the exception and is
+therefore an *analysis* parameter, on the editor rather than the canvas — see the
+shift predictor section above.
 
 Trigger sources persist via `saveCustomParametersToXml` **[done]**; canvas display
-state via `Visualizer::saveCustomParametersToXml` **[todo]**.
+state via `Visualizer::saveCustomParametersToXml` **[done]** (`TriggeredPowerCanvas.cpp`,
+`TriggeredCoherenceCanvas.cpp`).
 
 ---
 
@@ -729,7 +791,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 165 tests passing:
+**[done]** — 170 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -756,6 +818,12 @@ and doing that from the base constructor is a pure-virtual call.
 - *Accumulators*: mean/SEM, psdScale application, taper-vs-time reduction, coherence
   at both extremes, the 1/ν bias, taper and smoothing degrees of freedom, and the
   significance threshold.
+- *Shift predictor*: the two cases it exists to separate, measured the same way —
+  a trigger-locked component in both channels leaves the shifted estimate as high
+  as the real one, while a component redrawn each trial leaves it at the null.
+  Plus: the cross-block form agreeing exactly with the single-block form on the
+  same input, tapers still pooling through it, and blocks that do not describe
+  the same estimate being refused rather than silently crossed.
 - *Pipeline*: coherence isolates a shared component from an equally strong
   phase-independent one; independent channels sit near the null; Morlet and
   multitaper agree on band power; induced power survives random per-trial phase.

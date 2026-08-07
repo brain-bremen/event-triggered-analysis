@@ -57,11 +57,19 @@ struct ChannelPair
     bool isResolved() const { return selectedA >= 0 && selectedB >= 0; }
 };
 
-/** What a coherence panel draws. */
+/** What a coherence panel draws.
+ *
+ *  Appended to, never reordered: the index is what goes into the saved signal
+ *  chain, so inserting in the middle would silently change what a reloaded
+ *  configuration displays.
+ */
 enum class CoherenceDisplay
 {
     Coherence = 0,
-    Phase = 1
+    Phase = 1,
+    /** The trial-shifted null: the same estimate with channel B taken from the
+        previous trial. Whatever is left is explained by the trigger alone. */
+    ShiftPredictor = 2
 };
 
 /** Event-triggered pairwise coherence.
@@ -104,6 +112,11 @@ public:
 
     int getNumTrials (TriggerSource* source) const;
 
+    /** Trials behind the shift predictor. Always one fewer than getNumTrials()
+        once running — the first trial has no predecessor to pair against — and
+        zero when the predictor is switched off. */
+    int getNumShiftPredictorTrials (TriggerSource* source) const;
+
     /** Degrees of freedom behind the current estimate: trials x tapers x
         smoothing neighbourhood. */
     int getDegreesOfFreedom (TriggerSource* source) const;
@@ -118,6 +131,18 @@ public:
                                  int frequencyIndex,
                                  std::span<double> destination) const;
 
+    /** The shift-predictor coherence for one pair and frequency, whatever the
+        display mode is set to — so a panel can draw it *beside* the real
+        estimate rather than instead of it, which is how it is actually read.
+        False when the predictor is off or has no trials yet. */
+    bool getShiftPredictorForDisplay (TriggerSource* source,
+                                      int pairIndex,
+                                      int frequencyIndex,
+                                      std::span<double> destination) const;
+
+    /** Whether the trial-shifted null is being accumulated. */
+    bool isShiftPredictorEnabled() const;
+
     int getNumFrequencies() const { return m_engine.numFrequencies(); }
     int getNumBins() const { return m_engine.numAccumulatorBins(); }
     std::span<const double> getFrequencies() const { return m_engine.frequencies(); }
@@ -131,6 +156,12 @@ public:
 protected:
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
+
+    /** Adds `shift_predictor` to the base list: toggling it allocates a second
+        accumulator per pair, and the estimate it holds cannot be reconstructed
+        for trials that have already gone by, so it has to reset like any other
+        analysis parameter rather than pretending to apply retroactively. */
+    bool isAnalysisParameter (const juce::String& parameterName) const override;
 
     bool processCapturedTrial (const CaptureRequest& request,
                                const juce::AudioBuffer<float>& trial) override;
@@ -157,8 +188,25 @@ private:
 
     mutable juce::CriticalSection m_dataLock;
 
-    /** One accumulator per (trigger source, pair index). */
-    std::map<std::pair<TriggerSource*, int>, CrossSpectrumAccumulator> m_accumulators;
+    /** The real estimate and its trial-shifted null, kept together so they
+        cannot drift out of step the way two parallel maps would. */
+    struct PairAccumulators
+    {
+        CrossSpectrumAccumulator observed;
+        CrossSpectrumAccumulator shifted;
+    };
+
+    /** One pair of accumulators per (trigger source, pair index). */
+    std::map<std::pair<TriggerSource*, int>, PairAccumulators> m_accumulators;
+
+    /** The previous trial's coefficients, per trigger source, waiting to be
+        paired against the next one.
+     *
+     *  Per source rather than one global slot: trials from different sources are
+     *  different conditions, and crossing them would make the null answer a
+     *  question nobody asked. Empty when the predictor is off.
+     */
+    std::map<TriggerSource*, TfCoefficients> m_previousTrial;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceNode)
 };

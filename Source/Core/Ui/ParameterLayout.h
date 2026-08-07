@@ -87,6 +87,12 @@ inline const std::vector<Group> analysisGroups {
     // TriggeredPower only. The window drops a group whose parameters the node
     // does not have, so TriggeredCoherence simply never shows this one.
     { "Per-trial storage", "Applies in Spectrum mode.", { ParameterNames::max_trials } },
+
+    // TriggeredCoherence only, and dropped from TriggeredPower the same way.
+    // The shift predictor belongs here rather than on the canvas because it
+    // accumulates a second estimate as trials arrive; it cannot be reconstructed
+    // afterwards from what the display holds.
+    { "Coherence controls", "", { ParameterNames::shift_predictor } },
 };
 
 /** On the TriggeredPower canvas. All display-time: applied when the display reads

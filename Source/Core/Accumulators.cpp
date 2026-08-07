@@ -207,23 +207,38 @@ bool CrossSpectrumAccumulator::addTrial (const TfCoefficients& coefficients,
                                          int channelA,
                                          int channelB)
 {
-    if (! matches (coefficients.numFrequencies(), outputBinCount (coefficients)))
+    return addTrial (coefficients, channelA, coefficients, channelB);
+}
+
+bool CrossSpectrumAccumulator::addTrial (const TfCoefficients& coefficientsA,
+                                         int channelA,
+                                         const TfCoefficients& coefficientsB,
+                                         int channelB)
+{
+    if (! matches (coefficientsA.numFrequencies(), outputBinCount (coefficientsA)))
+        return false;
+
+    // The two blocks have to describe the same estimate for a cross-spectrum
+    // between them to mean anything.
+    if (coefficientsB.numFrequencies() != coefficientsA.numFrequencies()
+        || coefficientsB.numBins() != coefficientsA.numBins()
+        || coefficientsB.binAxis() != coefficientsA.binAxis())
         return false;
 
     if (m_crossSum.empty())
         return false;
 
-    if (channelA < 0 || channelA >= coefficients.numChannels() || channelB < 0
-        || channelB >= coefficients.numChannels())
+    if (channelA < 0 || channelA >= coefficientsA.numChannels() || channelB < 0
+        || channelB >= coefficientsB.numChannels())
         return false;
 
-    const bool poolTapers = (coefficients.binAxis() == BinAxis::Taper);
-    m_binsPooledPerTrial = poolTapers ? coefficients.numBins() : 1;
+    const bool poolTapers = (coefficientsA.binAxis() == BinAxis::Taper);
+    m_binsPooledPerTrial = poolTapers ? coefficientsA.numBins() : 1;
 
     for (int frequency = 0; frequency < m_numFrequencies; ++frequency)
     {
-        const auto a = coefficients.bins (channelA, frequency);
-        const auto b = coefficients.bins (channelB, frequency);
+        const auto a = coefficientsA.bins (channelA, frequency);
+        const auto b = coefficientsB.bins (channelB, frequency);
 
         if (poolTapers)
         {

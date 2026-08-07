@@ -373,3 +373,212 @@ TEST (CrossSpectrumAccumulator, RejectsBadChannelIndices)
     EXPECT_FALSE (accumulator.addTrial (coefficients, -1, 1));
     EXPECT_EQ (accumulator.numTrials(), 0);
 }
+
+// --- Shift predictor -------------------------------------------------------
+//
+// Coherence cannot distinguish two channels that interact from two channels
+// that merely share a stimulus-locked response: both fix the phase difference
+// across trials, which is the only thing the estimate looks at. The shift
+// predictor separates them by re-pairing channel A of each trial with channel B
+// of the previous one. Anything locked to the trigger is present in both trials
+// and survives; anything trial-by-trial does not.
+//
+// The two tests below are the same measurement applied to the two cases, and
+// they are the reason the feature exists.
+
+namespace
+{
+
+Coefficient toCoefficient (const std::complex<double>& value)
+{
+    return Coefficient { static_cast<float> (value.real()), static_cast<float> (value.imag()) };
+}
+
+/** One single-bin, single-frequency trial with the given value on each channel. */
+TfCoefficients makeTrial (const std::complex<double>& a, const std::complex<double>& b)
+{
+    auto coefficients = makeCoefficients (2, 1, 1, BinAxis::Time);
+
+    fill (coefficients, 0, 0, toCoefficient (a));
+    fill (coefficients, 1, 0, toCoefficient (b));
+
+    return coefficients;
+}
+
+/** Drives both accumulators exactly as TriggeredCoherenceNode does: every trial
+    into the observed estimate, and every trial after the first paired against
+    its predecessor for the shifted one. */
+void accumulateWithShiftPredictor (const std::vector<TfCoefficients>& trials,
+                                   CrossSpectrumAccumulator& observed,
+                                   CrossSpectrumAccumulator& shifted)
+{
+    for (std::size_t n = 0; n < trials.size(); ++n)
+    {
+        ASSERT_TRUE (observed.addTrial (trials[n], 0, 1));
+
+        if (n > 0)
+            ASSERT_TRUE (shifted.addTrial (trials[n], 0, trials[n - 1], 1));
+    }
+}
+
+} // namespace
+
+/** The confound. Both channels carry the same fixed response every trial - an
+    evoked potential, locked to the trigger - plus independent noise. Coherence
+    is high, and it means nothing about the two channels interacting. */
+TEST (ShiftPredictor, ATriggerLockedComponentSurvivesTheShift)
+{
+    constexpr int numTrials = 60;
+
+    std::mt19937 generator (101);
+    std::normal_distribution<double> noise (0.0, 0.3);
+
+    std::vector<TfCoefficients> trials;
+
+    for (int trial = 0; trial < numTrials; ++trial)
+    {
+        const std::complex<double> evoked (1.0, 0.0);
+
+        trials.push_back (
+            makeTrial (evoked + std::complex<double> (noise (generator), noise (generator)),
+                       evoked + std::complex<double> (noise (generator), noise (generator))));
+    }
+
+    CrossSpectrumAccumulator observed, shifted;
+    observed.setSize (1, 1);
+    shifted.setSize (1, 1);
+
+    accumulateWithShiftPredictor (trials, observed, shifted);
+
+    EXPECT_EQ (observed.numTrials(), numTrials);
+
+    // One fewer by construction: the first trial has no predecessor.
+    EXPECT_EQ (shifted.numTrials(), numTrials - 1);
+
+    double observedValue = 0.0, shiftedValue = 0.0;
+    observed.coherence (0, std::span<double> (&observedValue, 1));
+    shifted.coherence (0, std::span<double> (&shiftedValue, 1));
+
+    EXPECT_GT (observedValue, 0.5);
+
+    // The whole point: the null is just as high, so the observed coherence is
+    // explained by the trigger alone and says nothing about an interaction.
+    EXPECT_GT (shiftedValue, 0.5);
+    EXPECT_NEAR (shiftedValue, observedValue, 0.15);
+}
+
+/** The real thing. The shared component is redrawn every trial, so the channels
+    agree with each other but not with the trigger. Re-pairing destroys it. */
+TEST (ShiftPredictor, ATrialByTrialInteractionDoesNotSurviveTheShift)
+{
+    constexpr int numTrials = 60;
+
+    std::mt19937 generator (202);
+    std::normal_distribution<double> noise (0.0, 0.3);
+    std::uniform_real_distribution<double> angle (-std::numbers::pi, std::numbers::pi);
+
+    std::vector<TfCoefficients> trials;
+
+    for (int trial = 0; trial < numTrials; ++trial)
+    {
+        // Common to both channels within the trial, independent between trials.
+        const auto common = std::polar (1.0, angle (generator));
+
+        trials.push_back (
+            makeTrial (common + std::complex<double> (noise (generator), noise (generator)),
+                       common + std::complex<double> (noise (generator), noise (generator))));
+    }
+
+    CrossSpectrumAccumulator observed, shifted;
+    observed.setSize (1, 1);
+    shifted.setSize (1, 1);
+
+    accumulateWithShiftPredictor (trials, observed, shifted);
+
+    double observedValue = 0.0, shiftedValue = 0.0;
+    observed.coherence (0, std::span<double> (&observedValue, 1));
+    shifted.coherence (0, std::span<double> (&shiftedValue, 1));
+
+    EXPECT_GT (observedValue, 0.5);
+
+    // Near the null for numTrials-1 degrees of freedom, which is ~0.017. The
+    // gap between this and the previous test is the whole diagnostic.
+    EXPECT_LT (shiftedValue, 0.15);
+}
+
+TEST (ShiftPredictor, CrossBlockFormMatchesTheSingleBlockForm)
+{
+    std::mt19937 generator (303);
+    std::normal_distribution<float> gaussian (0.0f, 1.0f);
+
+    CrossSpectrumAccumulator viaSingleBlock, viaCrossBlock;
+    viaSingleBlock.setSize (1, 1);
+    viaCrossBlock.setSize (1, 1);
+
+    for (int trial = 0; trial < 12; ++trial)
+    {
+        auto coefficients = makeCoefficients (2, 1, 1, BinAxis::Time);
+        fill (coefficients, 0, 0, Coefficient { gaussian (generator), gaussian (generator) });
+        fill (coefficients, 1, 0, Coefficient { gaussian (generator), gaussian (generator) });
+
+        ASSERT_TRUE (viaSingleBlock.addTrial (coefficients, 0, 1));
+        ASSERT_TRUE (viaCrossBlock.addTrial (coefficients, 0, coefficients, 1));
+    }
+
+    double single = 0.0, crossed = 0.0;
+    viaSingleBlock.coherence (0, std::span<double> (&single, 1));
+    viaCrossBlock.coherence (0, std::span<double> (&crossed, 1));
+
+    EXPECT_DOUBLE_EQ (single, crossed);
+
+    double singlePhase = 0.0, crossedPhase = 0.0;
+    viaSingleBlock.phase (0, std::span<double> (&singlePhase, 1));
+    viaCrossBlock.phase (0, std::span<double> (&crossedPhase, 1));
+
+    EXPECT_DOUBLE_EQ (singlePhase, crossedPhase);
+}
+
+TEST (ShiftPredictor, PoolsTapersFromTheCrossBlockFormToo)
+{
+    constexpr int numTapers = 4;
+
+    CrossSpectrumAccumulator accumulator;
+    accumulator.setSize (1, 1);
+
+    auto current = makeCoefficients (2, 1, numTapers, BinAxis::Taper);
+    auto previous = makeCoefficients (2, 1, numTapers, BinAxis::Taper);
+
+    fill (current, 0, 0, Coefficient { 1.0f, 0.0f });
+    fill (previous, 1, 0, Coefficient { 1.0f, 0.0f });
+
+    ASSERT_TRUE (accumulator.addTrial (current, 0, previous, 1));
+
+    EXPECT_EQ (accumulator.binsPooledPerTrial(), numTapers);
+    EXPECT_EQ (accumulator.degreesOfFreedom(), numTapers);
+}
+
+/** A held trial from before a reconfiguration must be refused rather than
+    quietly producing a cross-spectrum between two different estimates. */
+TEST (ShiftPredictor, RejectsBlocksThatDoNotDescribeTheSameEstimate)
+{
+    CrossSpectrumAccumulator accumulator;
+    accumulator.setSize (2, 3);
+
+    auto current = makeCoefficients (2, 2, 3, BinAxis::Time);
+
+    auto otherFrequencies = makeCoefficients (2, 5, 3, BinAxis::Time);
+    EXPECT_FALSE (accumulator.addTrial (current, 0, otherFrequencies, 1));
+
+    auto otherBins = makeCoefficients (2, 2, 7, BinAxis::Time);
+    EXPECT_FALSE (accumulator.addTrial (current, 0, otherBins, 1));
+
+    // Same shape, different meaning: tapers are pooled, time bins are not.
+    auto otherAxis = makeCoefficients (2, 2, 3, BinAxis::Taper);
+    EXPECT_FALSE (accumulator.addTrial (current, 0, otherAxis, 1));
+
+    // The channel index is checked against the block it indexes, not the first.
+    auto singleChannel = makeCoefficients (1, 2, 3, BinAxis::Time);
+    EXPECT_FALSE (accumulator.addTrial (current, 0, singleChannel, 1));
+
+    EXPECT_EQ (accumulator.numTrials(), 0);
+}
