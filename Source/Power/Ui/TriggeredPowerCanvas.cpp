@@ -84,16 +84,55 @@ void TriggeredPowerCanvas::refreshState() { rebuildPanels(); }
 
 void TriggeredPowerCanvas::updateSettings() { rebuildPanels(); }
 
+std::vector<TriggeredPowerCanvas::PanelKey> TriggeredPowerCanvas::currentPanelKeys() const
+{
+    std::vector<PanelKey> keys;
+
+    if (m_node == nullptr)
+        return keys;
+
+    const auto sources = m_node->getTriggerSources().getAll();
+    const auto& channels = m_node->getSelectedChannels();
+
+    // One panel per (source, channel), grouped by channel so the same channel's
+    // conditions sit next to each other and can be compared directly.
+    keys.reserve (static_cast<std::size_t> (channels.size()) * static_cast<std::size_t> (sources.size()));
+
+    for (int channelIndex = 0; channelIndex < channels.size(); ++channelIndex)
+        for (auto* source : sources)
+            keys.push_back ({ source, channelIndex });
+
+    return keys;
+}
+
 void TriggeredPowerCanvas::refresh()
 {
-    updatePanelData();
+    // The panel set is (sources x channels), and both change while the canvas is
+    // open — adding a trigger source is the ordinary case. Nothing on that path
+    // rebuilds the panels: triggerSourceAdded() and a channel-selection change
+    // both land here via triggerAsyncUpdate(), and refresh() used to only copy
+    // fresh values into whatever panels already existed.
+    //
+    // Since the canvas is built the first time the visualizer is opened, and a
+    // fresh drop has neither channels nor sources, the usual outcome was a grid
+    // stuck at zero panels: "Select channels and add a trigger source to begin"
+    // stayed on screen while trials accumulated behind it, and only switching
+    // tabs (DataViewport -> refreshState) ever brought the plot back.
+    //
+    // Detecting staleness here rather than adding another notification means no
+    // future caller can forget to announce itself.
+    if (m_panelKeys != currentPanelKeys())
+        rebuildPanels();
+    else
+        updatePanelData();
+
     m_grid.repaintPanels();
     repaint();
 }
 
 void TriggeredPowerCanvas::rebuildPanels()
 {
-    m_panelKeys.clear();
+    m_panelKeys = currentPanelKeys();
 
     if (m_node == nullptr)
     {
@@ -103,12 +142,6 @@ void TriggeredPowerCanvas::rebuildPanels()
 
     const auto sources = m_node->getTriggerSources().getAll();
     const auto& channels = m_node->getSelectedChannels();
-
-    // One panel per (source, channel), grouped by channel so the same channel's
-    // conditions sit next to each other and can be compared directly.
-    for (int channelIndex = 0; channelIndex < channels.size(); ++channelIndex)
-        for (auto* source : sources)
-            m_panelKeys.push_back ({ source, channelIndex });
 
     m_grid.setNumPanels (static_cast<int> (m_panelKeys.size()));
 

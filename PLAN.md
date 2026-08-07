@@ -534,6 +534,26 @@ carry assumptions that do not survive a frequency axis.
 - Coherence panels draw the significance threshold as a dashed line (line mode) or a
   transparency mask on sub-threshold pixels (spectrogram mode).
 
+### **[changed]** `refresh()` has to detect a stale panel set
+
+The panel set is (sources × channels), and both change while the canvas is open.
+Neither change had any path that rebuilt it: `triggerSourceAdded()` and a
+channel-selection change both reach the canvas through `triggerAsyncUpdate()`,
+which lands in `refresh()`, and `refresh()` only copied fresh values into whatever
+panels already existed. `rebuildPanels()` was reachable only from the constructor,
+`refreshState()` (which the GUI calls on a *tab change*) and XML load.
+
+Since the canvas is constructed the first time the visualizer is opened, and a
+fresh drop has neither channels nor sources, the usual outcome was a grid stuck at
+zero panels: "Select channels and add a trigger source to begin" stayed on screen
+while trials accumulated behind it, and only switching tabs brought the plot back.
+That is the whole of "I configured a trigger and nothing appears" on the display
+side, and it applied to both canvases.
+
+`refresh()` now compares the built key list against what the configuration calls
+for and rebuilds when they differ. Detecting staleness beats adding another
+notification: no future caller can forget to announce itself.
+
 **Pair configuration** — port `TriggeredAvg`'s `PopupConfigurationWindow`
 `TableListBoxModel`: channel A, channel B, name, colour, delete — plus a **seed mode**
 button generating "seed × all selected" pairs in one click, which is how these are

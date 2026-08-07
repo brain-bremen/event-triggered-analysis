@@ -93,7 +93,16 @@ private:
     {
         TriggerSource* source = nullptr;
         int pairIndex = 0;
+
+        bool operator== (const PanelKey& other) const
+        {
+            return source == other.source && pairIndex == other.pairIndex;
+        }
     };
+
+    /** The panel set the current configuration calls for, which is not the same
+        thing as the one currently built — see refresh(). */
+    std::vector<PanelKey> currentPanelKeys() const;
 
     std::vector<PanelKey> m_panelKeys;
 
