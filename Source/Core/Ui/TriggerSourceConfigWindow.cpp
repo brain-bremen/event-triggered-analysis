@@ -390,9 +390,12 @@ juce::Component* TriggerSourceConfigWindow::Model::refreshComponentForCell (
 // --- Window ----------------------------------------------------------------
 
 TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredSpectraNode* node,
-                                                      bool acquisitionIsActive)
-    : PopupComponent (nullptr), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+                                                      bool acquisitionIsActive,
+                                                      juce::Component* anchor)
+    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
 {
+    jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor
+
     m_model = std::make_unique<Model> (*this, node, acquisitionIsActive);
 
     m_table = std::make_unique<juce::TableListBox> ("Trigger sources", m_model.get());

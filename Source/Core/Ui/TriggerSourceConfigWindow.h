@@ -53,7 +53,12 @@ class TriggeredSpectraNode;
 class TriggerSourceConfigWindow : public PopupComponent, public juce::Button::Listener
 {
 public:
-    TriggerSourceConfigWindow (TriggeredSpectraNode* node, bool acquisitionIsActive);
+    /** @param anchor  the component the popup is shown from, usually the button that
+        opened it. PopupComponent listens to it so the call-out closes if it
+        disappears, and dereferences it unconditionally, so it must not be null. */
+    TriggerSourceConfigWindow (TriggeredSpectraNode* node,
+                               bool acquisitionIsActive,
+                               juce::Component* anchor);
     ~TriggerSourceConfigWindow() override = default;
 
     /** Re-reads the source list and resizes to fit. */

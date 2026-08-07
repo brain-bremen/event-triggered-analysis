@@ -63,7 +63,7 @@ void TriggeredPowerEditor::buttonClicked (juce::Button* button)
     auto* node = static_cast<TriggeredSpectraNode*> (getProcessor());
 
     CoreServices::getPopupManager()->showPopup (
-        std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive), button);
+        std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button), button);
 }
 
 Visualizer* TriggeredPowerEditor::createNewCanvas()
