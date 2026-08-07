@@ -9,6 +9,7 @@
 #include "Core/Accumulators.h"
 #include "Core/SpectralTransform.h"
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <gtest/gtest.h>
@@ -555,6 +556,287 @@ TEST (ShiftPredictor, PoolsTapersFromTheCrossBlockFormToo)
 
     EXPECT_EQ (accumulator.binsPooledPerTrial(), numTapers);
     EXPECT_EQ (accumulator.degreesOfFreedom(), numTapers);
+}
+
+// --- PpcAccumulator --------------------------------------------------------
+//
+// PPC answers the same question as coherence and removes the 1/nu bias. The
+// tests that matter are the ones that show the difference: what PPC does at
+// small trial counts, and what it does with amplitude.
+
+namespace
+{
+
+/** One trial in which channel A leads channel B by `phaseDifference`, with the
+    given amplitudes. */
+TfCoefficients makePhaseTrial (double phaseDifference,
+                               double amplitudeA = 1.0,
+                               double amplitudeB = 1.0,
+                               double referencePhase = 0.0)
+{
+    return makeTrial (std::polar (amplitudeA, referencePhase + phaseDifference),
+                      std::polar (amplitudeB, referencePhase));
+}
+
+double ppcOf (const std::vector<double>& phaseDifferences)
+{
+    PpcAccumulator accumulator;
+    accumulator.setSize (1, 1);
+
+    for (const double difference : phaseDifferences)
+    {
+        const auto trial = makePhaseTrial (difference);
+        EXPECT_TRUE (accumulator.addTrial (trial, 0, 1));
+    }
+
+    double value = 0.0;
+    accumulator.ppc (0, std::span<double> (&value, 1));
+
+    return value;
+}
+
+} // namespace
+
+TEST (PpcAccumulator, PerfectConsistencyIsExactlyOne)
+{
+    // Twelve trials, all with the same phase difference. Every unit vector points
+    // the same way, so |R|^2 = N^2 and PPC is exactly 1.
+    EXPECT_NEAR (ppcOf (std::vector<double> (12, 0.7)), 1.0, 1e-12);
+}
+
+TEST (PpcAccumulator, OppositePhasesGiveMinusOne)
+{
+    // Two trials pointing in opposite directions cancel: |R|^2 = 0, so
+    // PPC = -N / (N(N-1)) = -1. Being able to reach this is the point - an
+    // unbiased estimator of something that is zero has to scatter below it.
+    EXPECT_NEAR (ppcOf ({ 0.0, std::numbers::pi }), -1.0, 1e-12);
+}
+
+/** The headline property, and the reason PPC belongs in a live display.
+ *
+ *  Coherence over-reads by about 1/nu, so at ten trials independent signals show
+ *  ~0.1 and the value visibly sags as trials accumulate and the bias decays.
+ *  PPC sits at zero from the start, so movement on screen is real. */
+TEST (PpcAccumulator, IsUnbiasedWhereCoherenceIsNot)
+{
+    constexpr int numTrials = 8;
+    constexpr int numRealisations = 400;
+
+    std::mt19937 generator (404);
+    std::uniform_real_distribution<double> angle (-std::numbers::pi, std::numbers::pi);
+
+    double summedPpc = 0.0;
+    double summedCoherence = 0.0;
+
+    for (int realisation = 0; realisation < numRealisations; ++realisation)
+    {
+        PpcAccumulator ppcAccumulator;
+        CrossSpectrumAccumulator coherenceAccumulator;
+        ppcAccumulator.setSize (1, 1);
+        coherenceAccumulator.setSize (1, 1);
+
+        for (int trial = 0; trial < numTrials; ++trial)
+        {
+            // Independent phases: the true consistency is zero.
+            const auto trialData = makePhaseTrial (angle (generator));
+
+            ASSERT_TRUE (ppcAccumulator.addTrial (trialData, 0, 1));
+            ASSERT_TRUE (coherenceAccumulator.addTrial (trialData, 0, 1));
+        }
+
+        double ppcValue = 0.0, coherenceValue = 0.0;
+        ppcAccumulator.ppc (0, std::span<double> (&ppcValue, 1));
+        coherenceAccumulator.coherence (0, std::span<double> (&coherenceValue, 1));
+
+        summedPpc += ppcValue;
+        summedCoherence += coherenceValue;
+    }
+
+    const double meanPpc = summedPpc / numRealisations;
+    const double meanCoherence = summedCoherence / numRealisations;
+
+    // Coherence lands near 1/nu = 0.125 and is nowhere near zero.
+    EXPECT_NEAR (meanCoherence, 1.0 / numTrials, 0.04);
+    EXPECT_GT (meanCoherence, 0.08);
+
+    // PPC lands on zero, which is the truth.
+    EXPECT_NEAR (meanPpc, 0.0, 0.03);
+}
+
+/** PPC's expectation does not move with the trial count. Coherence's does, which
+    is what makes a live coherence curve look like a fading effect. */
+TEST (PpcAccumulator, ExpectationDoesNotDriftWithTrialCount)
+{
+    std::mt19937 generator (505);
+    std::uniform_real_distribution<double> angle (-std::numbers::pi, std::numbers::pi);
+
+    const auto meanPpcOver = [&] (int numTrials)
+    {
+        double summed = 0.0;
+        constexpr int numRealisations = 300;
+
+        for (int realisation = 0; realisation < numRealisations; ++realisation)
+        {
+            std::vector<double> phases (static_cast<std::size_t> (numTrials));
+
+            for (auto& phase : phases)
+                phase = angle (generator);
+
+            summed += ppcOf (phases);
+        }
+
+        return summed / numRealisations;
+    };
+
+    EXPECT_NEAR (meanPpcOver (5), 0.0, 0.05);
+    EXPECT_NEAR (meanPpcOver (50), 0.0, 0.05);
+}
+
+/** Coherence weights each trial by |Xa||Xb|; PPC does not look at magnitude at
+    all. That is a real difference in what the two report, not a detail. */
+TEST (PpcAccumulator, IgnoresAmplitudeWhereCoherenceDoesNot)
+{
+    // Two trials that agree, and two that disagree but are far louder.
+    const std::vector<std::array<double, 3>> trials {
+        // phase difference, amplitude A, amplitude B
+        { 0.0, 1.0, 1.0 },
+        { 0.0, 1.0, 1.0 },
+        { std::numbers::pi, 8.0, 8.0 },
+        { std::numbers::pi, 8.0, 8.0 },
+    };
+
+    PpcAccumulator ppcAccumulator;
+    CrossSpectrumAccumulator coherenceAccumulator;
+    ppcAccumulator.setSize (1, 1);
+    coherenceAccumulator.setSize (1, 1);
+
+    for (const auto& trial : trials)
+    {
+        const auto data = makePhaseTrial (trial[0], trial[1], trial[2]);
+
+        ASSERT_TRUE (ppcAccumulator.addTrial (data, 0, 1));
+        ASSERT_TRUE (coherenceAccumulator.addTrial (data, 0, 1));
+    }
+
+    double ppcValue = 0.0, coherenceValue = 0.0;
+    ppcAccumulator.ppc (0, std::span<double> (&ppcValue, 1));
+    coherenceAccumulator.coherence (0, std::span<double> (&coherenceValue, 1));
+
+    // Two vectors each way, weighted equally: they cancel exactly.
+    EXPECT_NEAR (ppcValue, -1.0 / 3.0, 1e-12);
+
+    // Coherence lets the loud pair win, and reports strong consistency from data
+    // that is evenly split.
+    EXPECT_GT (coherenceValue, 0.9);
+}
+
+/** The taper rule, which is the easiest thing to get wrong here. Tapers within a
+    trial all observe the same phase, so counting them as separate observations
+    would measure within-trial SNR and report it as consistency over trials. */
+TEST (PpcAccumulator, AveragesTapersWithinTheTrialRatherThanCountingThem)
+{
+    constexpr int numTapers = 5;
+    constexpr int numTrials = 4;
+
+    PpcAccumulator accumulator;
+    accumulator.setSize (1, 1);
+
+    for (int trial = 0; trial < numTrials; ++trial)
+    {
+        auto coefficients = makeCoefficients (2, 1, numTapers, BinAxis::Taper);
+
+        for (int taper = 0; taper < numTapers; ++taper)
+        {
+            coefficients.bins (0, 0)[static_cast<std::size_t> (taper)] =
+                toCoefficient (std::polar (1.0, 0.4));
+            coefficients.bins (1, 0)[static_cast<std::size_t> (taper)] =
+                toCoefficient (std::polar (1.0, 0.0));
+        }
+
+        ASSERT_TRUE (accumulator.addTrial (coefficients, 0, 1));
+    }
+
+    // Four trials, not twenty. A CrossSpectrumAccumulator on the same input
+    // reports numTrials * numTapers, and that difference is deliberate.
+    EXPECT_EQ (accumulator.numTrials(), numTrials);
+    EXPECT_EQ (accumulator.numObservations(), numTrials);
+}
+
+TEST (PpcAccumulator, SignificanceThresholdFallsWithObservations)
+{
+    const double atTen = PpcAccumulator::significanceThreshold (10);
+    const double atHundred = PpcAccumulator::significanceThreshold (100);
+
+    // (ln(1/0.05) - 1) / (M - 1)
+    EXPECT_NEAR (atTen, (std::log (20.0) - 1.0) / 9.0, 1e-12);
+    EXPECT_LT (atHundred, atTen);
+    EXPECT_GT (atHundred, 0.0);
+
+    // Nothing to judge on must not read as "everything is significant".
+    EXPECT_DOUBLE_EQ (PpcAccumulator::significanceThreshold (1), 1.0);
+    EXPECT_DOUBLE_EQ (PpcAccumulator::significanceThreshold (0), 1.0);
+}
+
+/** Smoothing treats each pooled bin as another observation, which is only valid
+    if they are independent. Overlapping Morlet kernels are not, and pooling
+    correlated bins pulls PPC back toward the biased quantity it replaces. Pinned
+    here rather than left to be discovered on a plot. */
+TEST (PpcAccumulator, SmoothingOverCorrelatedBinsReintroducesBias)
+{
+    constexpr int numTrials = 6;
+    constexpr int numBins = 5;
+
+    std::mt19937 generator (606);
+    std::uniform_real_distribution<double> angle (-std::numbers::pi, std::numbers::pi);
+
+    PpcAccumulator accumulator;
+    accumulator.setSize (1, numBins);
+
+    for (int trial = 0; trial < numTrials; ++trial)
+    {
+        auto coefficients = makeCoefficients (2, 1, numBins, BinAxis::Time);
+
+        // One phase for the whole trial: every bin perfectly correlated with its
+        // neighbours, the worst case for pooling.
+        const double phase = angle (generator);
+
+        fill (coefficients, 0, 0, toCoefficient (std::polar (1.0, phase)));
+        fill (coefficients, 1, 0, toCoefficient (std::polar (1.0, 0.0)));
+
+        ASSERT_TRUE (accumulator.addTrial (coefficients, 0, 1));
+    }
+
+    std::vector<double> unsmoothed (numBins), smoothed (numBins);
+    accumulator.ppc (0, unsmoothed, 0, 0);
+    accumulator.ppc (0, smoothed, 2, 0);
+
+    // Unsmoothed, the six independent trials give the honest small-sample answer.
+    // Pooling five perfectly correlated bins claims 30 observations it does not
+    // have, and the estimate moves up toward the biased PLV^2 it is meant to
+    // improve on.
+    EXPECT_GT (smoothed[2], unsmoothed[2]);
+}
+
+TEST (PpcAccumulator, RejectsMismatchedShapesAndChannels)
+{
+    PpcAccumulator accumulator;
+    accumulator.setSize (2, 3);
+
+    auto wrongFrequencies = makeCoefficients (2, 5, 3, BinAxis::Time);
+    EXPECT_FALSE (accumulator.addTrial (wrongFrequencies, 0, 1));
+
+    auto correct = makeCoefficients (2, 2, 3, BinAxis::Time);
+    EXPECT_FALSE (accumulator.addTrial (correct, 0, 9));
+    EXPECT_FALSE (accumulator.addTrial (correct, -1, 1));
+
+    EXPECT_EQ (accumulator.numTrials(), 0);
+
+    ASSERT_TRUE (accumulator.addTrial (correct, 0, 1));
+    EXPECT_EQ (accumulator.numTrials(), 1);
+
+    accumulator.reset();
+    EXPECT_EQ (accumulator.numTrials(), 0);
+    EXPECT_TRUE (accumulator.matches (2, 3));
 }
 
 /** A held trial from before a reconfiguration must be refused rather than

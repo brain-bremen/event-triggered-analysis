@@ -70,9 +70,9 @@ void TriggeredCoherenceNode::registerAdditionalParameters()
     addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
                              ParameterNames::coherence_display,
                              "Show",
-                             "Coherence magnitude, the phase of the coherency, or the "
-                             "trial-shifted null",
-                             { "Coherence", "Phase", "Shift predictor" },
+                             "Coherence magnitude, the phase of the coherency, the "
+                             "trial-shifted null, or pairwise phase consistency",
+                             { "Coherence", "Phase", "Shift predictor", "PPC" },
                              0,
                              false);
 
@@ -266,6 +266,8 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
             auto& accumulators = m_accumulators[{ source, pairIndex }];
             accumulators.observed.setSize (m_engine.numFrequencies(),
                                            m_engine.numAccumulatorBins());
+            accumulators.ppc.setSize (m_engine.numFrequencies(),
+                                      m_engine.numAccumulatorBins());
 
             // Sized to zero when off, so the memory is not paid for and
             // addTrial() rejects anything that reaches it by mistake.
@@ -287,6 +289,7 @@ void TriggeredCoherenceNode::clearAllData()
         {
             accumulators.observed.reset();
             accumulators.shifted.reset();
+            accumulators.ppc.reset();
         }
 
         // Otherwise the first trial after a clear would be paired against one
@@ -353,6 +356,8 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
         if (accumulator->second.observed.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
             anyAdded = true;
 
+        accumulator->second.ppc.addTrial (m_coefficients, pair.selectedA, pair.selectedB);
+
         // Channel A from this trial against channel B from the last one. The
         // shift is one-directional on purpose: swapping which side is delayed
         // would estimate the same null twice over rather than differently.
@@ -397,8 +402,32 @@ int TriggeredCoherenceNode::getDegreesOfFreedom (TriggerSource* source) const
     return it->second.observed.degreesOfFreedom (getSmoothTimeBins(), getSmoothFreqBins());
 }
 
+int TriggeredCoherenceNode::getNumPpcObservations (TriggerSource* source) const
+{
+    const auto it = m_accumulators.find ({ source, 0 });
+
+    if (it == m_accumulators.end())
+        return 0;
+
+    return it->second.ppc.numObservations (getSmoothTimeBins(), getSmoothFreqBins());
+}
+
 double TriggeredCoherenceNode::getSignificanceThreshold (TriggerSource* source) const
 {
+    // PPC is centred on zero under the null and coherence is not, so they need
+    // different lines. Drawing the coherence threshold over a PPC plot would
+    // put it roughly a factor of two too high.
+    if (getDisplayMode() == CoherenceDisplay::Ppc)
+    {
+        const auto it = m_accumulators.find ({ source, 0 });
+
+        if (it == m_accumulators.end())
+            return 1.0;
+
+        return PpcAccumulator::significanceThreshold (
+            it->second.ppc.numObservations (getSmoothTimeBins(), getSmoothFreqBins()));
+    }
+
     return CrossSpectrumAccumulator::significanceThreshold (getDegreesOfFreedom (source));
 }
 
@@ -423,7 +452,9 @@ bool TriggeredCoherenceNode::getCoherenceForDisplay (TriggerSource* source,
     const int smoothTime = getSmoothTimeBins();
     const int smoothFrequency = getSmoothFreqBins();
 
-    if (mode == CoherenceDisplay::Phase)
+    if (mode == CoherenceDisplay::Ppc)
+        it->second.ppc.ppc (frequencyIndex, destination, smoothTime, smoothFrequency);
+    else if (mode == CoherenceDisplay::Phase)
         it->second.observed.phase (frequencyIndex, destination, smoothTime, smoothFrequency);
     else
         it->second.observed.coherence (frequencyIndex, destination, smoothTime, smoothFrequency);

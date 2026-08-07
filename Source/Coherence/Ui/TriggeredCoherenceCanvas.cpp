@@ -177,7 +177,13 @@ void TriggeredCoherenceCanvas::rebuildPanels()
     m_grid.setNumPanels (static_cast<int> (m_panelKeys.size()));
 
     const bool spectrogram = (m_node->getEstimateMode() == EstimateMode::Spectrogram);
-    const bool showPhase = (m_node->getDisplayMode() == CoherenceDisplay::Phase);
+    const auto displayMode = m_node->getDisplayMode();
+    const bool showPhase = (displayMode == CoherenceDisplay::Phase);
+
+    // PPC is unbiased, so at the null it has to scatter *below* zero as often as
+    // above. A [0, 1] sequential scale would clip exactly the half of that
+    // scatter which shows the estimator is behaving.
+    const bool showPpc = (displayMode == CoherenceDisplay::Ppc);
 
     for (int i = 0; i < m_grid.getNumPanels(); ++i)
     {
@@ -186,7 +192,7 @@ void TriggeredCoherenceCanvas::rebuildPanels()
         const auto& pair = pairs[static_cast<std::size_t> (key.pairIndex)];
 
         panel->setMode (spectrogram ? SpectrumPanel::Mode::Heatmap : SpectrumPanel::Mode::Line);
-        panel->setColorMap (showPhase ? ColorMapType::Diverging : m_colorMapType);
+        panel->setColorMap ((showPhase || showPpc) ? ColorMapType::Diverging : m_colorMapType);
         panel->setFrequencies (m_node->getFrequencies());
         panel->setBinTimes (m_node->getBinTimes());
         panel->setEmptyMessage ("waiting for triggers");
@@ -200,11 +206,13 @@ void TriggeredCoherenceCanvas::rebuildPanels()
         panel->setTitle (title);
         panel->setTitleColour (pair.colour);
 
-        // Coherence and phase both have fixed, meaningful ranges, so fixing the
-        // scale is more useful than autoscaling: a coherence of 0.3 should look
-        // the same in every panel.
+        // These all have fixed, meaningful ranges, so fixing the scale is more
+        // useful than autoscaling: a coherence of 0.3 should look the same in
+        // every panel.
         if (showPhase)
             panel->setValueRange (-juce::MathConstants<float>::pi, juce::MathConstants<float>::pi);
+        else if (showPpc)
+            panel->setValueRange (-1.0f, 1.0f);
         else
             panel->setValueRange (0.0f, 1.0f);
     }
@@ -231,6 +239,7 @@ void TriggeredCoherenceCanvas::updatePanelData()
     const auto displayMode = m_node->getDisplayMode();
     const bool showPhase = (displayMode == CoherenceDisplay::Phase);
     const bool showShiftPredictor = (displayMode == CoherenceDisplay::ShiftPredictor);
+    const bool showPpc = (displayMode == CoherenceDisplay::Ppc);
 
     const auto lock = m_node->lockData();
 
@@ -242,19 +251,26 @@ void TriggeredCoherenceCanvas::updatePanelData()
         const int numTrials = showShiftPredictor
                                   ? m_node->getNumShiftPredictorTrials (key.source)
                                   : m_node->getNumTrials (key.source);
-        const int dof = m_node->getDegreesOfFreedom (key.source);
+
+        // PPC counts observations differently: tapers do not multiply it, so
+        // reusing the coherence figure would overstate what it rests on.
+        const int support = showPpc ? m_node->getNumPpcObservations (key.source)
+                                    : m_node->getDegreesOfFreedom (key.source);
         const double threshold = m_node->getSignificanceThreshold (key.source);
 
         // The trial count and the significance level are not decoration here:
         // coherence from a handful of trials is biased high enough to look like
         // a real effect, so the panel must always say what it is based on. The
         // shift-predictor view says so too, or it reads as the real estimate.
-        panel->setSubtitle ((showShiftPredictor ? "SHIFTED: " : "") + juce::String (numTrials)
-                            + " trials, dof " + juce::String (dof));
+        panel->setSubtitle ((showShiftPredictor ? "SHIFTED: " : (showPpc ? "PPC: " : ""))
+                            + juce::String (numTrials) + " trials, "
+                            + (showPpc ? "n " : "dof ") + juce::String (support));
 
-        panel->setThreshold (
-            (! showPhase && dof >= 2) ? static_cast<float> (threshold)
-                                      : std::numeric_limits<float>::quiet_NaN());
+        // Both threshold functions return 1.0 when there is not enough to judge
+        // on, which is the same as having no line to draw.
+        panel->setThreshold ((! showPhase && threshold < 1.0)
+                                 ? static_cast<float> (threshold)
+                                 : std::numeric_limits<float>::quiet_NaN());
 
         if (numTrials == 0)
         {

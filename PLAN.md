@@ -9,7 +9,7 @@ outstanding. Places where implementation diverged from this plan are marked
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 170 unit tests and a clean build/install: neither plugin
+Everything else rests on 179 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -99,7 +99,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `TaperedPeriodogram.{h,cpp}` | **[done]** |
 | `StftTransform.{h,cpp}` | **[todo]** Morlet is used meanwhile |
 | `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
-| `Accumulators.{h,cpp}` | **[done]** |
+| `Accumulators.{h,cpp}` | **[done]** power, cross-spectrum (+ shift predictor), PPC |
 | `Baseline.{h,cpp}` | **[done]** **[changed]** — extracted from the Power node so it is testable |
 | `DataStore.{h,cpp}` | **[done]** folded into each node |
 | `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
@@ -344,6 +344,67 @@ separate display mode. `getShiftPredictorForDisplay()` exists for exactly that
 and is not yet called; it belongs with the pair-configuration window, which is
 where the ν and threshold readouts also live.
 
+### Pairwise phase consistency **[done]**
+
+Coherence carries an upward bias of about 1/ν. Offline that is a footnote. On a
+canvas somebody watches while the experiment runs it is actively misleading: the
+displayed value is **highest when the fewest trials have arrived** and sags as
+the bias decays, which reads as an effect fading when nothing has changed.
+
+PPC (Vinck et al. 2010) is the debiased estimator of the same thing. It averages
+`cos(θₙ − θₘ)` over all *distinct* pairs of observations — never pairing one with
+itself, which is what removes the bias — and the pairwise form collapses:
+
+```
+Σ_{n<m} cos(θₙ − θₘ) = ( |Σₙ e^{iθₙ}|² − N ) / 2
+
+PPC = ( |Σₙ e^{iθₙ}|² − N ) / ( N (N − 1) )
+```
+
+so the whole estimator is **a running complex sum and a count**. O(1) state per
+frequency and bin, nothing stored per trial, nothing to revisit when trial N+1
+arrives. That is what makes it usable online at all, and it is the reason it is
+a better fit here than in an offline script.
+
+Three things follow, and all three are load-bearing:
+
+- **It cannot be read off the cross-spectrum accumulator.** `ΣSxy` has already
+  discarded the per-trial magnitude, and PPC needs each trial normalised to unit
+  modulus *before* summing. Hence a separate `PpcAccumulator` rather than another
+  method on the existing one.
+- **Tapers must be averaged *within* the trial, not counted.** For coherence,
+  pooling K tapers legitimately buys degrees of freedom. For PPC it does not:
+  tapers from one trial all observe the same phase realisation, so counting them
+  as K observations measures within-trial SNR and reports it as consistency
+  across trials. `numObservations()` is trials × pooled bins, with no K.
+- **It must be able to go negative**, since an unbiased estimator of something
+  genuinely zero has to scatter either side of it. Range is `[−1/(N−1), 1]`. The
+  canvas therefore uses a diverging colour map and a symmetric `[−1, 1]` scale
+  in this mode; `[0, 1]` would clip exactly the half of the scatter that shows
+  the estimator is working.
+
+The null is centred on zero with spread ≈ `1/(M−1)`, giving a threshold of
+`(ln(1/α) − 1)/(M − 1)` — about `2/(M−1)` at α = 0.05. That is a different
+distribution from coherence's, so `getSignificanceThreshold()` switches on the
+display mode; drawing the coherence line over a PPC plot would put it roughly a
+factor of two too high.
+
+Two things PPC is **not**. It is not amplitude-weighted, and that is not purely
+a gain: coherence's `|Xa||Xb|` weighting is implicit SNR weighting, whereas in
+PPC a trial that was mostly noise contributes a random phase at full weight, so
+in weak bands PPC can be the noisier of the two. And it is **not a confound
+control** — a shared evoked response or a common reference pins the phase
+difference by construction, and PPC reports that as enthusiastically as
+coherence does. The shift predictor above is the control; these are orthogonal.
+
+Accumulated unconditionally, with no parameter gating it: it is half the size of
+a cross-spectrum accumulator, cannot be reconstructed after the fact, and is the
+estimate that does not mislead while trials are still arriving.
+
+**[todo]**: making PPC the *default* view rather than an option. The bias
+argument says it should be, but that changes what a fresh drop shows, so it is
+left as a deliberate decision rather than folded into this work.
+
 ---
 
 ## Parameters **[done]**
@@ -371,7 +432,7 @@ mandatory for a readable spectrogram, and is applied at *display* time so changi
 does not discard accumulated spectra. Plus the whitening parameters below.
 
 **Coherence only:** `smooth_time_bins`, `smooth_freq_bins`, `coherence_display`
-{Coherence, Phase, Shift predictor}, plus the pair table. Same rule: none of these
+{Coherence, Phase, Shift predictor, PPC}, plus the pair table. Same rule: none of these
 invalidate the accumulators. `shift_predictor` {Off, On} is the exception and is
 therefore an *analysis* parameter, on the editor rather than the canvas — see the
 shift predictor section above.
@@ -791,7 +852,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 170 tests passing:
+**[done]** — 179 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -824,6 +885,14 @@ and doing that from the base constructor is a pure-virtual call.
   Plus: the cross-block form agreeing exactly with the single-block form on the
   same input, tapers still pooling through it, and blocks that do not describe
   the same estimate being refused rather than silently crossed.
+- *PPC*: exactly 1 at perfect consistency and exactly −1 for two opposed trials;
+  and the comparison that justifies it — over 400 realisations of 8 independent
+  trials, coherence lands on its 1/ν bias while PPC lands on zero, and PPC's
+  expectation does not move between 5 and 50 trials. Plus: identical phases with
+  wildly different amplitudes give the same PPC but very different coherence;
+  tapers are averaged within the trial rather than counted; the threshold
+  formula; and the case where pooling correlated bins *reintroduces* the bias,
+  pinned rather than hidden.
 - *Pipeline*: coherence isolates a shared component from an equally strong
   phase-independent one; independent channels sit near the null; Morlet and
   multitaper agree on band power; induced power survives random per-trial phase.

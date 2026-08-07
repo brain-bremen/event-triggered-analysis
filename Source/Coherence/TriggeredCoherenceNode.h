@@ -69,7 +69,10 @@ enum class CoherenceDisplay
     Phase = 1,
     /** The trial-shifted null: the same estimate with channel B taken from the
         previous trial. Whatever is left is explained by the trigger alone. */
-    ShiftPredictor = 2
+    ShiftPredictor = 2,
+    /** Pairwise phase consistency: the same question as coherence, without the
+        1/nu bias that makes a live coherence curve sag as trials accumulate. */
+    Ppc = 3
 };
 
 /** Event-triggered pairwise coherence.
@@ -121,7 +124,13 @@ public:
         smoothing neighbourhood. */
     int getDegreesOfFreedom (TriggerSource* source) const;
 
-    /** Coherence above which zero coherence is rejected at alpha = 0.05. */
+    /** Observations behind the PPC estimate: trials x smoothing neighbourhood.
+        Tapers deliberately do not multiply this — see PpcAccumulator. */
+    int getNumPpcObservations (TriggerSource* source) const;
+
+    /** The value above which the null is rejected at alpha = 0.05, for whichever
+        estimator is on display — the two have different null distributions, so
+        one threshold cannot serve both. */
     double getSignificanceThreshold (TriggerSource* source) const;
 
     /** Fills `destination` (numBins values) for one pair and frequency, applying
@@ -194,6 +203,13 @@ private:
     {
         CrossSpectrumAccumulator observed;
         CrossSpectrumAccumulator shifted;
+
+        /** Always accumulated, with no parameter gating it. It is half the size
+            of the cross-spectrum accumulator, it cannot be reconstructed from
+            one afterwards, and it is the estimate that does not mislead while
+            trials are still coming in — so paying for it unconditionally is
+            cheaper than a switch the user has to know to find. */
+        PpcAccumulator ppc;
     };
 
     /** One pair of accumulators per (trigger source, pair index). */
