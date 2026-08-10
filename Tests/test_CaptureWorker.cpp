@@ -1,5 +1,5 @@
 /*
-    Tests for SpectralWorker: the thread that drains the work queue.
+    Tests for CaptureWorker: the thread that drains the work queue.
 
     Its job is to keep every expensive or blocking step off the audio thread, so
     what matters here is that it dispatches each item kind to the right place, in
@@ -27,7 +27,7 @@ constexpr int numChannels = 2;
 constexpr int ringCapacity = 4096;
 
 /** Records what the worker asked for, so a test can assert on the sequence. */
-class RecordingClient : public SpectralWorker::Client
+class RecordingClient : public CaptureWorker::Client
 {
 public:
     bool processCapturedTrial (const CaptureRequest& request,
@@ -179,7 +179,7 @@ struct WorkerFixture
     WorkerFixture()
     {
         ring.setSize (numChannels, ringCapacity);
-        worker = std::make_unique<SpectralWorker> (&ring, &queue, &client);
+        worker = std::make_unique<CaptureWorker> (&ring, &queue, &client);
         worker->startThread (juce::Thread::Priority::normal);
     }
 
@@ -188,13 +188,13 @@ struct WorkerFixture
     MultiChannelRingBuffer ring;
     WorkQueue queue { 64 };
     RecordingClient client;
-    std::unique_ptr<SpectralWorker> worker;
+    std::unique_ptr<CaptureWorker> worker;
 };
 } // namespace
 
 // --- Captures --------------------------------------------------------------
 
-TEST (SpectralWorker, ExtractsAWindowOnceItsDataIsPresent)
+TEST (CaptureWorker, ExtractsAWindowOnceItsDataIsPresent)
 {
     WorkerFixture fixture;
 
@@ -214,7 +214,7 @@ TEST (SpectralWorker, ExtractsAWindowOnceItsDataIsPresent)
 
 /** The normal case, not an error: a trigger is delivered in the same block it
     occurred in, so its post-trigger data has not been acquired yet. */
-TEST (SpectralWorker, WaitsForPostTriggerDataThatHasNotArrivedYet)
+TEST (CaptureWorker, WaitsForPostTriggerDataThatHasNotArrivedYet)
 {
     WorkerFixture fixture;
 
@@ -239,7 +239,7 @@ TEST (SpectralWorker, WaitsForPostTriggerDataThatHasNotArrivedYet)
 
 /** A stopped acquisition must not wedge the queue: the worker gives up on a
     stream that stops advancing, rather than retrying for minutes. */
-TEST (SpectralWorker, GivesUpWhenTheStreamStopsAdvancing)
+TEST (CaptureWorker, GivesUpWhenTheStreamStopsAdvancing)
 {
     WorkerFixture fixture;
 
@@ -257,7 +257,7 @@ TEST (SpectralWorker, GivesUpWhenTheStreamStopsAdvancing)
 }
 
 /** And having given up on one, it must still service the next. */
-TEST (SpectralWorker, KeepsWorkingAfterAFailedCapture)
+TEST (CaptureWorker, KeepsWorkingAfterAFailedCapture)
 {
     WorkerFixture fixture;
 
@@ -280,7 +280,7 @@ TEST (SpectralWorker, KeepsWorkingAfterAFailedCapture)
     EXPECT_TRUE (waitFor ([&] { return fixture.client.captureCount() == 1; }));
 }
 
-TEST (SpectralWorker, ReportsAWindowThatHasAlreadyBeenOverwritten)
+TEST (CaptureWorker, ReportsAWindowThatHasAlreadyBeenOverwritten)
 {
     WorkerFixture fixture;
 
@@ -301,7 +301,7 @@ TEST (SpectralWorker, ReportsAWindowThatHasAlreadyBeenOverwritten)
 // --- Message-driven items --------------------------------------------------
 
 /** These are the items that used to run on the audio thread. */
-TEST (SpectralWorker, DispatchesEachItemKindToItsOwnHandler)
+TEST (CaptureWorker, DispatchesEachItemKindToItsOwnHandler)
 {
     WorkerFixture fixture;
 
@@ -317,7 +317,7 @@ TEST (SpectralWorker, DispatchesEachItemKindToItsOwnHandler)
 
 /** Ordering between a capture and the commit that refers to it is the reason both
     travel in one queue. */
-TEST (SpectralWorker, KeepsCapturesAndCommitsInOrder)
+TEST (CaptureWorker, KeepsCapturesAndCommitsInOrder)
 {
     WorkerFixture fixture;
 
@@ -342,7 +342,7 @@ TEST (SpectralWorker, KeepsCapturesAndCommitsInOrder)
 
 /** A commit's timestamp is stamped where the message arrived, not where it is
     handled, so a backlogged worker cannot stretch a timeout. */
-TEST (SpectralWorker, PassesTheOriginalTimestampThroughToExpiry)
+TEST (CaptureWorker, PassesTheOriginalTimestampThroughToExpiry)
 {
     WorkerFixture fixture;
 
@@ -357,7 +357,7 @@ TEST (SpectralWorker, PassesTheOriginalTimestampThroughToExpiry)
 // --- Repaint coalescing ----------------------------------------------------
 
 /** A burst of triggers should cost one repaint, not one per trial. */
-TEST (SpectralWorker, CoalescesOneNotificationPerDrainedBatch)
+TEST (CaptureWorker, CoalescesOneNotificationPerDrainedBatch)
 {
     WorkerFixture fixture;
 
@@ -378,7 +378,7 @@ TEST (SpectralWorker, CoalescesOneNotificationPerDrainedBatch)
     EXPECT_LT (fixture.client.committedNotifications(), 8);
 }
 
-TEST (SpectralWorker, DoesNotNotifyWhenNothingChanged)
+TEST (CaptureWorker, DoesNotNotifyWhenNothingChanged)
 {
     WorkerFixture fixture;
 
@@ -401,7 +401,7 @@ TEST (SpectralWorker, DoesNotNotifyWhenNothingChanged)
 
 /** Flushing is how reconfiguration and restart drop stale work. Nothing queued
     before it may reach the client. */
-TEST (SpectralWorker, IgnoresItemsDiscardedByAFlush)
+TEST (CaptureWorker, IgnoresItemsDiscardedByAFlush)
 {
     MultiChannelRingBuffer ring;
     ring.setSize (numChannels, ringCapacity);
@@ -419,7 +419,7 @@ TEST (SpectralWorker, IgnoresItemsDiscardedByAFlush)
 
     queue.flush();
 
-    SpectralWorker worker (&ring, &queue, &client);
+    CaptureWorker worker (&ring, &queue, &client);
     worker.startThread (juce::Thread::Priority::normal);
 
     queue.push ({ .kind = WorkItemKind::Commit });
@@ -437,7 +437,7 @@ TEST (SpectralWorker, IgnoresItemsDiscardedByAFlush)
 
 /** Destruction must not block for the retry timeout; a stuck capture has to be
     interruptible or closing the GUI would hang. */
-TEST (SpectralWorker, StopsPromptlyWhileWaitingForDataThatNeverComes)
+TEST (CaptureWorker, StopsPromptlyWhileWaitingForDataThatNeverComes)
 {
     MultiChannelRingBuffer ring;
     ring.setSize (numChannels, ringCapacity);
@@ -446,7 +446,7 @@ TEST (SpectralWorker, StopsPromptlyWhileWaitingForDataThatNeverComes)
     WorkQueue queue (64);
     RecordingClient client;
 
-    auto worker = std::make_unique<SpectralWorker> (&ring, &queue, &client);
+    auto worker = std::make_unique<CaptureWorker> (&ring, &queue, &client);
     worker->startThread (juce::Thread::Priority::normal);
 
     // Never satisfiable: the post window is still in the future and no more data
@@ -467,7 +467,7 @@ TEST (SpectralWorker, StopsPromptlyWhileWaitingForDataThatNeverComes)
     EXPECT_LT (elapsed, 2000) << "worker took " << elapsed << " ms to stop";
 }
 
-TEST (SpectralWorker, StopsPromptlyWhenIdle)
+TEST (CaptureWorker, StopsPromptlyWhenIdle)
 {
     MultiChannelRingBuffer ring;
     ring.setSize (numChannels, ringCapacity);
@@ -475,7 +475,7 @@ TEST (SpectralWorker, StopsPromptlyWhenIdle)
     WorkQueue queue (64);
     RecordingClient client;
 
-    auto worker = std::make_unique<SpectralWorker> (&ring, &queue, &client);
+    auto worker = std::make_unique<CaptureWorker> (&ring, &queue, &client);
     worker->startThread (juce::Thread::Priority::normal);
 
     std::this_thread::sleep_for (std::chrono::milliseconds (20));
@@ -496,7 +496,7 @@ TEST (SpectralWorker, StopsPromptlyWhenIdle)
 // incremented would make that window confidently wrong, which is worse than not
 // having it, so the worker-side increments are pinned here.
 
-TEST (SpectralWorker, CountsASuccessfulCaptureOnItsTriggerSource)
+TEST (CaptureWorker, CountsASuccessfulCaptureOnItsTriggerSource)
 {
     WorkerFixture fixture;
     TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
@@ -518,7 +518,7 @@ TEST (SpectralWorker, CountsASuccessfulCaptureOnItsTriggerSource)
 /** A window that will never arrive must leave trialsCaptured alone — otherwise
     the monitor would show trials being captured while the display stayed empty,
     which is exactly the confusion it exists to remove. */
-TEST (SpectralWorker, DoesNotCountACaptureThatFailed)
+TEST (CaptureWorker, DoesNotCountACaptureThatFailed)
 {
     WorkerFixture fixture;
     TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
@@ -537,7 +537,7 @@ TEST (SpectralWorker, DoesNotCountACaptureThatFailed)
     EXPECT_EQ (source.counters.trialsCaptured.load(), 0);
 }
 
-TEST (SpectralWorker, CountsACommittedPendingCapture)
+TEST (CaptureWorker, CountsACommittedPendingCapture)
 {
     WorkerFixture fixture;
     TriggerSource source ("cond 1", 3, TriggerType::TTL_AND_MSG_TRIGGER);

@@ -27,7 +27,7 @@
 namespace TriggeredSpectra
 {
 
-SpectralWorker::SpectralWorker (MultiChannelRingBuffer* ringBuffer,
+CaptureWorker::CaptureWorker (MultiChannelRingBuffer* ringBuffer,
                                 WorkQueue* queue,
                                 Client* client)
     : juce::Thread ("TriggeredSpectra Worker"),
@@ -37,7 +37,7 @@ SpectralWorker::SpectralWorker (MultiChannelRingBuffer* ringBuffer,
 {
 }
 
-SpectralWorker::~SpectralWorker()
+CaptureWorker::~CaptureWorker()
 {
     signalThreadShouldExit();
 
@@ -50,7 +50,7 @@ SpectralWorker::~SpectralWorker()
     stopThread (2000);
 }
 
-RingBufferReadResult SpectralWorker::captureWithRetries (const CaptureRequest& request)
+RingBufferReadResult CaptureWorker::captureWithRetries (const CaptureRequest& request)
 {
     // The trigger arrives before its post-trigger data has been acquired, so a
     // first-attempt NotEnoughNewData is the normal case, not an error.
@@ -97,7 +97,7 @@ RingBufferReadResult SpectralWorker::captureWithRetries (const CaptureRequest& r
     return RingBufferReadResult::Aborted;
 }
 
-void SpectralWorker::run()
+void CaptureWorker::run()
 {
     if (m_ringBuffer == nullptr || m_queue == nullptr || m_client == nullptr)
         return;

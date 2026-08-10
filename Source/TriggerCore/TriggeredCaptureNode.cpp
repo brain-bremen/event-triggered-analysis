@@ -253,7 +253,7 @@ void TriggeredCaptureNode::startWorker()
     if (m_worker != nullptr || ! m_geometry.isValid() || getNumInputs() <= 0)
         return;
 
-    m_worker = std::make_unique<SpectralWorker> (&m_ringBuffer, &m_workQueue, this);
+    m_worker = std::make_unique<CaptureWorker> (&m_ringBuffer, &m_workQueue, this);
     m_worker->startThread (juce::Thread::Priority::high);
 }
 

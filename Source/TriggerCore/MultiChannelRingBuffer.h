@@ -58,7 +58,7 @@ const char* toString (RingBufferReadResult result);
 /** Lock-free single-producer / single-consumer ring buffer of continuous data.
  *
  *  The producer is the audio thread inside GenericProcessor::process(); the
- *  consumer is the SpectralWorker thread. Neither takes a lock.
+ *  consumer is the CaptureWorker thread. Neither takes a lock.
  *
  *  Synchronisation
  *  ---------------

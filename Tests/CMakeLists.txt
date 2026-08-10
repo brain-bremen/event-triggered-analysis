@@ -26,7 +26,7 @@ set(SPECTRA_TEST_SOURCES
     test_Whitening.cpp
     test_Baseline.cpp
     test_WorkQueue.cpp
-    test_SpectralWorker.cpp
+    test_CaptureWorker.cpp
     test_ParameterLayout.cpp
     test_PairRules.cpp
 )

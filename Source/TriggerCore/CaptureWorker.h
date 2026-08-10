@@ -51,9 +51,15 @@ struct CaptureRequest
 /** Background thread that drains the work queue: extracting trial windows,
  *  transforming them, and applying message-driven commits.
  *
- *  All spectral work happens here rather than in process(), which is the whole
- *  point: the audio thread only appends to the ring buffer and pushes an item.
- *  Everything that takes a lock or allocates lives on this side of the queue.
+ *  This class knows nothing about what a trial window is *for*. It reads windows
+ *  and hands them to a Client, which is where the estimator lives — a spectrum,
+ *  a coherence pair, or a running mean. That is why it sits in trigger_core and
+ *  carries no numerical dependency of its own.
+ *
+ *  All of a plugin's per-trial work happens here rather than in process(), which
+ *  is the whole point: the audio thread only appends to the ring buffer and
+ *  pushes an item. Everything that takes a lock or allocates lives on this side
+ *  of the queue.
  *
  *  A trigger fires before its post-trigger data exists, so the worker retries the
  *  ring-buffer read until the window fills. It gives up if the stream stops
@@ -64,7 +70,7 @@ struct CaptureRequest
  *  destroyed and recreated during reconfiguration without the audio thread ever
  *  observing a dangling or null pointer.
  */
-class SpectralWorker : public juce::Thread
+class CaptureWorker : public juce::Thread
 {
 public:
     /** What to do with each kind of work item. Implemented by each plugin's node.
@@ -101,8 +107,8 @@ public:
         virtual void discardExpiredCaptures (std::int64_t /*nowMs*/) {}
     };
 
-    SpectralWorker (MultiChannelRingBuffer* ringBuffer, WorkQueue* queue, Client* client);
-    ~SpectralWorker() override;
+    CaptureWorker (MultiChannelRingBuffer* ringBuffer, WorkQueue* queue, Client* client);
+    ~CaptureWorker() override;
 
     void run() override;
 
@@ -124,7 +130,7 @@ private:
 
     juce::AudioBuffer<float> m_trialBuffer;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpectralWorker)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CaptureWorker)
 };
 
 } // namespace TriggeredSpectra

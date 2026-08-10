@@ -84,7 +84,7 @@ struct TrialGeometry
  *  signal being analysed; nothing before it does.
  */
 class TriggeredCaptureNode : public GenericProcessor,
-                             public SpectralWorker::Client,
+                             public CaptureWorker::Client,
                              public TriggerSources::Listener,
                              public juce::AsyncUpdater
 {
@@ -211,7 +211,7 @@ protected:
      *  of the convolution. */
     virtual int computePadSamples (float /*sampleRate*/) const { return 0; }
 
-    // --- SpectralWorker::Client --------------------------------------------
+    // --- CaptureWorker::Client --------------------------------------------
 
     void capturesCommitted() override;
     void captureFailed (const CaptureRequest& request, RingBufferReadResult result) override;
@@ -261,7 +261,7 @@ protected:
      *  currently exists. */
     WorkQueue m_workQueue;
 
-    std::unique_ptr<SpectralWorker> m_worker;
+    std::unique_ptr<CaptureWorker> m_worker;
 
     TrialGeometry m_geometry;
     juce::Array<int> m_selectedChannels;
