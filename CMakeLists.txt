@@ -68,43 +68,10 @@ if (NOT CMAKE_LIBRARY_ARCHITECTURE)
   endif()
 endif()
 
-# --- Vendored FFTW3 --------------------------------------------------------
-# Binaries copied from the OpenEphysFFTW common library. Double precision only;
-# there is no fftwf in this distribution.
-if(MSVC)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/windows)
-elseif(LINUX)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux)
-elseif(APPLE)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/macos)
-endif()
-
-find_library(FFTW_LIBRARY NAMES libfftw3-3 fftw3 fftw3-3)
-find_path(FFTW_INCLUDE_DIRS fftw3.h)
-
-if (NOT FFTW_LIBRARY)
-  message(FATAL_ERROR "FFTW library not found (looked under ${CMAKE_CURRENT_SOURCE_DIR}/libs)")
-endif()
-if (NOT FFTW_INCLUDE_DIRS)
-  message(FATAL_ERROR "fftw3.h not found (looked under ${CMAKE_CURRENT_SOURCE_DIR}/libs)")
-endif()
-message(STATUS "FFTW library: ${FFTW_LIBRARY}")
-message(STATUS "FFTW headers: ${FFTW_INCLUDE_DIRS}")
-
-# Ship the FFTW runtime alongside the GUI. Both plugins load the *same*
-# libfftw3-3.dll, which is why Fftw.cpp guards the planner with a
-# process-wide lock (this build does not export fftw_make_planner_thread_safe).
-if (MSVC)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/windows/bin/${CMAKE_LIBRARY_ARCHITECTURE}/
-          DESTINATION ${GUI_BIN_DIR}/shared
-          CONFIGURATIONS ${CMAKE_CONFIGURATION_TYPES})
-elseif(LINUX)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux/bin/
-          DESTINATION ${GUI_BIN_DIR}/shared)
-elseif(APPLE)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/macos/bin/
-          DESTINATION $ENV{HOME}/Library/Application\ Support/open-ephys/shared-api${OE_GUI_API_VERSION})
-endif()
+# FFTW is discovered and shipped by Source/Spectral, the only place that needs
+# it. Deliberately not here: a plugin that links trigger_core alone must be
+# buildable on a checkout with no FFTW at all, and a top-level find_library()
+# with a FATAL_ERROR would make that impossible.
 
 # --- Generated version header ---------------------------------------------
 configure_file(
