@@ -272,6 +272,10 @@ private:
      *  rapid parameter edits. Never taken on the audio thread. */
     juce::CriticalSection m_configurationLock;
 
+    /** True while loadCustomParametersFromXml() is restoring trigger sources, so
+        the per-source rebuilds can be collapsed into one. */
+    bool m_isLoadingState = false;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredSpectraNode)
 };
 

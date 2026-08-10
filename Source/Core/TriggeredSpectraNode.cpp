@@ -682,6 +682,15 @@ TriggerSource* TriggeredSpectraNode::addTriggerSource (int line, TriggerType typ
 
 void TriggeredSpectraNode::triggerSourceAdded (TriggerSource* /*source*/)
 {
+    // Skipped while a saved chain is being restored: sources arrive one at a time,
+    // and a rebuild is far from free — it stops the worker, resizes the ring
+    // buffer, reallocates every accumulator and re-prepares the spectral engine
+    // (FFTW plans, wavelet kernels or DPSS tapers). Doing that once per source
+    // turns a chain with nine of them into eleven full rebuilds where two would
+    // do. loadCustomParametersFromXml() rebuilds once at the end.
+    if (m_isLoadingState)
+        return;
+
     rebuildConfiguration();
     triggerAsyncUpdate();
 }
@@ -745,6 +754,9 @@ void TriggeredSpectraNode::loadCustomParametersFromXml (XmlElement* xml)
 
     m_triggerSources.clear();
 
+    // Batch the whole restore behind one rebuild; see triggerSourceAdded().
+    m_isLoadingState = true;
+
     for (auto* sourceXml : xml->getChildIterator())
     {
         if (! sourceXml->hasTagName ("TRIGGERSOURCE"))
@@ -768,7 +780,10 @@ void TriggeredSpectraNode::loadCustomParametersFromXml (XmlElement* xml)
         source->pendingTimeoutMs = sourceXml->getIntAttribute ("pendingTimeoutMs", 2000);
     }
 
+    m_isLoadingState = false;
+
     rebuildConfiguration();
+    triggerAsyncUpdate();
 }
 
 } // namespace TriggeredSpectra
