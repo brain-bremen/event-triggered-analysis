@@ -95,25 +95,29 @@ void TriggeredAvgEditor::updateSettings()
     DataStore* store = (proc->getDataStore());
     assert (store);
 
-    store->Clear();
-    const int nChannels = proc->getTotalContinuousChannels();
-    const int nSamples = proc->getNumberOfSamples();
+    // Buffer sizing belongs to the node's analysisConfigurationChanged(), which
+    // the base class calls on every rebuild. Doing it here as well used to be
+    // harmless duplication; it is not any more, because the two disagreed — the
+    // node sizes to the selected channels and this sized to every input, so a
+    // partial selection made every captured trial fail the shape check and be
+    // dropped in silence.
 
-    // First, initialize buffers for all sources
-    for (auto source : proc->getTriggerSources().getAll())
-    {
-        store->ResetAndResizeBuffersForTriggerSource (source, nChannels, nSamples);
-    }
+    const auto& selected = proc->getSelectedChannels();
 
-    // Then add panels grouped by channel (for overlay feature to work correctly)
-    for (int i = 0; i < proc->getTotalContinuousChannels(); i++)
+    // Panels are grouped by channel so the overlay works, and carry the *row* in
+    // the average buffer rather than the global channel index. Those stopped
+    // being the same number when the accumulators narrowed to the selection.
+    for (int row = 0; row < selected.size(); ++row)
     {
-        const ContinuousChannel* channel = proc->getContinuousChannel (i);
+        const ContinuousChannel* channel = proc->getContinuousChannel (selected[row]);
+
+        if (channel == nullptr)
+            continue;
 
         for (auto source : proc->getTriggerSources().getAll())
         {
             canvas->addContChannel (
-                channel, source, i, store->getRefToAverageBufferForTriggerSource (source));
+                channel, source, row, store->getRefToAverageBufferForTriggerSource (source));
         }
     }
 

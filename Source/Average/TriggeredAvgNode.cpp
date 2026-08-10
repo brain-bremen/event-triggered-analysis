@@ -205,6 +205,33 @@ bool TriggeredAvgNode::processCapturedTrial (const CaptureRequest& request,
     if (request.triggerSource == nullptr)
         return false;
 
+    // The worker hands over every input channel, because the ring buffer is sized
+    // to the whole stream. The accumulators are sized to the *selected* channels,
+    // so the window has to be narrowed before it can be folded in. The spectral
+    // plugins do the same thing by indexing the trial with getSelectedChannels();
+    // an average has to copy, because it stores what it is given.
+    const auto& channels = getSelectedChannels();
+
+    if (channels.isEmpty())
+        return false;
+
+    const int numSamples = trial.getNumSamples();
+
+    // Worker thread only, so a member scratch buffer needs no synchronisation.
+    // setSize with keepExistingContent=false and avoidReallocating=true is a
+    // no-op once the shape has settled.
+    m_narrowedTrial.setSize (channels.size(), numSamples, false, false, true);
+
+    for (int row = 0; row < channels.size(); ++row)
+    {
+        const int globalChannel = channels[row];
+
+        if (globalChannel < 0 || globalChannel >= trial.getNumChannels())
+            return false;
+
+        m_narrowedTrial.copyFrom (row, 0, trial, globalChannel, 0, numSamples);
+    }
+
     const auto lock = m_dataStore.GetLock();
 
     // A source with a commit pattern does not accumulate on the edge. The trial
@@ -213,11 +240,12 @@ bool TriggeredAvgNode::processCapturedTrial (const CaptureRequest& request,
     if (requiresCommit (request.triggerSource))
     {
         m_dataStore.storePendingCapture (
-            request.triggerSource, trial, request.triggerSource->pendingTimeoutMs);
+            request.triggerSource, m_narrowedTrial, request.triggerSource->pendingTimeoutMs);
         return false;
     }
 
-    m_dataStore.addTrialForTriggerSource (request.triggerSource, trial);
+    if (! m_dataStore.addTrialForTriggerSource (request.triggerSource, m_narrowedTrial))
+        return false;
 
     request.triggerSource->counters.trialsCaptured.fetch_add (1, std::memory_order_relaxed);
     return true;

@@ -124,6 +124,13 @@ private:
     DataStore m_dataStore;
     TriggeredAvgCanvas* m_canvas = nullptr;
 
+    /** The captured window narrowed to the selected channels.
+     *
+     *  The worker reads every input channel, because the ring buffer spans the
+     *  stream; the accumulators only hold the selected ones. Worker thread only,
+     *  so it needs no synchronisation. */
+    juce::AudioBuffer<float> m_narrowedTrial;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgNode)
 };
 
