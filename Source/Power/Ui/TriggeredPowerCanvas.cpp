@@ -438,8 +438,22 @@ void TriggeredPowerCanvas::updatePanelData()
         }
     }
 
+    // Both branches are stated explicitly, because a panel's scale mode is sticky:
+    // setValueRange() latches auto-scaling off, PanelGrid reuses panels across
+    // rebuilds, and nothing else ever turns it back on. Restoring it only from the
+    // toggle's click handler made auto-scaling depend on the history of clicks
+    // rather than on the toggle's current state, so a session that never touched
+    // the button was stuck with whatever range the panels happened to hold — which
+    // reads as a spectrum flat against the axis.
     if (m_sharedScale)
+    {
         applySharedScale();
+    }
+    else
+    {
+        for (int i = 0; i < m_grid.getNumPanels(); ++i)
+            m_grid.getPanel (i)->setAutoScale (true);
+    }
 }
 
 void TriggeredPowerCanvas::applySharedScale()
@@ -604,10 +618,8 @@ void TriggeredPowerCanvas::buttonClicked (juce::Button* button)
     {
         m_sharedScale = m_sharedScaleButton->getToggleState();
 
-        if (! m_sharedScale)
-            for (int i = 0; i < m_grid.getNumPanels(); ++i)
-                m_grid.getPanel (i)->setAutoScale (true);
-
+        // updatePanelData() applies whichever scale mode is now selected; doing it
+        // here as well is how the two paths drifted apart in the first place.
         updatePanelData();
         m_grid.repaintPanels();
     }
