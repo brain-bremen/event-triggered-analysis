@@ -129,8 +129,8 @@ already there.
   `computeRingCapacity()`, `startWorker()` / `stopWorker()`
 - `startAcquisition()` / `stopAcquisition()`
 - `saveCustomParametersToXml()` / `loadCustomParametersFromXml()` — the trigger
-  source schema is **already byte-identical** between the two repos, attribute for
-  attribute, so no migration is needed
+  source schema happens to be byte-identical between the two repos anyway, so this
+  costs nothing even though nothing requires it
 - the `TriggerSources::Listener` and `CaptureWorker::Client` implementations
 - registration of `channels`, `pre_ms`, `post_ms` only
 
@@ -283,11 +283,17 @@ them to the three new targets belongs with the port.
 
 ### Repo identity
 
-The merged repo is `brain-bremen/TriggeredSpectra` and should be renamed —
-`brain-bremen/triggered-plugins` or similar — since it now ships three plugins and
-"Spectra" no longer describes it. `joschaschmiedt/triggered-lfp-viewer` gets
-archived with a pointer in its README. **Neither is done in this branch**; both are
-one-way and belong to a human with the org permissions.
+**Decided:** the merged repo is renamed to
+**`brain-bremen/event-triggered-analysis`**. "Spectra" stopped describing it the
+moment it shipped a time-domain average, and *event-triggered* is the existing
+term of art — event-triggered average, spike-triggered average — so the name
+covers all three plugins today and the spike work later.
+`joschaschmiedt/triggered-lfp-viewer` gets archived with a pointer in its README.
+
+**Neither is done in this branch.** Both are one-way GitHub operations that need
+org permissions. What *is* in scope here: the README, the CMake
+`PROJECT_SHORT_NAME`, the CI workflow names and the `TriggeredSpectra` namespace
+all still say "spectra" and are renamed as part of Phase 4.
 
 ---
 
@@ -298,45 +304,44 @@ to its own ring buffer, trigger sources and DataCollector thread.
 
 The real work. Ordered so that each step leaves the tree buildable.
 
-### 4.0 Traps found while reading the imported code
+### 4.0 Compatibility is not a constraint
 
-Four differences between the imported plugin and the base class it is about to
-inherit. Each would compile silently and change behaviour, so each is written
-down before any code moves.
+**Decided:** the averaging plugin was never really used in anger, so nothing here
+preserves its old behaviour, its old defaults or its saved chains. Where the base
+class and the imported plugin disagree, the base wins and the imported code is
+deleted rather than adapted. No shims, no fallbacks, no migration.
 
-**Channel selection would go from "all" to "none".** `TriggeredAvgNode` has no
-`channels` parameter at all — it averages every input channel.
-`TriggeredCaptureNode` registers one, and `addSelectedChannelsParameter()`
-defaults to an *empty* array; `SelectedChannelsParameter::setChannelCount()` only
-trims out-of-bounds entries and never selects anything. So simply inheriting the
-base would make the averaging plugin come up displaying nothing, on existing
-saved chains, with no error.
+That removes the largest piece of planned work. In particular:
 
-Resolution: a `virtual bool selectsAllChannelsByDefault() const` hook on the base,
-returning `false`, which `TriggeredAvgNode` overrides to `true`.
-`rebuildConfiguration()` then falls back to every channel in the stream when the
-selection is empty. That preserves today's behaviour exactly and leaves the
-spectral plugins alone. It is worth asking later whether the spectral plugins
-should adopt the same fallback — "nothing selected" almost always means "the user
-has not chosen yet" rather than "show me nothing" — but changing them is not part
-of a port that is supposed to preserve behaviour.
+**The channel selector is adopted as-is, defaulting to nothing selected.**
+`TriggeredAvgNode` had no `channels` parameter and averaged every input;
+`TriggeredCaptureNode` registers one that starts empty. This is a deliberate
+improvement, not a regression to work around: everything downstream is linear in
+the number of selected channels, so the selector is the main cost lever, and a
+plugin that quietly averages 384 Neuropixels channels by default is the wrong
+default. No `selectsAllChannelsByDefault()` hook — the earlier plan for one is
+dropped.
 
-**Parameters are registered in the constructor, not `registerParameters()`.** The
-imported plugin predates that hook. Its registrations move into
-`registerAdditionalParameters()`, and the ones the base now owns are dropped —
-noting that the defaults differ and the base's win: `pre_ms` 500 ms rather than
-250, `post_ms` 1000 rather than 750, and both ranges widen from 5 s to 10 s.
+**The base's parameter defaults win.** `pre_ms` becomes 500 ms rather than 250,
+`post_ms` 1000 rather than 750, and both ranges widen from 5 s to 10 s. The
+imported registrations move out of the constructor — which predates
+`registerParameters()` — into `registerAdditionalParameters()`, keeping only what
+the base does not already own.
 
-**A default trigger source is created in the constructor.**
-`m_triggerSources.addTriggerSource (-1, TTL_TRIGGER)` runs before the object is
-fully built. Under the base class that fires `triggerSourceAdded()`, which calls
-`rebuildConfiguration()`, which is virtual dispatch out of a constructor. It must
-move to `updateSettings()` or be dropped.
+**The constructor's default trigger source is dropped**, not relocated.
+`m_triggerSources.addTriggerSource (-1, TTL_TRIGGER)` ran before the object was
+fully built; under the base that fires `triggerSourceAdded()` →
+`rebuildConfiguration()`, which is virtual dispatch out of a constructor. The
+spectral plugins start with no sources and say so in the monitor; the averaging
+plugin now does the same.
+
+### 4.0b The one trap that is not a compatibility question
 
 **Half of `parameterValueChanged` is display-only.** `x_min`, `x_max`, `y_min`,
 `y_max` and the two `use_custom_*_limits` flags only repaint. They must *not* end
-up in `isAnalysisParameter()`, or every axis tweak stops the worker and
-reallocates the ring buffer.
+up in `isAnalysisParameter()`, or every axis tweak stops the worker, reallocates
+the ring buffer and discards every accumulated trial. That is a correctness bug
+waiting to happen regardless of what is done about compatibility.
 
 ### 4.1 Namespace and deletions
 
@@ -431,7 +436,7 @@ plugin re-tests it.
 | `test_CaptureWorker` commit ordering | A `Commit` item pushed after a `Capture` for the same source never overtakes it — the invariant that justifies one shared queue |
 | `test_TriggerMessaging` precedence | Cancel beats commit when one message matches both patterns |
 | `test_PendingCaptureStore` expiry | Expiry is measured from the timestamp taken where the message arrived, not from when the worker got to it |
-| `test_XmlRoundTrip` | A chain saved by the old `TriggeredAvg` loads into the merged plugin with patterns and timeouts intact |
+| `test_XmlRoundTrip` | A trigger source survives save/load with its patterns and timeout intact — a round trip within the merged plugin, *not* a compatibility check against chains saved by the old one |
 
 ### Checkpoint
 
