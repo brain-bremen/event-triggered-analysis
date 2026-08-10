@@ -231,7 +231,10 @@ void TriggeredPowerCanvas::refresh()
     //
     // Detecting staleness here rather than adding another notification means no
     // future caller can forget to announce itself.
-    if (m_panelKeys != currentPanelKeys())
+    // The shape is checked alongside the set: an estimate-mode change leaves the
+    // (source, channel) pairs untouched but changes the panel's draw mode and both
+    // of its axes, all of which are applied in rebuildPanels().
+    if (m_panelKeys != currentPanelKeys() || ! (m_panelLayout == currentPanelLayout()))
         rebuildPanels();
     else
         updatePanelData();
@@ -249,9 +252,20 @@ void TriggeredPowerCanvas::refresh()
     repaint();
 }
 
+TriggeredPowerCanvas::PanelLayout TriggeredPowerCanvas::currentPanelLayout() const
+{
+    if (m_node == nullptr)
+        return {};
+
+    return { .mode = m_node->getEstimateMode(),
+             .numFrequencies = m_node->getNumFrequencies(),
+             .numBins = m_node->getNumBins() };
+}
+
 void TriggeredPowerCanvas::rebuildPanels()
 {
     m_panelKeys = currentPanelKeys();
+    m_panelLayout = currentPanelLayout();
 
     if (m_node == nullptr)
     {
