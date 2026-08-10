@@ -49,6 +49,9 @@ public:
     /** Called when signal chain is updated */
     void updateSettings() override;
 
+    /** Lays the inline controls out from the editor's measured height. */
+    void resized() override;
+
     /** Called when source colours are updated */
     void updateColours (TriggerSource*);
 

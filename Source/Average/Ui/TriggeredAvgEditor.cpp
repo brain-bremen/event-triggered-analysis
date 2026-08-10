@@ -25,6 +25,7 @@
 #include "TriggeredAvgEditor.h"
 #include "../DataCollector.h"
 #include "TriggerCore/ParameterNames.h"
+#include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "../TriggeredAvgActions.h"
@@ -42,32 +43,44 @@ TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     configureButton->setFont (FontOptions (14.0f));
     configureButton->addListener (this);
-    configureButton->setBounds (20, 30, 100, 25);
     addAndMakeVisible (configureButton.get());
 
     monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     monitorButton->setFont (FontOptions (14.0f));
     monitorButton->addListener (this);
-    monitorButton->setBounds (125, 30, 65, 25);
     addAndMakeVisible (monitorButton.get());
 
-    // Pre MS and Post MS editors side by side
-    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 20, 55);
-    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 110, 55);
+    // Channel selection. Registered by TriggeredCaptureNode but, until this was
+    // added, given no control anywhere — so the plugin came up with nothing
+    // selected and no way to select anything, and captured nothing at all.
+    //
+    // It is also the main cost lever: everything downstream is linear in the
+    // number of selected channels.
+    addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
-    for (auto& p : { ParameterNames::pre_ms, ParameterNames::post_ms })
-    {
-        auto* ed = getParameterEditor (p);
-        ed->setLayout (ParameterEditor::Layout::nameOnTop);
-        ed->setBounds (ed->getX(), ed->getY(), 80, 36);
-    }
+    // Coordinates here only decide creation order; resized() places everything.
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
+    addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
-    // Number of trials parameter
+    for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
+        if (auto* parameterEditor = getParameterEditor (name))
+            parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
+
     addBoundedValueParameterEditor (
-        Parameter::PROCESSOR_SCOPE, ParameterNames::max_trials, 20, 100);
-    auto* trialsEd = getParameterEditor (ParameterNames::max_trials);
-    trialsEd->setLayout (ParameterEditor::Layout::nameOnLeft);
-    trialsEd->setBounds (trialsEd->getX(), trialsEd->getY(), 170, 20);
+        Parameter::PROCESSOR_SCOPE, ParameterNames::max_trials, 15, 137);
+
+    if (auto* trialsEd = getParameterEditor (ParameterNames::max_trials))
+        trialsEd->setLayout (ParameterEditor::Layout::nameOnLeft);
+}
+
+void TriggeredAvgEditor::resized()
+{
+    VisualizerEditor::resized();
+
+    const int y = EditorLayout::layoutCommonContents (
+        *this, { configureButton.get(), monitorButton.get() });
+
+    EditorLayout::layoutLastRow (*this, getParameterEditor (ParameterNames::max_trials), y);
 }
 
 Visualizer* TriggeredAvgEditor::createNewCanvas()
