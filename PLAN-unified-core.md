@@ -412,7 +412,7 @@ gains the pending-timeout column it lacked.
 
 ## Phase 5 — Tests **[done]**
 
-**265 tests across three binaries**, up from the 209 baseline: `trigger_core_tests`
+**272 tests across three binaries**, up from the 209 baseline: `trigger_core_tests`
 (no FFTW), `spectra_tests`, `average_tests`. `trigger_core_tests` owns everything
 about triggering and buffering, and neither plugin re-tests it.
 

@@ -70,7 +70,11 @@ jobs:
 
       - name: Run tests
         run: |
-          cd plugin/Build
+          # Build/Tests, not Build: adding the GUI as a subproject for gui_testable_source
+          # also registers the GUI's own test targets, which are EXCLUDE_FROM_ALL and
+          # therefore never built here. From the build root ctest finds them, fails to
+          # locate the executables, and fails the job.
+          cd plugin/Build/Tests
           ctest -C ${{ matrix.build-type }} --output-on-failure --verbose
         continue-on-error: false
 
@@ -164,7 +168,11 @@ jobs:
 
       - name: Run tests
         run: |
-          cd plugin/Build
+          # Build/Tests, not Build: adding the GUI as a subproject for gui_testable_source
+          # also registers the GUI's own test targets, which are EXCLUDE_FROM_ALL and
+          # therefore never built here. From the build root ctest finds them, fails to
+          # locate the executables, and fails the job.
+          cd plugin/Build/Tests
           ctest --output-on-failure --verbose
         continue-on-error: false
 

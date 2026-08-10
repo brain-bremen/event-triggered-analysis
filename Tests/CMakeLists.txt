@@ -3,7 +3,11 @@
 # Reuses the GUI's own testable infrastructure (gui_testable_source + test_helpers),
 # which is why the top-level CMakeLists adds the GUI as a subproject when
 # BUILD_TESTS is on. Run them all with:
-#     ctest -C Release
+#     ctest --test-dir Build/Tests -C Release
+#
+# Run them from Build/Tests, not the build root: adding the GUI as a subproject
+# also registers its own test targets, which are EXCLUDE_FROM_ALL and never built
+# here, so from the root ctest finds them and fails on the missing executables.
 #
 # The split is not cosmetic. trigger_core_tests links trigger_core and *not*
 # spectra_core, so it will fail to build the day something FFTW-dependent is put
@@ -16,6 +20,20 @@ endif()
 
 enable_testing()
 include(GoogleTest)
+
+# Where gui_testable_source and test_helpers put their runtime libraries.
+#
+# A multi-config generator (Visual Studio) appends the configuration to every
+# output directory; a single-config one (Makefiles, Ninja) does not. The GUI sets
+# that output directory without a $<CONFIG> component, so the two disagree, and
+# hardcoding either layout breaks the other platform's build — copying from
+# TestBin/common/$<CONFIG> failed on Linux with "Error copying directory",
+# because there is no Release subdirectory there.
+if(CMAKE_CONFIGURATION_TYPES)
+    set(COMMON_TEST_RUNTIME_DIR ${CMAKE_BINARY_DIR}/TestBin/common/$<CONFIG>)
+else()
+    set(COMMON_TEST_RUNTIME_DIR ${CMAKE_BINARY_DIR}/TestBin/common)
+endif()
 
 # Everything about triggering and buffering. No FFTW, by construction.
 set(TRIGGER_CORE_TEST_SOURCES
@@ -107,13 +125,11 @@ function(oe_add_test_binary TEST_NAME core needs_fftw)
         VS_DEBUGGER_WORKING_DIRECTORY ${TEST_OUTPUT_DIR}
     )
 
-    # The GUI's test DLLs land in TestBin/common, which a multi-config generator
-    # splits by configuration. Copy the matching one — copying the whole tree
-    # only ever worked because it recreated a Release/ subdirectory that happened
-    # to be where the executable already was.
+    # The GUI's test libraries have to sit beside the executable. See
+    # COMMON_TEST_RUNTIME_DIR above for why the source path is not a constant.
     add_custom_command(TARGET ${TEST_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_BINARY_DIR}/TestBin/common/$<CONFIG>
+            ${COMMON_TEST_RUNTIME_DIR}
             ${TEST_OUTPUT_DIR}
     )
 
