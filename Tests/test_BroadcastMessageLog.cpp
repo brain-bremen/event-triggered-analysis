@@ -6,8 +6,8 @@
     match?", so truncation, a full ring, and unmatched messages all have to be
     visible rather than silent.
 */
-#include "Core/BroadcastMessageLog.h"
-#include "Core/TriggerSource.h"
+#include "TriggerCore/BroadcastMessageLog.h"
+#include "TriggerCore/TriggerSource.h"
 
 #include <cstring>
 #include <gtest/gtest.h>

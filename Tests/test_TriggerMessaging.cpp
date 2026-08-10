@@ -7,8 +7,8 @@
     over-eager cancel silently throws away data - so the edge cases are pinned
     down here rather than discovered during an experiment.
 */
-#include "Core/TriggerMessaging.h"
-#include "Core/TriggerSource.h"
+#include "TriggerCore/TriggerMessaging.h"
+#include "TriggerCore/TriggerSource.h"
 
 #include <gtest/gtest.h>
 #include <string>

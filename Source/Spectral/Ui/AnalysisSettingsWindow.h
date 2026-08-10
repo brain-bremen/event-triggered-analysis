@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "ParameterControl.h"
+#include "TriggerCore/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>

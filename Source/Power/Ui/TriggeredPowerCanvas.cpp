@@ -23,8 +23,8 @@
 #include "TriggeredPowerCanvas.h"
 
 #include "../TriggeredPowerNode.h"
-#include "Core/ParameterNames.h"
-#include "Core/Ui/ParameterLayout.h"
+#include "Spectral/SpectralParameterNames.h"
+#include "Spectral/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>

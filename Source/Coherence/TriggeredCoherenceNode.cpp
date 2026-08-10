@@ -22,7 +22,7 @@
 */
 #include "TriggeredCoherenceNode.h"
 
-#include "Core/ParameterNames.h"
+#include "Spectral/SpectralParameterNames.h"
 #include "Ui/TriggeredCoherenceCanvas.h"
 #include "Ui/TriggeredCoherenceEditor.h"
 

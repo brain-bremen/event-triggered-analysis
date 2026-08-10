@@ -22,13 +22,13 @@
 */
 #pragma once
 
-#include "Core/Accumulators.h"
-#include "Core/Baseline.h"
-#include "Core/SpectralEngine.h"
-#include "Core/TrialSpectrumBuffer.h"
-#include "Core/TriggerMessaging.h"
-#include "Core/TriggeredSpectraNode.h"
-#include "Core/Whitening.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/Baseline.h"
+#include "Spectral/SpectralEngine.h"
+#include "Spectral/TrialSpectrumBuffer.h"
+#include "TriggerCore/TriggerMessaging.h"
+#include "Spectral/TriggeredSpectraNode.h"
+#include "Spectral/Whitening.h"
 
 #include <JuceHeader.h>
 #include <cstdint>

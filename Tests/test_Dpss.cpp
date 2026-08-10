@@ -7,8 +7,8 @@
         from scipy.signal.windows import dpss
         w, lam = dpss(N, NW, Kmax=K, return_ratios=True)
 */
-#include "Core/Dpss.h"
-#include "Core/Tapers.h"
+#include "Spectral/Dpss.h"
+#include "Spectral/Tapers.h"
 
 #include <cmath>
 #include <gtest/gtest.h>

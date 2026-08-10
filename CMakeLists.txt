@@ -207,7 +207,8 @@ function(spectra_add_plugin PLUGIN_NAME)
 endfunction()
 
 # ---------------------------------------------------------------------------
-add_subdirectory(Source/Core)
+add_subdirectory(Source/TriggerCore)
+add_subdirectory(Source/Spectral)
 add_subdirectory(Source/Power)
 add_subdirectory(Source/Coherence)
 

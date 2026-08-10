@@ -5,7 +5,7 @@
     signal chain to reach and so had no coverage at all. The maths is pure, so it
     now lives in Core/Baseline and is tested directly.
 */
-#include "Core/Baseline.h"
+#include "Spectral/Baseline.h"
 
 #include <gtest/gtest.h>
 

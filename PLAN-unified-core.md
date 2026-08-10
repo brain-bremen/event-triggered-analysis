@@ -99,7 +99,7 @@ of the GUI.
 
 ---
 
-## Phase 1 — Extract `TriggeredCaptureNode` **[wip]**
+## Phase 1 — Extract `TriggeredCaptureNode` **[done]**
 
 > Ordering correction, made after writing the first draft of this plan: the node
 > extraction has to come **before** the directory split, not after. Both
@@ -144,12 +144,21 @@ Two new hooks are needed; the rest already exist (`registerAdditionalParameters(
 | Hook | Default | Why |
 |---|---|---|
 | `virtual int computePadSamples (float sampleRate) const` | `0` | Only Morlet needs padding; the periodogram, the STFT and a time-domain average are computed on exactly the samples they are given |
-| `virtual const char* getPluginTag() const` | — | Console lines are currently prefixed `[TriggeredSpectra]` by hand |
 
-### Checkpoint
+**[changed]** `getPluginTag()` was not added. `GenericProcessor::getName()` already
+returns what it would have returned, so the hardcoded `[TriggeredSpectra]` console
+prefixes became `getName()` instead of a new virtual.
 
-Both spectral plugins behave identically, and all 209 tests still pass. No test
-changes at all in this phase.
+**[changed]** A second hook was added that the plan did not anticipate.
+`TriggeredSpectraNode::registerAdditionalParameters()` is `final` and hands over to
+a new `registerPluginParameters()`. Without the seal, a plugin overriding the
+wrong one of the two would compile and load with no frequency controls at all —
+a failure that shows up as "the editor looks wrong" long after the cause. Both
+plugins hit the compile error while this was written, which is the point.
+
+### Checkpoint **[done]**
+
+Both spectral plugins build and install; 209/209 tests pass, unchanged.
 
 ---
 

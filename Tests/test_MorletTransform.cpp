@@ -6,8 +6,8 @@
     the correct instantaneous phase. Everything downstream - power in units^2/Hz,
     coherence phase - depends on that holding.
 */
-#include "Core/FrequencyGrid.h"
-#include "Core/MorletTransform.h"
+#include "Spectral/FrequencyGrid.h"
+#include "Spectral/MorletTransform.h"
 
 #include <cmath>
 #include <complex>

@@ -6,8 +6,8 @@
     so the tests pin down the two extremes (identical and independent signals) and
     the bias itself.
 */
-#include "Core/Accumulators.h"
-#include "Core/SpectralTransform.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/SpectralTransform.h"
 
 #include <array>
 #include <cmath>

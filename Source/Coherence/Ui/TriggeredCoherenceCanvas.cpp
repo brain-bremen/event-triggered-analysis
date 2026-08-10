@@ -23,7 +23,7 @@
 #include "TriggeredCoherenceCanvas.h"
 
 #include "../TriggeredCoherenceNode.h"
-#include "Core/Ui/ParameterLayout.h"
+#include "Spectral/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>

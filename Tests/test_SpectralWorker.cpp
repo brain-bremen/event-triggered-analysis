@@ -6,9 +6,9 @@
     order, and that it gives up rather than wedging when a window will never
     arrive.
 */
-#include "Core/MultiChannelRingBuffer.h"
-#include "Core/SpectralWorker.h"
-#include "Core/WorkQueue.h"
+#include "TriggerCore/MultiChannelRingBuffer.h"
+#include "TriggerCore/CaptureWorker.h"
+#include "TriggerCore/WorkQueue.h"
 
 #include <gtest/gtest.h>
 

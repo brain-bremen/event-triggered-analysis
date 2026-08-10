@@ -8,7 +8,7 @@
     rely on — ordering, generation-based flushing, and dropping rather than
     blocking when full.
 */
-#include "Core/WorkQueue.h"
+#include "TriggerCore/WorkQueue.h"
 
 #include <gtest/gtest.h>
 

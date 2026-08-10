@@ -5,7 +5,7 @@
     the batched plans address their input and output strides the way the transform
     code assumes.
 */
-#include "Core/Fftw.h"
+#include "Spectral/Fftw.h"
 
 #include <cmath>
 #include <gtest/gtest.h>

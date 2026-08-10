@@ -23,11 +23,11 @@
 #include "TriggeredCoherenceEditor.h"
 
 #include "../TriggeredCoherenceNode.h"
-#include "Core/ParameterNames.h"
-#include "Core/Ui/AnalysisSettingsWindow.h"
-#include "Core/Ui/EditorLayout.h"
-#include "Core/Ui/TriggerMonitorWindow.h"
-#include "Core/Ui/TriggerSourceConfigWindow.h"
+#include "Spectral/SpectralParameterNames.h"
+#include "Spectral/Ui/AnalysisSettingsWindow.h"
+#include "Spectral/Ui/EditorLayout.h"
+#include "TriggerCore/Ui/TriggerMonitorWindow.h"
+#include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "PairConfigWindow.h"
 #include "TriggeredCoherenceCanvas.h"
 

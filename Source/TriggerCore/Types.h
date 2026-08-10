@@ -1,8 +1,8 @@
 /*
     ------------------------------------------------------------------
 
-    This file is part of the Open Ephys GUI plugins TriggeredPower and
-    TriggeredCoherence.
+    This file is part of the Open Ephys GUI plugins TriggeredPower,
+    TriggeredCoherence and TriggeredAverage.
     Copyright (C) 2026 Joscha Schmiedt, Universität Bremen
 
     ------------------------------------------------------------------
@@ -23,7 +23,6 @@
 */
 #pragma once
 
-#include <complex>
 #include <cstdint>
 
 namespace TriggeredSpectra
@@ -31,22 +30,5 @@ namespace TriggeredSpectra
 
 /** Absolute sample index within a data stream, as reported by the GUI. */
 using SampleNumber = std::int64_t;
-
-/** Storage type for time-frequency coefficients handed to the display.
- *
- *  All accumulation happens in double (see Accumulators); float is only used for
- *  the per-trial coefficient array, which is the largest transient allocation in
- *  the pipeline and never feeds back into a running sum.
- */
-using Coefficient = std::complex<float>;
-
-/** What a plugin is currently estimating. */
-enum class EstimateMode : std::int_fast8_t
-{
-    /** Sliding time-frequency map: Morlet wavelets or Hann STFT. */
-    Spectrogram = 0,
-    /** One tapered periodogram over the whole analysis window. */
-    Spectrum = 1
-};
 
 } // namespace TriggeredSpectra

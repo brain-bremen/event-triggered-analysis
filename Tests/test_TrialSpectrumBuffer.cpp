@@ -5,7 +5,7 @@
     always be the oldest *retained* trial, which stops being trial 0 as soon as
     the buffer wraps.
 */
-#include "Core/TrialSpectrumBuffer.h"
+#include "Spectral/TrialSpectrumBuffer.h"
 
 #include <gtest/gtest.h>
 #include <vector>

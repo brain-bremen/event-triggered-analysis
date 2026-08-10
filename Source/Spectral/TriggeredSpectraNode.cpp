@@ -24,7 +24,7 @@
 */
 #include "TriggeredSpectraNode.h"
 
-#include "ParameterNames.h"
+#include "SpectralParameterNames.h"
 
 #include <algorithm>
 #include <cmath>

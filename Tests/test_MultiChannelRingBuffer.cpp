@@ -7,7 +7,7 @@
     the concurrent case where a slow reader must be told it lost the race rather
     than handed a mixture of two timelines.
 */
-#include "Core/MultiChannelRingBuffer.h"
+#include "TriggerCore/MultiChannelRingBuffer.h"
 
 #include <atomic>
 #include <chrono>

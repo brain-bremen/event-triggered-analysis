@@ -10,7 +10,7 @@
     plugin: coherence is defined on pairs, and with an empty list TriggeredCoherence
     captured trials, transformed them, and had nowhere to put the result.
 */
-#include "Core/PairRules.h"
+#include "Spectral/PairRules.h"
 
 #include <gtest/gtest.h>
 

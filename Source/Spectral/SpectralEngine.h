@@ -26,7 +26,7 @@
 #include "MorletTransform.h"
 #include "SpectralTransform.h"
 #include "TaperedPeriodogram.h"
-#include "Types.h"
+#include "SpectralTypes.h"
 
 #include <JuceHeader.h>
 #include <span>

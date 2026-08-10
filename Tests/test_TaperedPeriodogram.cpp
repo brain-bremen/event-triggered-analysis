@@ -6,7 +6,7 @@
     move the numbers. White noise of known variance is the cleanest way to pin
     that down.
 */
-#include "Core/TaperedPeriodogram.h"
+#include "Spectral/TaperedPeriodogram.h"
 
 #include <cmath>
 #include <complex>

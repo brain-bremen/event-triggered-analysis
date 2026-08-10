@@ -1,7 +1,7 @@
 /*
     Tests for nextFastSize / isFastSize.
 */
-#include "Core/FastSize.h"
+#include "Spectral/FastSize.h"
 
 #include <gtest/gtest.h>
 

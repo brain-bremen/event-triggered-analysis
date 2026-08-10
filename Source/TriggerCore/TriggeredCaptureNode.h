@@ -26,7 +26,7 @@
 
 #include "BroadcastMessageLog.h"
 #include "MultiChannelRingBuffer.h"
-#include "SpectralWorker.h"
+#include "CaptureWorker.h"
 #include "TriggerSource.h"
 #include "WorkQueue.h"
 

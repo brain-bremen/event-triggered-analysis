@@ -6,7 +6,7 @@
     least squares does not - the peaks pull the line up and flatten the estimate -
     so the iterative rejection is the whole point and gets its own test.
 */
-#include "Core/Whitening.h"
+#include "Spectral/Whitening.h"
 
 #include <algorithm>
 #include <cmath>

@@ -23,17 +23,12 @@
 */
 #pragma once
 
+#include "TriggerCore/ParameterNames.h"
+
 namespace TriggeredSpectra::ParameterNames
 {
 
-// --- Shared by both plugins ------------------------------------------------
-
-/** Channels to analyse. The main cost lever: everything downstream is linear in
-    the number of selected channels. */
-inline constexpr auto channels = "channels";
-
-inline constexpr auto pre_ms = "pre_ms";
-inline constexpr auto post_ms = "post_ms";
+// --- Shared by both spectral plugins ---------------------------------------
 
 /** Spectrogram (time-frequency) vs Spectrum (one line per trial window). */
 inline constexpr auto mode = "mode";
@@ -54,10 +49,6 @@ inline constexpr auto stft_hop_ms = "stft_hop_ms";
 inline constexpr auto line_method = "line_method";
 inline constexpr auto nw = "nw";
 inline constexpr auto n_tapers = "n_tapers";
-
-/** Backing store for the trigger-source popup's currently edited row. */
-inline constexpr auto trigger_line = "trigger_line";
-inline constexpr auto trigger_type = "trigger_type";
 
 // --- TriggeredPower only ---------------------------------------------------
 
@@ -84,19 +75,20 @@ inline constexpr auto coherence_display = "coherence_display";
     it needs its own accumulator per pair and the previous trial held back. */
 inline constexpr auto shift_predictor = "shift_predictor";
 
-// --- Every name above ------------------------------------------------------
+// --- Every name a spectral plugin registers --------------------------------
 
-/** The full set, so that "does this parameter have a control anywhere?" can be
-    asked as a test rather than discovered by a user who cannot reach it.
-    Add a parameter above and it must be added here too, which is the point:
-    Ui/ParameterLayout.h then has to place it. */
+/** The full set, including the ones inherited from TriggeredCaptureNode, so that
+    "does this parameter have a control anywhere?" can be asked as a test rather
+    than discovered by a user who cannot reach it. Add a parameter above and it
+    must be added here too, which is the point: Ui/ParameterLayout.h then has to
+    place it. */
 inline constexpr const char* all[] = {
-    channels,        pre_ms,           post_ms,           mode,
-    freq_min,        freq_max,         num_freqs,         freq_spacing,
-    tf_method,       n_cycles_low,     n_cycles_high,     stft_window_ms,
-    stft_hop_ms,     line_method,      nw,                n_tapers,
-    trigger_line,    trigger_type,     max_trials,        baseline_mode,
-    baseline_start_ms, baseline_end_ms, whitening_mode,   whitening_exponent,
+    channels,          pre_ms,           post_ms,          mode,
+    freq_min,          freq_max,         num_freqs,        freq_spacing,
+    tf_method,         n_cycles_low,     n_cycles_high,    stft_window_ms,
+    stft_hop_ms,       line_method,      nw,               n_tapers,
+    trigger_line,      trigger_type,     max_trials,       baseline_mode,
+    baseline_start_ms, baseline_end_ms,  whitening_mode,   whitening_exponent,
     whitening_overlay, smooth_time_bins, smooth_freq_bins, coherence_display,
     shift_predictor
 };

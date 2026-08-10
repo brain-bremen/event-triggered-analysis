@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "../ParameterNames.h"
+#include "../SpectralParameterNames.h"
 
 #include <vector>
 

@@ -41,6 +41,7 @@ spectra_apply_common_settings(${TEST_NAME})
 target_link_libraries(${TEST_NAME}
     PRIVATE
         spectra_core
+        trigger_core
         gui_testable_source   # JUCE + Open Ephys types
         test_helpers
         gtest_main

@@ -22,10 +22,10 @@
 */
 #pragma once
 
-#include "Core/Accumulators.h"
-#include "Core/PairRules.h"
-#include "Core/SpectralEngine.h"
-#include "Core/TriggeredSpectraNode.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/PairRules.h"
+#include "Spectral/SpectralEngine.h"
+#include "Spectral/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
 #include <map>

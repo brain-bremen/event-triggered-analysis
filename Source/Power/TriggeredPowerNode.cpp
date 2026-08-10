@@ -22,7 +22,7 @@
 */
 #include "TriggeredPowerNode.h"
 
-#include "Core/ParameterNames.h"
+#include "Spectral/SpectralParameterNames.h"
 #include "Ui/TriggeredPowerCanvas.h"
 #include "Ui/TriggeredPowerEditor.h"
 

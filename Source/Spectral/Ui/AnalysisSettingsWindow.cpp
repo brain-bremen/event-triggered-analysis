@@ -23,9 +23,9 @@
 */
 #include "AnalysisSettingsWindow.h"
 
-#include "../ParameterNames.h"
+#include "../SpectralParameterNames.h"
 #include "../TriggeredSpectraNode.h"
-#include "../Types.h"
+#include "../SpectralTypes.h"
 #include "ParameterLayout.h"
 
 #include <algorithm>

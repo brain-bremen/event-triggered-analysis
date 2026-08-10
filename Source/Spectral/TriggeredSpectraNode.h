@@ -24,8 +24,8 @@
 */
 #pragma once
 
-#include "TriggeredCaptureNode.h"
-#include "Types.h"
+#include "TriggerCore/TriggeredCaptureNode.h"
+#include "SpectralTypes.h"
 
 #include <JuceHeader.h>
 

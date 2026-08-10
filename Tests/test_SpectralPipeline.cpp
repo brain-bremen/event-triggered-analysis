@@ -8,10 +8,10 @@
     property that lets a user toggle between the two display modes without the
     numbers moving.
 */
-#include "Core/Accumulators.h"
-#include "Core/FrequencyGrid.h"
-#include "Core/MorletTransform.h"
-#include "Core/TaperedPeriodogram.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/FrequencyGrid.h"
+#include "Spectral/MorletTransform.h"
+#include "Spectral/TaperedPeriodogram.h"
 
 #include <cmath>
 #include <complex>

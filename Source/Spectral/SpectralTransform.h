@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "Types.h"
+#include "SpectralTypes.h"
 
 #include <span>
 #include <vector>

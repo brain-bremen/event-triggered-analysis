@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "../ParameterNames.h"
+#include "../SpectralParameterNames.h"
 
 #include <EditorHeaders.h>
 #include <JuceHeader.h>

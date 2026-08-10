@@ -11,8 +11,8 @@
     the inside: every test passed, and the plugin looked finished. A parameter with
     no home now fails here instead.
 */
-#include "Core/ParameterNames.h"
-#include "Core/Ui/ParameterLayout.h"
+#include "Spectral/SpectralParameterNames.h"
+#include "Spectral/Ui/ParameterLayout.h"
 
 #include <gtest/gtest.h>
 
