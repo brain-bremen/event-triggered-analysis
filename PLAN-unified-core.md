@@ -46,7 +46,7 @@ concurrency-sensitive code in either repository.
 | Decision | Choice | Why |
 |---|---|---|
 | Packaging | One repo, **two** static cores, three plugin DLLs | The two-core split is what keeps FFTW away from the averaging plugin |
-| Shared namespace | `TriggerCore` | Plugins keep `TriggeredSpectra` / `TriggeredAverage` and name the layer explicitly at the boundary; minimal churn, visible seam |
+| Shared namespace |  `EventTriggered` | One namespace for the whole repo; the layer boundary is enforced by the two CMake targets, not by a second weaker expression in the type system |
 | History | `git subtree add`, not a copy | `TriggeredAvg` has real history worth keeping |
 | CI | Adopt `TriggeredAvg`'s workflows repo-wide | This repo has none; that is the free half of the trade |
 | Test binaries | One per layer: `trigger_core_tests`, `spectra_tests`, `average_tests` | If `trigger_core_tests` links without FFTW, the split is real and stays real |
@@ -348,9 +348,9 @@ waiting to happen regardless of what is done about compatibility.
 `TriggeredAverage` keeps its namespace; shared types are named `TriggerCore::…` at
 the boundary. Deleted outright, replaced by the shared equivalents:
 
-- `Source/Average/MultiChannelRingBuffer.{h,cpp}` → `TriggerCore` version
+- `Source/Average/MultiChannelRingBuffer.{h,cpp}` →  `EventTriggered` version
 - `Source/Average/Types.h` → `TriggerCore/Types.h`
-- `Source/Average/TriggerSource.{h,cpp}` → `TriggerCore` version
+- `Source/Average/TriggerSource.{h,cpp}` →  `EventTriggered` version
 - `Source/Average/Ui/PopupConfigurationWindow.{h,cpp}` → `TriggerSourceConfigWindow`
 - `Tests/Average/test_MultiChannelRingBuffer.cpp` → covered by `trigger_core_tests`
 

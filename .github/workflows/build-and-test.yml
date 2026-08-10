@@ -70,7 +70,7 @@ jobs:
 
       - name: Run tests
         run: |
-          cd plugin/Build/Tests
+          cd plugin/Build
           ctest -C ${{ matrix.build-type }} --output-on-failure --verbose
         continue-on-error: false
 
@@ -82,12 +82,16 @@ jobs:
           path: plugin/Build/test-results/
           if-no-files-found: ignore
 
+      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
+      # the build. Add it here in the same commit that makes it compile.
       - name: Upload plugin artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: triggered-avg-plugin-windows-${{ matrix.build-type }}
-          path: plugin/Build/${{ matrix.build-type }}/TriggeredAvg.dll
+          name: plugins-windows-${{ matrix.build-type }}
+          path: |
+            plugin/Build/${{ matrix.build-type }}/TriggeredPower.dll
+            plugin/Build/${{ matrix.build-type }}/TriggeredCoherence.dll
           if-no-files-found: error
 
   build-linux:
@@ -161,7 +165,7 @@ jobs:
 
       - name: Run tests
         run: |
-          cd plugin/Build/Tests
+          cd plugin/Build
           ctest --output-on-failure --verbose
         continue-on-error: false
 
@@ -173,10 +177,14 @@ jobs:
           path: plugin/Build/test-results/
           if-no-files-found: ignore
 
+      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
+      # the build. Add it here in the same commit that makes it compile.
       - name: Upload plugin artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: triggered-avg-plugin-linux-${{ matrix.build-type }}
-          path: plugin/Build/TriggeredAvg.so
+          name: plugins-linux-${{ matrix.build-type }}
+          path: |
+            plugin/Build/TriggeredPower.so
+            plugin/Build/TriggeredCoherence.so
           if-no-files-found: error

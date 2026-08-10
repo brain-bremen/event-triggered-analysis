@@ -67,7 +67,7 @@ extra degrees of freedom.
 ## Repository layout **[done]**
 
 ```
-triggered-spectra/
+event-triggered-analysis/
   CMakeLists.txt                  top level: core lib + 2 plugin targets + tests
   libs/{windows,linux,macos}/     FFTW3, copied verbatim from OpenEphysFFTW
   Source/
@@ -999,8 +999,8 @@ whitening, pre-trigger baseline, trigger-messaging, queueing and worker paths ar
 covered; the rendering path is not.
 
 ```sh
-cmake --build Build --config Release --target TriggeredSpectra_tests
-ctest --test-dir Build -R "TriggeredSpectra_tests" -C Release
+cmake --build Build --config Release --target trigger_core_tests spectra_tests
+ctest --test-dir Build -C Release
 ```
 
 ### End-to-end in the GUI **[todo]**

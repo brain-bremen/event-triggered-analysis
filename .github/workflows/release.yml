@@ -63,11 +63,15 @@ jobs:
           cd plugin
           cmake --build Build --config Release -j4
 
+      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
+      # the build. Add it here in the same commit that makes it compile.
       - name: Upload Windows DLL
         uses: actions/upload-artifact@v4
         with:
-          name: TriggeredAvg-windows
-          path: plugin/Build/Release/TriggeredAvg.dll
+          name: plugins-windows
+          path: |
+            plugin/Build/Release/TriggeredPower.dll
+            plugin/Build/Release/TriggeredCoherence.dll
           if-no-files-found: error
 
   build-linux:
@@ -135,11 +139,15 @@ jobs:
           cd plugin
           cmake --build Build --config Release -j$(nproc)
 
+      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
+      # the build. Add it here in the same commit that makes it compile.
       - name: Upload Linux SO
         uses: actions/upload-artifact@v4
         with:
-          name: TriggeredAvg-linux
-          path: plugin/Build/TriggeredAvg.so
+          name: plugins-linux
+          path: |
+            plugin/Build/TriggeredPower.so
+            plugin/Build/TriggeredCoherence.so
           if-no-files-found: error
 
   create-release:
@@ -155,21 +163,21 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: TriggeredAvg-windows
+          name: plugins-windows
           path: ./artifacts/windows
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: TriggeredAvg-linux
+          name: plugins-linux
           path: ./artifacts/linux
 
       - name: Create release archives
         run: |
           cd artifacts/windows
-          zip -j ../../TriggeredAvg-windows-${{ github.ref_name }}.zip TriggeredAvg.dll
+          zip -j ../../event-triggered-analysis-windows-${{ github.ref_name }}.zip *.dll
           cd ../linux
-          tar -czf ../../TriggeredAvg-linux-${{ github.ref_name }}.tar.gz TriggeredAvg.so
+          tar -czf ../../event-triggered-analysis-linux-${{ github.ref_name }}.tar.gz *.so
           cd ../..
 
       - name: Extract release notes
@@ -202,8 +210,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            TriggeredAvg-windows-${{ github.ref_name }}.zip
-            TriggeredAvg-linux-${{ github.ref_name }}.tar.gz
+            event-triggered-analysis-windows-${{ github.ref_name }}.zip
+            event-triggered-analysis-linux-${{ github.ref_name }}.tar.gz
           body: ${{ steps.extract-notes.outputs.notes }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}

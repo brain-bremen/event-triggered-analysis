@@ -61,7 +61,7 @@ namespace
  */
 juce::InterProcessLock& plannerLockObject()
 {
-    static auto* lock = new juce::InterProcessLock ("OpenEphysTriggeredSpectraFftwPlanner");
+    static auto* lock = new juce::InterProcessLock ("OpenEphysEventTriggeredFftwPlanner");
     return *lock;
 }
 
@@ -254,7 +254,7 @@ std::string defaultWisdomPath()
     const auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
                          .getChildFile ("open-ephys");
 
-    return dir.getChildFile ("triggered-spectra-fftw-wisdom.txt").getFullPathName().toStdString();
+    return dir.getChildFile ("event-triggered-analysis-fftw-wisdom.txt").getFullPathName().toStdString();
 }
 
 } // namespace EventTriggered::Fftw

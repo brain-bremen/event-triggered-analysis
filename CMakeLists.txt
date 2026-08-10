@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.23.0)
 
 # ---------------------------------------------------------------------------
-# Triggered Spectra: two Open Ephys plugins (TriggeredPower, TriggeredCoherence)
-# sharing one statically-linked numerical core (spectra_core).
+# Event-Triggered Analysis: three Open Ephys plugins (TriggeredPower,
+# TriggeredCoherence, TriggeredAverage) over two statically-linked cores.
+#
+#   trigger_core   ring buffer, trigger sources, work queue, capture worker,
+#                  broadcast-message path, trigger config + monitor windows.
+#                  No FFTW, no DSP.
+#   spectra_core   FFTW, DPSS, Morlet, accumulators, spectral display widgets.
+#                  Layered on trigger_core; used by the two spectral plugins.
 # ---------------------------------------------------------------------------
 
-set(PROJECT_SHORT_NAME TriggeredSpectra)
+set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
 
 set(PLUGIN_VERSION_MAJOR 0)
 set(PLUGIN_VERSION_MINOR 1)
@@ -200,7 +206,7 @@ endif()
 
 # --- Tests -----------------------------------------------------------------
 # Pulls the GUI in as a subproject to get gui_testable_source + test_helpers.
-# Run only this repo's tests with:  ctest -R "TriggeredSpectra_tests" -C Release
+# Run this repo's tests with:  ctest -C Release
 if(BUILD_TESTS)
   enable_testing()
   set(BUILD_TESTS ON CACHE BOOL "Enable testing" FORCE)
