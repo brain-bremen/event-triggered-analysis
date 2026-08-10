@@ -82,15 +82,34 @@ inline constexpr auto shift_predictor = "shift_predictor";
     than discovered by a user who cannot reach it. Add a parameter above and it
     must be added here too, which is the point: Ui/ParameterLayout.h then has to
     place it. */
-inline constexpr const char* all[] = {
-    channels,          pre_ms,           post_ms,          mode,
-    freq_min,          freq_max,         num_freqs,        freq_spacing,
-    tf_method,         n_cycles_low,     n_cycles_high,    stft_window_ms,
-    stft_hop_ms,       line_method,      nw,               n_tapers,
-    trigger_line,      trigger_type,     max_trials,       baseline_mode,
-    baseline_start_ms, baseline_end_ms,  whitening_mode,   whitening_exponent,
-    whitening_overlay, smooth_time_bins, smooth_freq_bins, coherence_display,
-    shift_predictor
-};
+inline constexpr const char* all[] = { channels,
+                                       pre_ms,
+                                       post_ms,
+                                       mode,
+                                       freq_min,
+                                       freq_max,
+                                       num_freqs,
+                                       freq_spacing,
+                                       tf_method,
+                                       n_cycles_low,
+                                       n_cycles_high,
+                                       stft_window_ms,
+                                       stft_hop_ms,
+                                       line_method,
+                                       nw,
+                                       n_tapers,
+                                       trigger_line,
+                                       trigger_type,
+                                       max_trials,
+                                       baseline_mode,
+                                       baseline_start_ms,
+                                       baseline_end_ms,
+                                       whitening_mode,
+                                       whitening_exponent,
+                                       whitening_overlay,
+                                       smooth_time_bins,
+                                       smooth_freq_bins,
+                                       coherence_display,
+                                       shift_predictor };
 
 } // namespace TriggeredSpectra::ParameterNames

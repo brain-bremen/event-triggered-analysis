@@ -41,8 +41,10 @@ inline constexpr auto trigger_type = "trigger_type";
 
 /** The names above, for tests that need to distinguish "belongs to every
     triggered plugin" from "belongs to one of them". */
-inline constexpr const char* captureAll[] = {
-    channels, pre_ms, post_ms, trigger_line, trigger_type
-};
+inline constexpr const char* captureAll[] = { channels,
+                                              pre_ms,
+                                              post_ms,
+                                              trigger_line,
+                                              trigger_type };
 
 } // namespace TriggeredSpectra::ParameterNames

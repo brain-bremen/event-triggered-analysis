@@ -25,8 +25,8 @@
 #pragma once
 
 #include "BroadcastMessageLog.h"
-#include "MultiChannelRingBuffer.h"
 #include "CaptureWorker.h"
+#include "MultiChannelRingBuffer.h"
 #include "TriggerSource.h"
 #include "WorkQueue.h"
 
