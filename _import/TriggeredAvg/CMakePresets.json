@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022",
+      "description": "Multi-configuration preset for Visual Studio 2022",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/Build",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/Build/install"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs2022-debug",
+      "displayName": "Build Debug",
+      "configurePreset": "vs2022",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs2022-release",
+      "displayName": "Build Release",
+      "configurePreset": "vs2022",
+      "configuration": "Release"
+    }
+  ]
+}

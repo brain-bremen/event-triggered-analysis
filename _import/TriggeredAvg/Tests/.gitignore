@@ -1,0 +1,15 @@
+# Build artifacts
+build/
+*.exe
+*.o
+*.obj
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Test results
+Testing/
+*.xml

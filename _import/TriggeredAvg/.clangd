@@ -1,0 +1,8 @@
+CompileFlags:
+  Add: [
+    "-std=c++17",
+    "-ID:/open-ephys/plugin-GUI/JuceLibraryCode/modules/",
+    "-ID:/open-ephys/plugin-GUI/JuceLibraryCode/",
+    "-ID:/open-ephys/plugin-GUI/Plugins/Headers/",
+    "-ID:/open-ephys/plugin-GUI/installed_libs/"
+  ]
