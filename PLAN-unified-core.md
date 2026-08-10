@@ -243,14 +243,30 @@ runs all 209.
 
 ---
 
-## Phase 3 — Import TriggeredAvg **[todo]**
+## Phase 3 — Import TriggeredAvg **[done]**
+
+Landed. 115 commits of history came across and `03721ba` (TriggeredAvg `main`) is
+an ancestor of this branch; the repo now carries 157 commits. `_import/` was a
+staging prefix only and is gone.
+
+**[changed]** The subtree was taken from the local clone at
+`C:/Code/open-ephys/plugins/TriggeredAvg` rather than over SSH from GitHub — same
+commits, no network round trip. The `triggered-avg` remote is still configured and
+can be repointed at the GitHub URL before any push.
+
+Note for whoever reads `git log --oneline -- Source/Average`: it shows one commit.
+That is path-filter simplification, not lost history — the imported commits touched
+`Source/…` at the old repo root. `git log --follow` on an individual file works,
+and `git merge-base --is-ancestor 03721ba HEAD` confirms the rest.
+
+### How it was done
 
 ```
-git remote add triggered-avg git@github.com:joschaschmiedt/triggered-lfp-viewer.git
+git remote add triggered-avg <TriggeredAvg repo>
 git subtree add --prefix=_import/TriggeredAvg triggered-avg main
 ```
 
-Then, as a separate commit, move it into place and delete the shell:
+Then, as a separate commit, moved into place and the shell deleted:
 
 | From | To |
 |---|---|
@@ -262,7 +278,8 @@ Then, as a separate commit, move it into place and delete the shell:
 | `_import/TriggeredAvg/Resources/screenshot_*.png` | `Resources/` |
 
 The imported plugin does not build yet. That is expected and is the whole of
-Phase 4.
+Phase 4. The CI workflows came across too and still name the old project; wiring
+them to the three new targets belongs with the port.
 
 ### Repo identity
 
@@ -276,7 +293,50 @@ one-way and belong to a human with the org permissions.
 
 ## Phase 4 — Port the averaging plugin onto the core **[todo]**
 
+Not started. Source/Average is in the tree but not in the build: it still refers
+to its own ring buffer, trigger sources and DataCollector thread.
+
 The real work. Ordered so that each step leaves the tree buildable.
+
+### 4.0 Traps found while reading the imported code
+
+Four differences between the imported plugin and the base class it is about to
+inherit. Each would compile silently and change behaviour, so each is written
+down before any code moves.
+
+**Channel selection would go from "all" to "none".** `TriggeredAvgNode` has no
+`channels` parameter at all — it averages every input channel.
+`TriggeredCaptureNode` registers one, and `addSelectedChannelsParameter()`
+defaults to an *empty* array; `SelectedChannelsParameter::setChannelCount()` only
+trims out-of-bounds entries and never selects anything. So simply inheriting the
+base would make the averaging plugin come up displaying nothing, on existing
+saved chains, with no error.
+
+Resolution: a `virtual bool selectsAllChannelsByDefault() const` hook on the base,
+returning `false`, which `TriggeredAvgNode` overrides to `true`.
+`rebuildConfiguration()` then falls back to every channel in the stream when the
+selection is empty. That preserves today's behaviour exactly and leaves the
+spectral plugins alone. It is worth asking later whether the spectral plugins
+should adopt the same fallback — "nothing selected" almost always means "the user
+has not chosen yet" rather than "show me nothing" — but changing them is not part
+of a port that is supposed to preserve behaviour.
+
+**Parameters are registered in the constructor, not `registerParameters()`.** The
+imported plugin predates that hook. Its registrations move into
+`registerAdditionalParameters()`, and the ones the base now owns are dropped —
+noting that the defaults differ and the base's win: `pre_ms` 500 ms rather than
+250, `post_ms` 1000 rather than 750, and both ranges widen from 5 s to 10 s.
+
+**A default trigger source is created in the constructor.**
+`m_triggerSources.addTriggerSource (-1, TTL_TRIGGER)` runs before the object is
+fully built. Under the base class that fires `triggerSourceAdded()`, which calls
+`rebuildConfiguration()`, which is virtual dispatch out of a constructor. It must
+move to `updateSettings()` or be dropped.
+
+**Half of `parameterValueChanged` is display-only.** `x_min`, `x_max`, `y_min`,
+`y_max` and the two `use_custom_*_limits` flags only repaint. They must *not* end
+up in `isAnalysisParameter()`, or every axis tweak stops the worker and
+reallocates the ring buffer.
 
 ### 4.1 Namespace and deletions
 
