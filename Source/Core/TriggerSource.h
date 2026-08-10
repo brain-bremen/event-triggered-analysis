@@ -91,6 +91,16 @@ struct TriggerCounters
     /** Parked captures folded in by a commit message. */
     std::atomic<int> pendingCommitted { 0 };
 
+    // Broadcast messages that matched each pattern. Counted as *matched*, not as
+    // acted on: a cancel and a commit pattern that both hit the same message both
+    // count here, while only the cancel takes effect. That difference is the whole
+    // diagnosis for "my commit message is being ignored", and collapsing these
+    // into "what happened" would hide it.
+
+    std::atomic<int> armMessages { 0 };
+    std::atomic<int> cancelMessages { 0 };
+    std::atomic<int> commitMessages { 0 };
+
     void reset()
     {
         for (auto* c : { &ttlEdges,
@@ -98,7 +108,10 @@ struct TriggerCounters
                          &capturesDropped,
                          &trialsCaptured,
                          &capturesFailed,
-                         &pendingCommitted })
+                         &pendingCommitted,
+                         &armMessages,
+                         &cancelMessages,
+                         &commitMessages })
             c->store (0, std::memory_order_relaxed);
     }
 };

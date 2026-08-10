@@ -154,6 +154,53 @@ TEST (TriggerMessaging, ArmOnlyAffectsMessageGatedSources)
     EXPECT_TRUE (plain.canTrigger);
 }
 
+/** Regression: arming must survive a cancel carried by the *same* message.
+ *
+ *  This is what makes "arm and cancel both on TRIAL_START" a usable configuration:
+ *  each trial start throws away whatever the previous trial left parked, and arms
+ *  for the new one. Reordering applyTriggerMessage so that cancel had the last
+ *  word would leave the source permanently disarmed and capture nothing — silently,
+ *  because every message would still match. */
+TEST (TriggerMessaging, ArmSurvivesACancelInTheSameMessage)
+{
+    auto source = makeSource ("TRIAL_START", "TRIAL_START", "OUTCOME 0 ");
+    ASSERT_FALSE (source.canTrigger);
+
+    const auto actions = matchTriggerMessage (source, "VSTIM: TRIAL_START 423 TRIALTYPE 0");
+    ASSERT_TRUE (actions.arm);
+    ASSERT_TRUE (actions.cancel);
+
+    const auto change = applyTriggerMessage (source, actions);
+
+    EXPECT_TRUE (change.discardPending) << "the previous trial's capture is dropped";
+    EXPECT_TRUE (source.canTrigger) << "and this trial is armed";
+}
+
+/** The other half of that configuration: the trial-end message must commit only on
+    the wanted outcome, and must not re-arm or cancel on its way past. */
+TEST (TriggerMessaging, TrialEndCommitsOnlyOnTheMatchingOutcome)
+{
+    auto source = makeSource ("TRIAL_START", "TRIAL_START", "OUTCOME 0 ");
+
+    const auto good =
+        matchTriggerMessage (source, "VSTIM: TRIAL_END 422 TRIALTYPE 0 OUTCOME 0 FRAME 336037");
+    EXPECT_TRUE (good.commit);
+    EXPECT_FALSE (good.arm);
+    EXPECT_FALSE (good.cancel);
+
+    // Any other outcome simply matches nothing; the capture stays parked until the
+    // next TRIAL_START cancels it.
+    const auto bad =
+        matchTriggerMessage (source, "VSTIM: TRIAL_END 423 TRIALTYPE 0 OUTCOME 3 FRAME 336999");
+    EXPECT_FALSE (bad.any());
+
+    // The trailing space in the pattern is load-bearing: without it a two-digit
+    // outcome beginning with 0 would read as a hit.
+    const auto twoDigit =
+        matchTriggerMessage (source, "VSTIM: TRIAL_END 424 TRIALTYPE 0 OUTCOME 07 FRAME 337100");
+    EXPECT_FALSE (twoDigit.commit);
+}
+
 TEST (TriggerMessaging, CancelWinsOverCommit)
 {
     TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);

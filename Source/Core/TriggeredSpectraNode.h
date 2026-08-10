@@ -24,6 +24,7 @@
 */
 #pragma once
 
+#include "BroadcastMessageLog.h"
 #include "MultiChannelRingBuffer.h"
 #include "ParameterNames.h"
 #include "SpectralWorker.h"
@@ -134,8 +135,39 @@ public:
     /** Line of the most recent rising edge, or -1 if none has arrived. */
     int getLastTtlLine() const { return m_lastTtlLine.load (std::memory_order_relaxed); }
 
+    /** Broadcast messages delivered to this plugin since acquisition started,
+     *  whatever they said. The message-side counterpart of getNumTtlEdgesSeen():
+     *  it separates "no messages are arriving" from "they arrive and match
+     *  nothing", which the per-source counts alone cannot. */
+    int getNumBroadcastMessagesSeen() const
+    {
+        return m_broadcastMessagesSeen.load (std::memory_order_relaxed);
+    }
+
+    /** The most recent broadcast message, with what each source made of it, as
+     *  rendered for the console. Empty until one arrives.
+     *
+     *  Message thread only: it is written while draining the log, which happens
+     *  there too. */
+    const juce::String& getLastBroadcastMessage() const { return m_lastBroadcastMessage; }
+
     /** Zeroes every counter, node-wide and per source. */
     void resetTriggerCounters();
+
+    // --- Broadcast message log ----------------------------------------------
+
+    /** Echoes every incoming broadcast message to the GUI console, together with
+     *  the actions each trigger source took from it.
+     *
+     *  This is how the arm / cancel / commit patterns get shaped: the patterns are
+     *  contains-matches against message text nobody can see otherwise, so a
+     *  mismatched pattern is indistinguishable from a message that never arrived.
+     *
+     *  Off by default, and deliberately not saved with the signal chain — it is a
+     *  setup aid, and a chain that quietly floods the console on load would be
+     *  worse than one that has to be switched on again. */
+    void setLogBroadcastMessages (bool shouldLog);
+    bool isLoggingBroadcastMessages() const { return m_messageLog.isEnabled(); }
 
 protected:
     // --- Hooks for subclasses ----------------------------------------------
@@ -202,6 +234,14 @@ protected:
     /** Written on the audio thread, read on the message thread. See the getters. */
     std::atomic<int> m_ttlEdgesSeen { 0 };
     std::atomic<int> m_lastTtlLine { -1 };
+    std::atomic<int> m_broadcastMessagesSeen { 0 };
+
+    /** Filled in where broadcast messages arrive (audio thread), drained from
+        handleAsyncUpdate() (message thread). */
+    BroadcastMessageLog m_messageLog;
+
+    /** Last drained entry, kept for the monitor. Message thread only. */
+    juce::String m_lastBroadcastMessage;
 
 protected:
     /** Recomputes m_geometry and m_selectedChannels from the current parameters
@@ -216,6 +256,10 @@ protected:
     void rebuildConfiguration();
 
 private:
+    /** Prints and clears whatever the audio thread parked in m_messageLog.
+        Message thread only. */
+    void drainBroadcastMessageLog();
+
     /** Ring capacity: the trial window plus padding, doubled for headroom, and
      *  never less than four seconds so that a long pre-trigger window still works
      *  right after acquisition starts. */

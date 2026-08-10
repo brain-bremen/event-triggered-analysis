@@ -22,6 +22,7 @@ set(SPECTRA_TEST_SOURCES
     test_Accumulators.cpp
     test_SpectralPipeline.cpp
     test_TriggerMessaging.cpp
+    test_BroadcastMessageLog.cpp
     test_Whitening.cpp
     test_Baseline.cpp
     test_WorkQueue.cpp

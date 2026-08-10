@@ -257,6 +257,8 @@ void TriggeredSpectraNode::resetTriggerCounters()
 {
     m_ttlEdgesSeen.store (0, std::memory_order_relaxed);
     m_lastTtlLine.store (-1, std::memory_order_relaxed);
+    m_broadcastMessagesSeen.store (0, std::memory_order_relaxed);
+    m_lastBroadcastMessage.clear();
 
     for (auto* source : m_triggerSources.items())
         source->counters.reset();
@@ -553,24 +555,55 @@ void TriggeredSpectraNode::handleBroadcastMessage (const juce::String& message,
         m_workQueue.push ({ .kind = WorkItemKind::DiscardExpired,
                             .timeMs = juce::Time::currentTimeMillis() });
 
+    m_broadcastMessagesSeen.fetch_add (1, std::memory_order_relaxed);
+
+    // Recorded rather than printed: LOGC formats and allocates, and this is the
+    // audio thread. The entry is drained on the message thread below, whether or
+    // not the console echo is on — the monitor shows the last message either way,
+    // and recording costs one fixed-size copy per message.
+    BroadcastLogEntry logEntry;
+    logEntry.setText (message);
+
+    int sourceIndex = 0;
+
     for (auto* source : m_triggerSources.items())
     {
         const auto actions = matchTriggerMessage (*source, message);
 
-        if (! actions.any())
-            continue;
+        if (actions.any())
+        {
+            logEntry.addMatch (sourceIndex, actions);
 
-        const auto change = applyTriggerMessage (*source, actions);
+            // Counted as matched rather than as applied, so that a commit
+            // suppressed by an overlapping cancel is still visible in the monitor
+            // as a commit pattern that is firing.
+            if (actions.arm)
+                source->counters.armMessages.fetch_add (1, std::memory_order_relaxed);
+            if (actions.cancel)
+                source->counters.cancelMessages.fetch_add (1, std::memory_order_relaxed);
+            if (actions.commit)
+                source->counters.commitMessages.fetch_add (1, std::memory_order_relaxed);
 
-        if (change.discardPending)
-            m_workQueue.push ({ .kind = WorkItemKind::Discard, .triggerSource = source });
+            const auto change = applyTriggerMessage (*source, actions);
 
-        if (change.commitPending)
-            m_workQueue.push ({ .kind = WorkItemKind::Commit, .triggerSource = source });
+            if (change.discardPending)
+                m_workQueue.push ({ .kind = WorkItemKind::Discard, .triggerSource = source });
+
+            if (change.commitPending)
+                m_workQueue.push ({ .kind = WorkItemKind::Commit, .triggerSource = source });
+        }
+
+        ++sourceIndex;
     }
 
-    // The repaint is triggered by the worker once it has actually committed
-    // something, via capturesCommitted().
+    // Messages that matched nothing are recorded too — while patterns are being
+    // shaped, those are the interesting ones.
+    //
+    // The update is triggered whether or not the push succeeded: a full ring is
+    // exactly the case where the consumer needs waking, and dropping the wake-up
+    // too would leave it full for good.
+    m_messageLog.push (logEntry);
+    triggerAsyncUpdate();
 }
 
 // --- Worker callbacks ------------------------------------------------------
@@ -592,7 +625,53 @@ void TriggeredSpectraNode::captureFailed (const CaptureRequest& request,
           toString (result));
 }
 
-void TriggeredSpectraNode::handleAsyncUpdate() { refreshDisplay(); }
+void TriggeredSpectraNode::handleAsyncUpdate()
+{
+    // Always drained, even with logging switched off, so entries recorded just
+    // before the toggle still reach the console instead of sitting in the ring.
+    drainBroadcastMessageLog();
+
+    refreshDisplay();
+}
+
+// --- Broadcast message log -------------------------------------------------
+
+void TriggeredSpectraNode::setLogBroadcastMessages (bool shouldLog)
+{
+    if (shouldLog == m_messageLog.isEnabled())
+        return;
+
+    m_messageLog.setEnabled (shouldLog);
+
+    LOGC ("[",
+          getName(),
+          "] broadcast message logging ",
+          shouldLog ? "ON - every incoming message will be echoed here"
+                    : "OFF");
+}
+
+void TriggeredSpectraNode::drainBroadcastMessageLog()
+{
+    const bool echo = m_messageLog.isEnabled();
+
+    BroadcastLogEntry entry;
+
+    while (m_messageLog.pop (entry))
+    {
+        // Kept even with the echo off, so the monitor can show what arrived last
+        // without the console having to be on.
+        m_lastBroadcastMessage = formatBroadcastLogEntry (entry, m_triggerSources);
+
+        if (echo)
+            LOGC ("[", getName(), "] msg: ", m_lastBroadcastMessage);
+    }
+
+    // A drop means the message thread fell behind the traffic, and the message
+    // being hunted for may be one of the missing ones. Saying so is the whole
+    // difference between a log that can be trusted and one that cannot.
+    if (const int dropped = m_messageLog.takeNumDropped(); dropped > 0 && echo)
+        LOGC ("[", getName(), "] msg: ", dropped, " message(s) not logged - console fell behind");
+}
 
 // --- Trigger sources -------------------------------------------------------
 
