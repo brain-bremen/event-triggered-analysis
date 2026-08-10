@@ -2,14 +2,12 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
-Phases 1–3 are complete. Phase 4 is partly done — coherence estimates fully, but
-the pair-configuration UI is missing, so no pairs can be created. Phase 5 is
-outstanding. Places where implementation diverged from this plan are marked
-**[changed]**; each says why.
+Phases 1–4 are complete. Phase 5 is outstanding. Places where implementation
+diverged from this plan are marked **[changed]**; each says why.
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 185 unit tests and a clean build/install: neither plugin
+Everything else rests on 197 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -110,6 +108,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `Ui/AnalysisSettingsWindow.{h,cpp}` | **[done]** every computation parameter |
 | `Ui/ParameterControl.{h,cpp}` | **[done]** one control bound to one Parameter |
 | `Ui/ParameterLayout.h` | **[done]** declares the editor/canvas split |
+| `PairRules.{h,cpp}` | **[done]** pair add/seed rules, split out to be testable |
 
 ### **[changed]** A shared node base class was added
 
@@ -716,10 +715,34 @@ side, and it applied to both canvases.
 for and rebuilds when they differ. Detecting staleness beats adding another
 notification: no future caller can forget to announce itself.
 
-**Pair configuration** — port `TriggeredAvg`'s `PopupConfigurationWindow`
-`TableListBoxModel`: channel A, channel B, name, colour, delete — plus a **seed mode**
-button generating "seed × all selected" pairs in one click, which is how these are
-used in practice. Mutations wrapped in `ProcessorAction` subclasses for undo/redo.
+### Pair configuration **[done]**
+
+`Coherence/Ui/PairConfigWindow` (editor button **PAIRS**): name, channel A,
+channel B, colour, status, delete — plus **seed mode**, one click for "seed ×
+every other selected channel", which is how these are used in practice and
+tedious enough one at a time that people give up.
+
+Channels are picked from the *selected* list rather than typed, because a pair
+naming an unanalysed channel can never produce anything. Pairs whose channels
+later leave the selection stay configured and read **inactive** rather than being
+deleted — losing a pair list because the selection was narrowed for a moment is
+worse than showing a row that does nothing — and "inactive" distinguishes *will
+never produce data* from *no data yet*, which look identical on the plot.
+
+Two structural points:
+
+- **Editing the pair list rebuilds the accumulators, which discards trials.**
+  The pair set decides how many cross-spectra exist, so it cannot change
+  underneath them; there is nothing honest to carry over. `rebuildConfiguration()`
+  also asserts acquisition is stopped, so the window is read-only while running
+  and says why. Renaming and recolouring deliberately do *not* rebuild — a label
+  is not part of the estimate.
+- **The rules moved to `Core/PairRules.h`.** `TriggeredCoherenceNode` is a
+  `GenericProcessor` and cannot be instantiated outside a running GUI, so
+  duplicate/self-pair/capacity/seed behaviour was untestable where it lived.
+  Pulling out the pure decisions made it checkable without a signal chain.
+
+**[todo]**: mutations wrapped in `ProcessorAction` subclasses for undo/redo.
 
 **[done]**: `ColorMap` (viridis / magma / diverging / greyscale via a 256-entry LUT),
 `SpectrumPanel` (heatmap and line modes, cached image and paths, log-aware frequency
@@ -826,11 +849,10 @@ so transform-based drawing does not link in a plugin.
 3. **[done] TriggeredPower.** Spectra accumulate, per-trial line spectra are kept,
    baseline normalisation (None/dB/%/z) and whitening both apply at display time,
    and the panel grid renders both modes.
-4. **[part done] TriggeredCoherence.** Pair data model with seed generation and XML
-   persistence, cross-spectrum accumulation, coherence/phase, significance threshold
-   and smoothing all wired, and the panel grid renders. **[todo]**: the pair
-   configuration window — without it no pair can be created, so the plugin shows
-   "no pairs configured" and computes nothing.
+4. **[done] TriggeredCoherence.** Pair data model with seed generation and XML
+   persistence, cross-spectrum accumulation, coherence/phase/PPC, the shift
+   predictor, significance thresholds and smoothing all wired, the panel grid
+   renders, and the pair-configuration window makes it reachable.
 5. **[todo] Performance pass.** Batched `fftw_plan_many` everywhere, wisdom caching,
    profiling, and *only if measurements demand it* a thread pool over channels.
 
@@ -841,13 +863,7 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 
 ## Known gaps **[todo]**
 
-The estimation core is complete and tested; the controls that make it reachable are
-not. These are ordered by how much they block actual use.
-
-### Coherence pairs cannot be created
-
-Covered above. The node supports add / remove / seed-against-all and persists pairs
-to XML; there is simply no window.
+These are ordered by how much they block actual use.
 
 ### Nothing has been seen rendering
 
@@ -888,7 +904,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 185 tests passing:
+**[done]** — 197 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -957,6 +973,13 @@ and doing that from the base constructor is a pure-virtual call.
 - *Trigger counters*: a successful capture counted against its source, a failed
   one not counted, a committed pending capture counted, `reset()` zeroing every
   field, and counts not surviving a copy.
+- *Pair rules*: a self-pair, an unset channel and a duplicate in **either**
+  order are all refused, with the reason distinguished — "you already have that"
+  and "you have reached the limit" call for different responses, and a silent
+  rejection for either makes the button look broken. Plus seed generation
+  excluding the seed, yielding nothing for a seed outside the analysed set,
+  stopping at the cap, and producing a list that satisfies the add rules — so
+  seeding cannot build something that could not have been built by hand.
 - *Parameter layout*: every registered parameter has exactly one home in the UI,
   no name appears twice, no name is a typo, the display groups hold nothing that
   reaches the estimator, and the editor covers every analysis parameter.

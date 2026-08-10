@@ -147,7 +147,9 @@ void TriggeredCoherenceCanvas::refresh()
     // See TriggeredPowerCanvas::refresh(): adding a trigger source or a pair
     // reaches the canvas only through triggerAsyncUpdate(), which lands here, so
     // a stale panel set would otherwise never be rebuilt.
-    if (m_panelKeys != currentPanelKeys())
+    // The shape is checked alongside the set: an estimate-mode change leaves the
+    // (source, pair) keys untouched but changes the panel's draw mode and axes.
+    if (m_panelKeys != currentPanelKeys() || ! (m_panelLayout == currentPanelLayout()))
         rebuildPanels();
     else
         updatePanelData();
@@ -161,9 +163,20 @@ void TriggeredCoherenceCanvas::refresh()
     repaint();
 }
 
+TriggeredCoherenceCanvas::PanelLayout TriggeredCoherenceCanvas::currentPanelLayout() const
+{
+    if (m_node == nullptr)
+        return {};
+
+    return { .mode = m_node->getEstimateMode(),
+             .numFrequencies = m_node->getNumFrequencies(),
+             .numBins = m_node->getNumBins() };
+}
+
 void TriggeredCoherenceCanvas::rebuildPanels()
 {
     m_panelKeys = currentPanelKeys();
+    m_panelLayout = currentPanelLayout();
 
     if (m_node == nullptr)
     {

@@ -23,6 +23,7 @@
 #pragma once
 
 #include "Core/TriggerSource.h"
+#include "Core/Types.h"
 #include "Core/Ui/PanelGrid.h"
 #include "Core/Ui/ParameterControl.h"
 
@@ -118,6 +119,29 @@ private:
     std::vector<PanelKey> currentPanelKeys() const;
 
     std::vector<PanelKey> m_panelKeys;
+
+    /** What rebuildPanels() baked into the panels, so refresh() can tell that the
+     *  data's *shape* changed even when the panel set did not.
+     *
+     *  Switching Spectrogram <-> Spectrum keeps every (source, pair), so a check on
+     *  the panel set alone misses it: the panels stay heat maps with the old time
+     *  axis while being fed a one-bin spectrum. */
+    struct PanelLayout
+    {
+        EstimateMode mode = EstimateMode::Spectrogram;
+        int numFrequencies = 0;
+        int numBins = 0;
+
+        bool operator== (const PanelLayout& other) const
+        {
+            return mode == other.mode && numFrequencies == other.numFrequencies
+                   && numBins == other.numBins;
+        }
+    };
+
+    PanelLayout currentPanelLayout() const;
+
+    PanelLayout m_panelLayout;
 
     /** Scratch reused across updates so a refresh does not allocate. */
     std::vector<double> m_binScratch;

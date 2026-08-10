@@ -37,8 +37,16 @@ namespace
     left, so it is not listed here. */
 constexpr int lineWidth = 46;
 constexpr int stateWidth = 78;
-constexpr int countWidth = 62;
-constexpr int numCountColumns = 5; // edges, queued, captured, failed, dropped
+constexpr int countWidth = 56;
+
+/** edges, queued, captured, failed, dropped | arm, cancel, commit, kept.
+    The first five follow a TTL edge through the pipeline, the last four follow a
+    broadcast message. */
+constexpr int numCountColumns = 9;
+constexpr int firstMessageColumn = 5;
+
+/** Columns whose non-zero value is bad news rather than progress. */
+constexpr bool isProblemColumn (int column) { return column == 3 || column == 4; }
 
 constexpr int swatchWidth = 14;
 
@@ -78,10 +86,25 @@ TriggerMonitorWindow::TriggerMonitorWindow (TriggeredSpectraNode* node, juce::Co
     };
     addAndMakeVisible (m_resetButton.get());
 
+    m_logMessagesButton = std::make_unique<juce::ToggleButton> ("Log messages to console");
+    m_logMessagesButton->setTooltip (
+        "Echo every incoming broadcast message to the GUI console, with the arm / cancel / "
+        "commit actions each source took from it. Use it to shape the patterns.");
+    m_logMessagesButton->setToggleState (m_node != nullptr && m_node->isLoggingBroadcastMessages(),
+                                         juce::dontSendNotification);
+    m_logMessagesButton->onClick = [this]
+    {
+        if (m_node != nullptr)
+            m_node->setLogBroadcastMessages (m_logMessagesButton->getToggleState());
+    };
+    addAndMakeVisible (m_logMessagesButton.get());
+
     refreshRows();
 
     const int rows = juce::jmax (1, juce::jmin (static_cast<int> (m_rows.size()), maxVisibleRows));
-    setSize (windowWidth, summaryHeight + headerHeight + rows * rowHeight + footerHeight);
+    setSize (windowWidth,
+             summaryHeight + messageSummaryHeight + lastMessageHeight + headerHeight
+                 + rows * rowHeight + footerHeight);
 
     startTimer (refreshIntervalMs);
 }
@@ -101,6 +124,8 @@ bool TriggerMonitorWindow::refreshRows()
 
     const int edgesSeen = m_node->getNumTtlEdgesSeen();
     const int lastLine = m_node->getLastTtlLine();
+    const int messagesSeen = m_node->getNumBroadcastMessagesSeen();
+    const auto& lastMessage = m_node->getLastBroadcastMessage();
 
     std::vector<Row> rows;
     rows.reserve (static_cast<std::size_t> (m_node->getTriggerSources().size()));
@@ -118,10 +143,14 @@ bool TriggerMonitorWindow::refreshRows()
                           .dropped = c.capturesDropped.load (std::memory_order_relaxed),
                           .captured = c.trialsCaptured.load (std::memory_order_relaxed),
                           .failed = c.capturesFailed.load (std::memory_order_relaxed),
-                          .committed = c.pendingCommitted.load (std::memory_order_relaxed) });
+                          .committed = c.pendingCommitted.load (std::memory_order_relaxed),
+                          .armMessages = c.armMessages.load (std::memory_order_relaxed),
+                          .cancelMessages = c.cancelMessages.load (std::memory_order_relaxed),
+                          .commitMessages = c.commitMessages.load (std::memory_order_relaxed) });
     }
 
     const bool changed = edgesSeen != m_edgesSeen || lastLine != m_lastLine
+                         || messagesSeen != m_messagesSeen || lastMessage != m_lastMessage
                          || rows.size() != m_rows.size()
                          || ! std::equal (rows.begin(),
                                           rows.end(),
@@ -133,6 +162,9 @@ bool TriggerMonitorWindow::refreshRows()
                                                      && a.captured == b.captured
                                                      && a.failed == b.failed
                                                      && a.committed == b.committed
+                                                     && a.armMessages == b.armMessages
+                                                     && a.cancelMessages == b.cancelMessages
+                                                     && a.commitMessages == b.commitMessages
                                                      && a.state == b.state && a.line == b.line
                                                      && a.name == b.name
                                                      && a.colour == b.colour;
@@ -141,6 +173,8 @@ bool TriggerMonitorWindow::refreshRows()
     m_rows = std::move (rows);
     m_edgesSeen = edgesSeen;
     m_lastLine = lastLine;
+    m_messagesSeen = messagesSeen;
+    m_lastMessage = lastMessage;
 
     return changed;
 }
@@ -173,9 +207,32 @@ juce::String TriggerMonitorWindow::diagnose() const
     const bool anyQueued =
         std::any_of (m_rows.begin(), m_rows.end(), [] (const Row& r) { return r.queued > 0; });
 
+    const auto total = [this] (int Row::*field)
+    {
+        return std::accumulate (m_rows.begin(),
+                                m_rows.end(),
+                                0,
+                                [field] (int sum, const Row& r) { return sum + r.*field; });
+    };
+
     if (! anyQueued)
+    {
+        // A disarmed source is the usual cause, and the message side says which
+        // half of the arming is missing: no traffic at all, or traffic whose text
+        // the arm pattern does not match.
+        if (m_messagesSeen == 0)
+            return "Edges are matching a source but none was queued, and no broadcast message "
+                   "has arrived to arm one. Check that the source of the messages is running.";
+
+        if (total (&Row::armMessages) == 0)
+            return juce::String (m_messagesSeen)
+                   + " message(s) arrived but none matched an arm pattern. Switch on 'Log "
+                     "messages to console' and compare the printed text with the pattern - "
+                     "matching is a plain substring, case-insensitive, with no wildcards.";
+
         return "Edges are matching a source but none was queued: the sources on that line are "
                "disarmed (send their arm message) or are Msg-only, which never fires.";
+    }
 
     const bool anyCaptured =
         std::any_of (m_rows.begin(), m_rows.end(), [] (const Row& r) { return r.captured > 0; });
@@ -184,11 +241,22 @@ juce::String TriggerMonitorWindow::diagnose() const
         return "Captures were queued but none completed. The worker could not read the window "
                "back - check that pre+post fits the ring buffer and that the stream is running.";
 
-    const int failed =
-        std::accumulate (m_rows.begin(),
-                         m_rows.end(),
-                         0,
-                         [] (int sum, const Row& r) { return sum + r.failed; });
+    // Parked captures that were never folded in. The two causes are worth
+    // separating, because one is a pattern problem and the other a timing one.
+    const int commitMessages = total (&Row::commitMessages);
+    const int cancelMessages = total (&Row::cancelMessages);
+
+    if (commitMessages > 0 && total (&Row::committed) == 0)
+        return cancelMessages > 0
+                   ? "Commit messages are matching, but nothing was kept: a cancel is landing "
+                     "between the TTL edge and the commit. If the cancel pattern matches a "
+                     "trial-start message, note that the message arrives AFTER the pulse it "
+                     "belongs to and so discards that trial's own capture - clear the cancel "
+                     "pattern, or match it on a message that precedes the trigger."
+                   : "Commit messages are matching, but nothing was kept: the capture had "
+                     "already timed out when the commit arrived. Raise Timeout in TRIGGERS.";
+
+    const int failed = total (&Row::failed);
 
     if (failed > 0)
         return juce::String (failed)
@@ -200,8 +268,17 @@ juce::String TriggerMonitorWindow::diagnose() const
 
 void TriggerMonitorWindow::resized()
 {
+    auto footer = getLocalBounds().removeFromBottom (footerHeight).reduced (12, 0);
+
+    auto toggleRow = footer.removeFromTop (toggleRowHeight);
+
+    if (m_logMessagesButton != nullptr)
+        m_logMessagesButton->setBounds (
+            toggleRow.removeFromLeft (220).withSizeKeepingCentre (220, 22));
+
     if (m_resetButton != nullptr)
-        m_resetButton->setBounds (getWidth() - 130, getHeight() - footerHeight + 12, 118, 20);
+        m_resetButton->setBounds (
+            footer.removeFromRight (118).removeFromTop (20).translated (0, 6));
 }
 
 void TriggerMonitorWindow::drawRow (juce::Graphics& g,
@@ -235,26 +312,38 @@ void TriggerMonitorWindow::drawRow (juce::Graphics& g,
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (willFire ? 0.9f : 0.5f));
     g.drawText (row.state, area.removeFromLeft (stateWidth), juce::Justification::centred);
 
-    const int counts[numCountColumns] = {
-        row.edges, row.queued, row.captured, row.failed, row.dropped
-    };
+    const int counts[numCountColumns] = { row.edges,
+                                          row.queued,
+                                          row.captured,
+                                          row.failed,
+                                          row.dropped,
+                                          row.armMessages,
+                                          row.cancelMessages,
+                                          row.commitMessages,
+                                          row.committed };
 
     for (int i = 0; i < numCountColumns; ++i)
     {
+        auto column = area.removeFromLeft (countWidth);
+
         // Zeros are the norm on a fresh source and should not shout; a non-zero
         // failure or drop count should.
-        const bool isProblemColumn = (i == 3 || i == 4);
-
         if (counts[i] == 0)
             g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.35f));
-        else if (isProblemColumn)
+        else if (isProblemColumn (i))
             g.setColour (juce::Colours::orangered);
         else
             g.setColour (findColour (ThemeColours::defaultText));
 
-        g.drawText (juce::String (counts[i]),
-                    area.removeFromLeft (countWidth),
-                    juce::Justification::centred);
+        g.drawText (juce::String (counts[i]), column, juce::Justification::centred);
+
+        if (i == firstMessageColumn - 1)
+        {
+            // Separates what the TTL side did from what the messages did. Without
+            // it the row reads as nine unrelated numbers.
+            g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.15f));
+            g.fillRect (column.getRight() + 1, bounds.getY() + 3, 1, bounds.getHeight() - 6);
+        }
     }
 }
 
@@ -281,6 +370,28 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
 
     g.drawText (summaryText, summary, juce::Justification::centredLeft);
 
+    // The message-side counterpart, and for the same reason: a pattern that
+    // matches nothing leaves every per-source count at zero, exactly like traffic
+    // that never arrived.
+    auto messageSummary = bounds.removeFromTop (messageSummaryHeight).reduced (12, 0);
+
+    g.drawText ("Broadcast messages received: " + juce::String (m_messagesSeen),
+                messageSummary,
+                juce::Justification::centredLeft);
+
+    // The last message in full, so a pattern can be checked against the text that
+    // actually arrived rather than against what it was supposed to be.
+    auto lastMessage = bounds.removeFromTop (lastMessageHeight).reduced (12, 0);
+
+    g.setFont (juce::FontOptions (
+        juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
+    g.setColour (findColour (ThemeColours::defaultText)
+                     .withAlpha (m_lastMessage.isEmpty() ? 0.4f : 0.75f));
+    g.drawText (m_lastMessage.isEmpty() ? "Last message: (none yet)" : "Last: " + m_lastMessage,
+                lastMessage,
+                juce::Justification::centredLeft,
+                true);
+
     // --- Header -------------------------------------------------------------
     auto header = bounds.removeFromTop (headerHeight);
 
@@ -302,7 +413,10 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
     g.drawText ("TTL", headerArea.removeFromLeft (lineWidth), juce::Justification::centred);
     g.drawText ("State", headerArea.removeFromLeft (stateWidth), juce::Justification::centred);
 
-    for (const auto* label : { "Edges", "Queued", "Trials", "Failed", "Dropped" })
+    // "Kept" is the end of the message story, not the TTL one: it counts parked
+    // captures that a commit message actually folded in.
+    for (const auto* label :
+         { "Edges", "Queued", "Trials", "Failed", "Dropped", "Arm", "Cancel", "Commit", "Kept" })
         g.drawText (label, headerArea.removeFromLeft (countWidth), juce::Justification::centred);
 
     // --- Rows ---------------------------------------------------------------
@@ -332,6 +446,7 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
 
     // --- Footer -------------------------------------------------------------
     auto footer = getLocalBounds().removeFromBottom (footerHeight).reduced (12, 0);
+    footer.removeFromTop (toggleRowHeight); // the console-log toggle sits here
     footer.removeFromRight (130); // the RESET button sits here
 
     const auto hint = diagnose();

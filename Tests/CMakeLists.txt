@@ -22,11 +22,13 @@ set(SPECTRA_TEST_SOURCES
     test_Accumulators.cpp
     test_SpectralPipeline.cpp
     test_TriggerMessaging.cpp
+    test_BroadcastMessageLog.cpp
     test_Whitening.cpp
     test_Baseline.cpp
     test_WorkQueue.cpp
     test_SpectralWorker.cpp
     test_ParameterLayout.cpp
+    test_PairRules.cpp
 )
 
 enable_testing()

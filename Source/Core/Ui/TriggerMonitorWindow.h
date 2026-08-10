@@ -85,6 +85,11 @@ private:
         int captured = 0;
         int failed = 0;
         int committed = 0;
+
+        /** Broadcast messages that matched each of this source's patterns. */
+        int armMessages = 0;
+        int cancelMessages = 0;
+        int commitMessages = 0;
     };
 
     /** Re-reads the node. Returns true if anything visible changed. */
@@ -98,9 +103,22 @@ private:
 
     static constexpr int rowHeight = 24;
     static constexpr int headerHeight = 22;
-    static constexpr int summaryHeight = 26;
-    static constexpr int footerHeight = 44;
-    static constexpr int windowWidth = 620;
+
+    /** Three stacked lines above the table: TTL edges, message traffic, and the
+        text of the last message. */
+    static constexpr int summaryHeight = 24;
+    static constexpr int messageSummaryHeight = 22;
+    static constexpr int lastMessageHeight = 22;
+
+    static constexpr int footerHeight = 72;
+
+    /** Top strip of the footer, holding the console-log toggle; the diagnostic
+        hint and RESET share what is left below it. */
+    static constexpr int toggleRowHeight = 28;
+
+    /** Wide because the table carries two groups of columns: what the TTL side
+        did, and what the message patterns did. */
+    static constexpr int windowWidth = 860;
     static constexpr int maxVisibleRows = 12;
     static constexpr int refreshIntervalMs = 100;
 
@@ -109,8 +127,16 @@ private:
     std::vector<Row> m_rows;
     int m_edgesSeen = 0;
     int m_lastLine = -1;
+    int m_messagesSeen = 0;
+    juce::String m_lastMessage;
 
     std::unique_ptr<UtilityButton> m_resetButton;
+
+    /** Echoes incoming broadcast messages to the GUI console. Lives here because
+        this window is where "my trigger did not fire" is investigated, and a
+        message that never matched a pattern is the commonest reason. The state
+        belongs to the node, not to this popup, which is destroyed on close. */
+    std::unique_ptr<juce::ToggleButton> m_logMessagesButton;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggerMonitorWindow)
 };

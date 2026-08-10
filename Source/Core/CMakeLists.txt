@@ -20,8 +20,10 @@ set(SPECTRA_CORE_SOURCES
     Accumulators.cpp
     SpectralEngine.cpp
     TriggerMessaging.cpp
+    BroadcastMessageLog.cpp
     Whitening.cpp
     Baseline.cpp
+    PairRules.cpp
     Ui/ColorMap.cpp
     Ui/SpectrumPanel.cpp
     Ui/PanelGrid.cpp
@@ -50,8 +52,10 @@ set(SPECTRA_CORE_HEADERS
     Accumulators.h
     SpectralEngine.h
     TriggerMessaging.h
+    BroadcastMessageLog.h
     Whitening.h
     Baseline.h
+    PairRules.h
     Ui/ColorMap.h
     Ui/SpectrumPanel.h
     Ui/PanelGrid.h

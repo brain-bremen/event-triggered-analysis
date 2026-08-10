@@ -6,4 +6,6 @@ spectra_add_plugin(TriggeredCoherence
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceEditor.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceCanvas.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredCoherenceCanvas.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/PairConfigWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/PairConfigWindow.h
 )

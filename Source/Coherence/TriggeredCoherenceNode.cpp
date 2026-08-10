@@ -135,22 +135,57 @@ int TriggeredCoherenceNode::getSmoothFreqBins() const
 
 bool TriggeredCoherenceNode::addPair (int globalA, int globalB, const juce::String& name)
 {
-    if (globalA == globalB || globalA < 0 || globalB < 0)
+    if (! addPairWithoutNotifying (globalA, globalB, name))
         return false;
 
-    if (static_cast<int> (m_pairs.size()) >= maxPairs)
-        return false;
+    pairsChanged();
+    return true;
+}
 
-    // Coherence is symmetric, so (a,b) and (b,a) are the same pair.
-    const auto duplicate = std::find_if (m_pairs.begin(),
-                                         m_pairs.end(),
-                                         [&] (const ChannelPair& pair)
-                                         {
-                                             return (pair.globalA == globalA && pair.globalB == globalB)
-                                                    || (pair.globalA == globalB && pair.globalB == globalA);
-                                         });
+void TriggeredCoherenceNode::pairsChanged()
+{
+    // The pair set decides how many cross-spectrum accumulators exist, so it
+    // cannot change without reallocating them - which discards what they hold.
+    // There is no honest alternative: trials accumulated for a pair that no
+    // longer exists have nowhere to go, and a pair that has just appeared has
+    // no history to invent.
+    rebuildConfiguration();
+    triggerAsyncUpdate();
+}
 
-    if (duplicate != m_pairs.end())
+void TriggeredCoherenceNode::setPairName (int index, const juce::String& name)
+{
+    if (index < 0 || index >= static_cast<int> (m_pairs.size()))
+        return;
+
+    m_pairs[static_cast<std::size_t> (index)].name = name;
+
+    // No rebuild: a label is not part of the estimate.
+    triggerAsyncUpdate();
+}
+
+void TriggeredCoherenceNode::setPairColour (int index, juce::Colour colour)
+{
+    if (index < 0 || index >= static_cast<int> (m_pairs.size()))
+        return;
+
+    m_pairs[static_cast<std::size_t> (index)].colour = colour;
+    triggerAsyncUpdate();
+}
+
+bool TriggeredCoherenceNode::addPairWithoutNotifying (int globalA,
+                                                      int globalB,
+                                                      const juce::String& name)
+{
+    // The rules live in Core/PairRules.h so they can be tested: this node is a
+    // GenericProcessor and cannot be instantiated outside a running GUI.
+    std::vector<PairKey> existing;
+    existing.reserve (m_pairs.size());
+
+    for (const auto& pair : m_pairs)
+        existing.emplace_back (pair.globalA, pair.globalB);
+
+    if (checkPair (existing, globalA, globalB, maxPairs) != PairRejection::None)
         return false;
 
     ChannelPair pair;
@@ -173,17 +208,34 @@ void TriggeredCoherenceNode::removePair (int index)
         return;
 
     m_pairs.erase (m_pairs.begin() + index);
+    pairsChanged();
 }
 
-void TriggeredCoherenceNode::clearPairs() { m_pairs.clear(); }
+void TriggeredCoherenceNode::clearPairs()
+{
+    if (m_pairs.empty())
+        return;
+
+    m_pairs.clear();
+    pairsChanged();
+}
 
 void TriggeredCoherenceNode::generateSeedPairs (int globalSeedChannel)
 {
     m_pairs.clear();
 
-    for (const int channel : getSelectedChannels())
-        if (channel != globalSeedChannel)
-            addPair (globalSeedChannel, channel);
+    const auto& channels = getSelectedChannels();
+
+    // Without notifying per pair: a 32-channel seed would otherwise reallocate
+    // every accumulator 31 times over.
+    for (const auto& [a, b] :
+         seedPairs (globalSeedChannel,
+                    std::span<const int> (channels.getRawDataPointer(),
+                                          static_cast<std::size_t> (channels.size())),
+                    maxPairs))
+        addPairWithoutNotifying (a, b, {});
+
+    pairsChanged();
 }
 
 void TriggeredCoherenceNode::resolvePairs()
@@ -524,7 +576,9 @@ void TriggeredCoherenceNode::loadCustomParametersFromXml (XmlElement* xml)
             const int a = pairXml->getIntAttribute ("a", -1);
             const int b = pairXml->getIntAttribute ("b", -1);
 
-            if (addPair (a, b, pairXml->getStringAttribute ("name")))
+            // Without notifying: the base call below rebuilds once, and doing it
+            // per pair here would run before the channel selection is restored.
+            if (addPairWithoutNotifying (a, b, pairXml->getStringAttribute ("name")))
                 m_pairs.back().colour = juce::Colour::fromString (
                     pairXml->getStringAttribute ("colour", m_pairs.back().colour.toString()));
         }
