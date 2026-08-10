@@ -28,7 +28,7 @@
 #include <functional>
 #include <memory>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** One Open Ephys `Parameter`, with a control appropriate to its type.
@@ -113,4 +113,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParameterControl)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

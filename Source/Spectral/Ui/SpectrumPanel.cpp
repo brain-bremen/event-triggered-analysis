@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -659,4 +659,4 @@ void SpectrumPanel::drawValueAxis (juce::Graphics& g, juce::Rectangle<int> plot)
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

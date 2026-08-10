@@ -29,7 +29,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredPowerNode::TriggeredPowerNode() : TriggeredSpectraNode ("Triggered Power") {}
@@ -779,4 +779,4 @@ void TriggeredPowerNode::refreshDisplay()
         m_canvas->refresh();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

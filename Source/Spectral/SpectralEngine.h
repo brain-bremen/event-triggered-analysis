@@ -32,7 +32,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Chooses and drives the right estimator for the current settings.
@@ -160,4 +160,4 @@ private:
     juce::AudioBuffer<float> m_sliceScratch;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

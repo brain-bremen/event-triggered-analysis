@@ -25,7 +25,7 @@
 
 #include "TriggerCore/ParameterNames.h"
 
-namespace TriggeredSpectra::ParameterNames
+namespace EventTriggered::ParameterNames
 {
 
 // --- Shared by both spectral plugins ---------------------------------------
@@ -112,4 +112,4 @@ inline constexpr const char* all[] = { channels,
                                        coherence_display,
                                        shift_predictor };
 
-} // namespace TriggeredSpectra::ParameterNames
+} // namespace EventTriggered::ParameterNames

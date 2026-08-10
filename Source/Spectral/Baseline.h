@@ -24,7 +24,7 @@
 
 #include <span>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** How power is expressed relative to the baseline window.
@@ -85,4 +85,4 @@ void applyBaselineValue (std::span<double> values,
                          double baselineSd,
                          BaselineMode mode);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

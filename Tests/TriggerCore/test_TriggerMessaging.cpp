@@ -13,7 +13,7 @@
 #include <gtest/gtest.h>
 #include <string>
 
-using namespace TriggeredSpectra;
+using namespace EventTriggered;
 
 namespace
 {

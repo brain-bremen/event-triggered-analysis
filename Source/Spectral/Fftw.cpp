@@ -27,7 +27,7 @@
 #include <cstring>
 #include <fftw3.h>
 
-namespace TriggeredSpectra::Fftw
+namespace EventTriggered::Fftw
 {
 
 // --- Aligned allocation ----------------------------------------------------
@@ -257,4 +257,4 @@ std::string defaultWisdomPath()
     return dir.getChildFile ("triggered-spectra-fftw-wisdom.txt").getFullPathName().toStdString();
 }
 
-} // namespace TriggeredSpectra::Fftw
+} // namespace EventTriggered::Fftw

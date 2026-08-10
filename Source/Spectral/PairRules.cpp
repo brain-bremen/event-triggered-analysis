@@ -24,7 +24,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 PairRejection checkPair (std::span<const PairKey> existing, int a, int b, int maxPairs)
@@ -74,4 +74,4 @@ std::vector<PairKey> seedPairs (int seed, std::span<const int> channels, int max
     return pairs;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

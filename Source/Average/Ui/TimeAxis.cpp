@@ -23,9 +23,9 @@
 */
 
 #include "TimeAxis.h"
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
-void TriggeredAverage::TimeAxis::paint (Graphics& g)
+void EventTriggered::TimeAxis::paint (Graphics& g)
 {
     const float fHeight = static_cast<float> (getHeight());
     const float fWidth = static_cast<float> (getWidth());

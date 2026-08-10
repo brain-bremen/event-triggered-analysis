@@ -24,7 +24,7 @@
 #pragma once
 #include <VisualizerWindowHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class TimeAxis : public Component
 {
@@ -36,4 +36,4 @@ private:
     float preTriggerMs = 250.0f; // should not be negative
     float postTriggerMs = 500;
 };
-} // namespace TriggeredAverage
+} // namespace EventTriggered

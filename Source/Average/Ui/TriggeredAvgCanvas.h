@@ -27,7 +27,7 @@
 #include "TimeAxis.h"
 #include <VisualizerWindowHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class TriggerSource;
 class TriggeredAvgCanvas;
@@ -171,4 +171,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgCanvas)
 };
-} // namespace TriggeredAverage
+} // namespace EventTriggered

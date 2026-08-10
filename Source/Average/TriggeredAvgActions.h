@@ -28,7 +28,7 @@
 #include "TriggeredAvgNode.h"
 #include <ProcessorHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 enum class TriggerType : std::int_fast8_t;
@@ -167,5 +167,5 @@ private:
     String oldPattern;
     int triggerIndex = -1;
 };
-} // namespace TriggeredAverage
+} // namespace EventTriggered
 #endif /* TriggeredAvgNodeActions_h */

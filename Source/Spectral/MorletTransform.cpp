@@ -29,7 +29,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -255,4 +255,4 @@ void MorletTransform::process (const juce::AudioBuffer<float>& trial,
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

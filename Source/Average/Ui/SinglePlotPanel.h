@@ -26,7 +26,7 @@
 #include "DisplayMode.h"
 #include <VisualizerWindowHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class MultiChannelAverageBuffer;
 class SingleTrialBuffer;
@@ -47,7 +47,7 @@ public:
 
     void clear();
     void setWindowSizeMs (float pre_ms, float post_ms);
-    void setPlotType (TriggeredAverage::DisplayMode plotType);
+    void setPlotType (EventTriggered::DisplayMode plotType);
     void setSourceColour (Colour colour);
 
     void setSourceName (const String& name) const;
@@ -186,4 +186,4 @@ private:
     float xMin = 0.0f;
     float xMax = 1.0f;
 };
-} // namespace TriggeredAverage
+} // namespace EventTriggered

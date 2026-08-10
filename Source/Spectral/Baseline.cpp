@@ -25,7 +25,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 bool findBaselineBinRange (std::span<const double> binTimes,
@@ -143,4 +143,4 @@ void applyBaselineValue (std::span<double> values,
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

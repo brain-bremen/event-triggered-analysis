@@ -26,7 +26,7 @@
 
 #include "../TriggeredCaptureNode.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -538,4 +538,4 @@ void TriggerSourceConfigWindow::paint (juce::Graphics& g)
         "TTL line / type", 6, getHeight() - addRowHeight - 2, 200, 12, juce::Justification::left);
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

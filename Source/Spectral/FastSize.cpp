@@ -25,7 +25,7 @@
 
 #include <initializer_list>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 bool isFastSize (int n)
@@ -54,4 +54,4 @@ int nextFastSize (int n)
     return n;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

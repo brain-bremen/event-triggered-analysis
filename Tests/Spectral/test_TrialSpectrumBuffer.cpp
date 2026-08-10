@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-using namespace TriggeredSpectra;
+using namespace EventTriggered;
 
 namespace
 {

@@ -27,7 +27,7 @@
 #include <algorithm>
 #include <thread>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 const char* toString (RingBufferReadResult result)
@@ -244,4 +244,4 @@ RingBufferReadResult MultiChannelRingBuffer::readAroundSample (
     return RingBufferReadResult::Success;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

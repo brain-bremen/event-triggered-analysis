@@ -28,7 +28,7 @@
 #include "TriggeredAvgActions.h"
 #include "TriggeredAvgCanvas.h"
 #include "TriggeredAvgNode.h"
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
 TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     : VisualizerEditor (parentNode, "TRIG AVG", 210),

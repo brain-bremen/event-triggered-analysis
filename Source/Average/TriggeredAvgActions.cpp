@@ -26,11 +26,11 @@
 #include "TriggeredAvgNode.h"
 #include "Ui/TriggeredAvgEditor.h"
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
-AddTriggerConditions::AddTriggerConditions (TriggeredAverage::TriggeredAvgNode* processor_,
+AddTriggerConditions::AddTriggerConditions (EventTriggered::TriggeredAvgNode* processor_,
                                             Array<int> lines,
-                                            TriggeredAverage::TriggerType type_)
+                                            EventTriggered::TriggerType type_)
     : ProcessorAction ("AddTriggerConditions"),
       processorNode (processor_),
       triggerLines (std::move (lines)),

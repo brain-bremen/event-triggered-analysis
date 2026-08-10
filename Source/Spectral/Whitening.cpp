@@ -27,7 +27,7 @@
 #include <cmath>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -241,4 +241,4 @@ void aperiodicCurve (std::span<const double> frequencies,
         destination[i] = frequencies[i] > 0.0 ? fit.evaluate (frequencies[i]) : 0.0;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

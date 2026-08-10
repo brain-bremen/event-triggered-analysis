@@ -25,7 +25,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 WorkQueue::WorkQueue (int capacity)
@@ -92,4 +92,4 @@ bool WorkQueue::waitForWork (int timeoutMs) { return m_workAvailable.wait (timeo
 
 void WorkQueue::wake() { m_workAvailable.signal(); }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

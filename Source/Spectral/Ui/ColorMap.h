@@ -27,7 +27,7 @@
 #include <array>
 #include <span>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Available colour scales.
@@ -102,4 +102,4 @@ juce::Image buildSpectrogramImage (std::span<const float> values,
                                    float maxValue,
                                    const ColorMap& colourMap);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

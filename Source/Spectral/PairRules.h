@@ -26,7 +26,7 @@
 #include <utility>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** A candidate channel pair, by global channel index. */
@@ -74,4 +74,4 @@ PairRejection checkPair (std::span<const PairKey> existing, int a, int b, int ma
  */
 std::vector<PairKey> seedPairs (int seed, std::span<const int> channels, int maxPairs);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

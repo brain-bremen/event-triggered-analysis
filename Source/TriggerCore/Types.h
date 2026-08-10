@@ -25,10 +25,10 @@
 
 #include <cstdint>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Absolute sample index within a data stream, as reported by the GUI. */
 using SampleNumber = std::int64_t;
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

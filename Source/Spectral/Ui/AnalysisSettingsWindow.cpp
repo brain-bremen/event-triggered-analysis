@@ -30,7 +30,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 AnalysisSettingsWindow::AnalysisSettingsWindow (TriggeredSpectraNode* node,
@@ -280,4 +280,4 @@ void AnalysisSettingsWindow::paint (juce::Graphics& g)
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

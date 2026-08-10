@@ -29,7 +29,7 @@ namespace juce
 {
 class StringArray;
 }
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 enum class DisplayMode : std::uint8_t
@@ -63,4 +63,4 @@ static const auto DisplayModeStrings = {
     DisplayModeModeToString (DisplayMode::AVERAGE_TRAGE),
     DisplayModeModeToString (DisplayMode::ALL_AND_AVERAGE),
 };
-} // namespace TriggeredAverage
+} // namespace EventTriggered

@@ -25,7 +25,7 @@
 #include <cassert>
 #include <cstring>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 void SingleTrialBuffer::addTrial (std::span<const std::span<const float>> channelData)
@@ -240,4 +240,4 @@ const float* SingleTrialBuffer::getTrialDataPointer (int channelIndex, int trial
     return &data[getIndex (channelIndex, physicalTrial, 0)];
 }
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

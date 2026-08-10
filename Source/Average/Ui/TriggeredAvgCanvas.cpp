@@ -28,7 +28,7 @@
 #include "TimeAxis.h"
 #include "TriggeredAvgNode.h"
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
 OptionsBar::OptionsBar (TriggeredAvgCanvas* canvas_, GridDisplay* display_, TimeAxis* timescale_)
     : display (display_),

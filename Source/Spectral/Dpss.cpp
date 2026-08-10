@@ -29,7 +29,7 @@
 #include <numbers>
 #include <numeric>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 // --- TaperBank -------------------------------------------------------------
@@ -388,4 +388,4 @@ std::vector<double> Dpss::concentrations (const TaperBank& tapers, double timeBa
     return result;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

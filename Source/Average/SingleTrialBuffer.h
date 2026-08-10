@@ -26,7 +26,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 struct SingleTrialBufferSize
@@ -179,4 +179,4 @@ private:
     }
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

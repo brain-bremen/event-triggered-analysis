@@ -25,7 +25,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 void BroadcastLogEntry::setText (const juce::String& message)
@@ -134,4 +134,4 @@ juce::String formatBroadcastLogEntry (const BroadcastLogEntry& entry,
     return line;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

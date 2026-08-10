@@ -20,7 +20,7 @@
 #include <random>
 #include <vector>
 
-using namespace TriggeredSpectra;
+using namespace EventTriggered;
 
 namespace
 {

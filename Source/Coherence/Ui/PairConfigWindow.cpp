@@ -26,7 +26,7 @@
 
 #include "../TriggeredCoherenceNode.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -610,4 +610,4 @@ void PairConfigWindow::paint (juce::Graphics& g)
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

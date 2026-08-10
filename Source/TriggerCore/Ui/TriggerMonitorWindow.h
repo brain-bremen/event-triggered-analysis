@@ -28,7 +28,7 @@
 #include <memory>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredCaptureNode;
@@ -141,4 +141,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggerMonitorWindow)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

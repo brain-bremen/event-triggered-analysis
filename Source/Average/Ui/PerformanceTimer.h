@@ -25,7 +25,7 @@
 
 #include <JuceHeader.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 /**
@@ -126,4 +126,4 @@ private:
     double m_maxMs;
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

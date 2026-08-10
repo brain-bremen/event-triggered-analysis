@@ -30,7 +30,7 @@
 #include <atomic>
 #include <memory>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 
 using StreamId = std::uint16_t;
@@ -84,7 +84,7 @@ public:
     // trigger sources
     TriggerSources& getTriggerSources() { return m_triggerSources; }
 
-    TriggeredAverage::DataStore* getDataStore() { return m_dataStore.get(); }
+    EventTriggered::DataStore* getDataStore() { return m_dataStore.get(); }
 
     void setCanvas (TriggeredAvgCanvas* canvas) { m_canvas = canvas; }
 
@@ -131,4 +131,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgNode)
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

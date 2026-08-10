@@ -30,7 +30,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Running power spectra for one trigger source.
@@ -332,4 +332,4 @@ private:
     int m_numBins = 0;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

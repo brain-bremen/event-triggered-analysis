@@ -31,7 +31,7 @@
 #include <atomic>
 #include <cstdint>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 enum class TriggerType : std::int_fast8_t
@@ -247,4 +247,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE (TriggerSources)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

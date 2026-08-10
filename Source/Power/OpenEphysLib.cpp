@@ -55,7 +55,7 @@ extern "C" EXPORT int getPluginInfo (int index, Plugin::PluginInfo* info)
             info->processor.name = "Triggered Power";
             info->processor.type = Processor::Type::SINK;
             info->processor.creator =
-                &(Plugin::createProcessor<TriggeredSpectra::TriggeredPowerNode>);
+                &(Plugin::createProcessor<EventTriggered::TriggeredPowerNode>);
             break;
 
         default:

@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 namespace TestHelpers
 {
@@ -210,4 +210,4 @@ inline bool validateTrialData (const juce::AudioBuffer<float>& trial,
 }
 
 } // namespace TestHelpers
-} // namespace TriggeredAverage
+} // namespace EventTriggered

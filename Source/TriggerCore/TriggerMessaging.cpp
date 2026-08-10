@@ -23,7 +23,7 @@
 */
 #include "TriggerMessaging.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggerMessageActions matchTriggerMessage (const TriggerSource& source,
@@ -76,4 +76,4 @@ TriggerStateChange applyTriggerMessage (TriggerSource& source,
     return change;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

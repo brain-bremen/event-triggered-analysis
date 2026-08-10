@@ -35,7 +35,7 @@
 #include <atomic>
 #include <memory>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Geometry of one trial window, derived from the current parameters.
@@ -305,4 +305,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCaptureNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

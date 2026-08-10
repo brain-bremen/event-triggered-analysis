@@ -31,7 +31,7 @@
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredCaptureNode;
@@ -136,4 +136,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggerSourceConfigWindow)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

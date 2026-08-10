@@ -31,7 +31,7 @@
 #include "PairConfigWindow.h"
 #include "TriggeredCoherenceCanvas.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
@@ -120,4 +120,4 @@ Visualizer* TriggeredCoherenceEditor::createNewCanvas()
     return m_canvas;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

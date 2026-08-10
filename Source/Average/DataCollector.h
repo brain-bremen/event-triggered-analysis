@@ -28,7 +28,7 @@
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class MultiChannelAverageBuffer;
 class TriggeredAvgNode;
@@ -238,4 +238,4 @@ private:
     void updateRunningAverage();
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

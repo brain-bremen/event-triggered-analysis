@@ -27,7 +27,7 @@
 
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Discrete prolate spheroidal sequences (Slepian tapers).
@@ -79,4 +79,4 @@ public:
     static std::vector<double> concentrations (const TaperBank& tapers, double timeBandwidth);
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

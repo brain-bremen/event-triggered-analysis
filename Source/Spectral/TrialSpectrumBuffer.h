@@ -29,7 +29,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 struct TrialSpectrumBufferSize
@@ -124,4 +124,4 @@ private:
     }
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

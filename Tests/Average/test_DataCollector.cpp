@@ -7,7 +7,7 @@
 #include <thread>
 #include <chrono>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 using namespace juce;
 
 // Mock classes for testing

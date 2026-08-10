@@ -27,7 +27,7 @@
 
 #include <vector>
 
-namespace TriggeredSpectra::ParameterLayout
+namespace EventTriggered::ParameterLayout
 {
 
 /** Where each parameter is edited.
@@ -126,4 +126,4 @@ inline const std::vector<const char*> internalOnly {
     ParameterNames::trigger_type,
 };
 
-} // namespace TriggeredSpectra::ParameterLayout
+} // namespace EventTriggered::ParameterLayout

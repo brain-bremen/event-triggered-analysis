@@ -29,7 +29,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -693,4 +693,4 @@ void TriggeredPowerCanvas::loadCustomParametersFromXml (XmlElement* xml)
     rebuildPanels();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

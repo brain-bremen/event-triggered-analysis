@@ -25,7 +25,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 void PanelGrid::setNumPanels (int numPanels)
@@ -106,4 +106,4 @@ void PanelGrid::resized()
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

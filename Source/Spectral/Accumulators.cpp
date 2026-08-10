@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -536,4 +536,4 @@ double PpcAccumulator::significanceThreshold (int numObservations, double alpha)
     return std::min (1.0, (z - 1.0) / (static_cast<double> (numObservations) - 1.0));
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

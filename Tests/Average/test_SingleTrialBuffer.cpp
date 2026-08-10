@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <numeric>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 using namespace juce;
 
 static AudioBuffer<float> makeTrial (int nChannels, int nSamples, float baseValue)

@@ -30,7 +30,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** One plot: either a time-frequency heat map or a line spectrum.
@@ -162,4 +162,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpectrumPanel)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

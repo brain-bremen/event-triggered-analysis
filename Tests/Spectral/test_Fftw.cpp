@@ -12,8 +12,8 @@
 #include <numbers>
 #include <vector>
 
-using namespace TriggeredSpectra;
-using namespace TriggeredSpectra::Fftw;
+using namespace EventTriggered;
+using namespace EventTriggered::Fftw;
 
 TEST (Fftw, AlignedBufferManagesItsMemory)
 {

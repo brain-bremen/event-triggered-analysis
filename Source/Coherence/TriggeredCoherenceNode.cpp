@@ -28,7 +28,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredCoherenceNode::TriggeredCoherenceNode() : TriggeredSpectraNode ("Triggered Coherence") {}
@@ -584,4 +584,4 @@ void TriggeredCoherenceNode::loadCustomParametersFromXml (XmlElement* xml)
     TriggeredSpectraNode::loadCustomParametersFromXml (xml);
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

@@ -36,7 +36,7 @@
 #include <memory>
 #include <unordered_map>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredPowerCanvas;
@@ -213,4 +213,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

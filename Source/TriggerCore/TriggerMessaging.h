@@ -30,7 +30,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** What a broadcast message asks a trigger source to do.
@@ -171,4 +171,4 @@ private:
     std::unordered_map<const TriggerSource*, Entry> m_entries;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

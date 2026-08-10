@@ -30,7 +30,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -231,4 +231,4 @@ int TriggeredSpectraNode::computePadSamples (float sampleRate) const
     return static_cast<int> (std::ceil (paddingSigmas * sigmaSeconds * sampleRate));
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

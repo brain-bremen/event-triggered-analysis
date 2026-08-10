@@ -30,7 +30,7 @@
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "TriggeredPowerCanvas.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
@@ -105,4 +105,4 @@ Visualizer* TriggeredPowerEditor::createNewCanvas()
     return m_canvas;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

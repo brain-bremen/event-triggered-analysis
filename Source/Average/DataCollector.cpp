@@ -27,7 +27,7 @@
 #include "TriggeredAvgNode.h"
 #include <ProcessorHeaders.h>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
 // DataStore implementation
 void DataStore::ResetAndResizeBuffersForTriggerSource (TriggerSource* source,
@@ -50,7 +50,7 @@ void DataStore::ResetAndResizeBuffersForTriggerSource (TriggerSource* source,
     }
 }
 
-void TriggeredAverage::DataStore::ResizeAllAverageBuffers (int nChannels, int nSamples, bool clear)
+void EventTriggered::DataStore::ResizeAllAverageBuffers (int nChannels, int nSamples, bool clear)
 {
     auto lock = GetLock();
     for (auto& [source, buffer] : m_averageBuffers)

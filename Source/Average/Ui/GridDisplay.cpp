@@ -27,11 +27,11 @@
 #include "TriggerSource.h"
 #include "TriggeredAvgNode.h"
 
-TriggeredAverage::GridDisplay::GridDisplay() = default;
+EventTriggered::GridDisplay::GridDisplay() = default;
 
-TriggeredAverage::GridDisplay::~GridDisplay() = default;
+EventTriggered::GridDisplay::~GridDisplay() = default;
 
-void TriggeredAverage::GridDisplay::refresh()
+void EventTriggered::GridDisplay::refresh()
 {
     // Update paths if data has changed (update functions check internally)
     for (auto panel : panels)
@@ -45,7 +45,7 @@ void TriggeredAverage::GridDisplay::refresh()
     }
 }
 
-void TriggeredAverage::GridDisplay::resized()
+void EventTriggered::GridDisplay::resized()
 {
     totalHeight = 0;
     const int numPlots = panels.size();
@@ -100,7 +100,7 @@ void TriggeredAverage::GridDisplay::resized()
     totalHeight = (row + 1) * (panelHeightPx + borderSize);
 }
 
-void TriggeredAverage::GridDisplay::addContChannel (const ContinuousChannel* channel,
+void EventTriggered::GridDisplay::addContChannel (const ContinuousChannel* channel,
                                                     const TriggerSource* source,
                                                     int channelIndexInAverageBuffer,
                                                     const MultiChannelAverageBuffer* avgBuffer)
@@ -119,7 +119,7 @@ void TriggeredAverage::GridDisplay::addContChannel (const ContinuousChannel* cha
     addAndMakeVisible (h);
 }
 
-void TriggeredAverage::GridDisplay::updateColourForSource (const TriggerSource* source)
+void EventTriggered::GridDisplay::updateColourForSource (const TriggerSource* source)
 {
     Array<SinglePlotPanel*> plotPanels = triggerSourceToPanelMap[source];
 
@@ -129,7 +129,7 @@ void TriggeredAverage::GridDisplay::updateColourForSource (const TriggerSource* 
     }
 }
 
-void TriggeredAverage::GridDisplay::updateConditionName (const TriggerSource* source)
+void EventTriggered::GridDisplay::updateConditionName (const TriggerSource* source)
 {
     Array<SinglePlotPanel*> plotPanels = triggerSourceToPanelMap[source];
 
@@ -139,25 +139,25 @@ void TriggeredAverage::GridDisplay::updateConditionName (const TriggerSource* so
     }
 }
 
-void TriggeredAverage::GridDisplay::setNumColumns (int numColumns_)
+void EventTriggered::GridDisplay::setNumColumns (int numColumns_)
 {
     numColumns = numColumns_;
     resized();
 }
 
-void TriggeredAverage::GridDisplay::setRowHeight (int height)
+void EventTriggered::GridDisplay::setRowHeight (int height)
 {
     panelHeightPx = height;
     resized();
 }
 
-void TriggeredAverage::GridDisplay::setConditionOverlay (bool overlay_)
+void EventTriggered::GridDisplay::setConditionOverlay (bool overlay_)
 {
     overlayConditions = overlay_;
     resized();
 }
 
-void TriggeredAverage::GridDisplay::prepareToUpdate()
+void EventTriggered::GridDisplay::prepareToUpdate()
 {
     panels.clear();
     triggerSourceToPanelMap.clear();
@@ -165,7 +165,7 @@ void TriggeredAverage::GridDisplay::prepareToUpdate()
     setBounds (0, 0, getWidth(), 0);
 }
 
-void TriggeredAverage::GridDisplay::setWindowSizeMs (float pre_ms_, float post_ms_)
+void EventTriggered::GridDisplay::setWindowSizeMs (float pre_ms_, float post_ms_)
 {
     for (auto hist : panels)
     {
@@ -173,7 +173,7 @@ void TriggeredAverage::GridDisplay::setWindowSizeMs (float pre_ms_, float post_m
     }
 }
 
-void TriggeredAverage::GridDisplay::setPlotType (TriggeredAverage::DisplayMode plotType_)
+void EventTriggered::GridDisplay::setPlotType (EventTriggered::DisplayMode plotType_)
 {
     plotType = plotType_;
 
@@ -183,9 +183,9 @@ void TriggeredAverage::GridDisplay::setPlotType (TriggeredAverage::DisplayMode p
     }
 }
 
-int TriggeredAverage::GridDisplay::getDesiredHeight() const { return totalHeight; }
+int EventTriggered::GridDisplay::getDesiredHeight() const { return totalHeight; }
 
-void TriggeredAverage::GridDisplay::clearPanels()
+void EventTriggered::GridDisplay::clearPanels()
 {
     for (auto hist : panels)
     {
@@ -193,7 +193,7 @@ void TriggeredAverage::GridDisplay::clearPanels()
     }
 }
 
-void TriggeredAverage::GridDisplay::setYLimits (float minY, float maxY)
+void EventTriggered::GridDisplay::setYLimits (float minY, float maxY)
 {
     for (auto panel : panels)
     {
@@ -202,7 +202,7 @@ void TriggeredAverage::GridDisplay::setYLimits (float minY, float maxY)
     repaint();
 }
 
-void TriggeredAverage::GridDisplay::resetYLimits()
+void EventTriggered::GridDisplay::resetYLimits()
 {
     for (auto panel : panels)
     {
@@ -211,7 +211,7 @@ void TriggeredAverage::GridDisplay::resetYLimits()
     repaint();
 }
 
-void TriggeredAverage::GridDisplay::setXLimits (float minX, float maxX)
+void EventTriggered::GridDisplay::setXLimits (float minX, float maxX)
 {
     for (auto panel : panels)
     {
@@ -220,7 +220,7 @@ void TriggeredAverage::GridDisplay::setXLimits (float minX, float maxX)
     repaint();
 }
 
-void TriggeredAverage::GridDisplay::resetXLimits()
+void EventTriggered::GridDisplay::resetXLimits()
 {
     for (auto panel : panels)
     {
@@ -229,7 +229,7 @@ void TriggeredAverage::GridDisplay::resetXLimits()
     repaint();
 }
 
-void TriggeredAverage::GridDisplay::setYLimitsForSource (const TriggerSource* source,
+void EventTriggered::GridDisplay::setYLimitsForSource (const TriggerSource* source,
                                                          float minY,
                                                          float maxY)
 {
@@ -244,7 +244,7 @@ void TriggeredAverage::GridDisplay::setYLimitsForSource (const TriggerSource* so
     }
 }
 
-void TriggeredAverage::GridDisplay::setYLimitsForChannel (const ContinuousChannel* channel,
+void EventTriggered::GridDisplay::setYLimitsForChannel (const ContinuousChannel* channel,
                                                           float minY,
                                                           float maxY)
 {
@@ -259,7 +259,7 @@ void TriggeredAverage::GridDisplay::setYLimitsForChannel (const ContinuousChanne
     }
 }
 
-DynamicObject TriggeredAverage::GridDisplay::getInfo()
+DynamicObject EventTriggered::GridDisplay::getInfo()
 {
     DynamicObject output;
     Array<var> panelInfo;
@@ -275,7 +275,7 @@ DynamicObject TriggeredAverage::GridDisplay::getInfo()
     return output;
 }
 
-void TriggeredAverage::GridDisplay::setShowIndividualTrials (bool show)
+void EventTriggered::GridDisplay::setShowIndividualTrials (bool show)
 {
     // This method will be used to show/hide individual trials
     // Currently, individual trial rendering is controlled by the panel itself
@@ -287,7 +287,7 @@ void TriggeredAverage::GridDisplay::setShowIndividualTrials (bool show)
     }
 }
 
-void TriggeredAverage::GridDisplay::setMaxTrialsToDisplay (int n)
+void EventTriggered::GridDisplay::setMaxTrialsToDisplay (int n)
 {
     for (auto panel : panels)
     {
@@ -295,7 +295,7 @@ void TriggeredAverage::GridDisplay::setMaxTrialsToDisplay (int n)
     }
 }
 
-void TriggeredAverage::GridDisplay::setTrialOpacity (float opacity)
+void EventTriggered::GridDisplay::setTrialOpacity (float opacity)
 {
     for (auto panel : panels)
     {
@@ -303,7 +303,7 @@ void TriggeredAverage::GridDisplay::setTrialOpacity (float opacity)
     }
 }
 
-void TriggeredAverage::GridDisplay::setTrialBuffersForSource (const TriggerSource* source,
+void EventTriggered::GridDisplay::setTrialBuffersForSource (const TriggerSource* source,
                                                               const SingleTrialBuffer* trialBuffer)
 {
     if (triggerSourceToPanelMap.find (source) != triggerSourceToPanelMap.end())

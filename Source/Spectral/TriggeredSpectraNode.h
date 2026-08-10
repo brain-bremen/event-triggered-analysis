@@ -29,7 +29,7 @@
 
 #include <JuceHeader.h>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** What TriggeredPower and TriggeredCoherence have in common on top of
@@ -76,4 +76,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredSpectraNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

@@ -31,7 +31,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Continuous wavelet transform with complex Morlet wavelets, via FFT convolution.
@@ -141,4 +141,4 @@ private:
     Fftw::ComplexPlan m_backwardPlan;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

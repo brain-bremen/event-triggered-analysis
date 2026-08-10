@@ -28,7 +28,7 @@
 #include <EditorHeaders.h>
 #include <JuceHeader.h>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Shared editor layout for both plugins, which have the same four inline
@@ -109,4 +109,4 @@ inline void layoutEditorContents (GenericEditor& editor,
         mode->setBounds (left, y, contentWidth, juce::jmax (16, juce::jmin (20, bottom - y)));
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

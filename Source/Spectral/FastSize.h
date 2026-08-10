@@ -23,7 +23,7 @@
 */
 #pragma once
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Smallest integer >= n that FFTW transforms efficiently.
@@ -41,4 +41,4 @@ int nextFastSize (int n);
 /** True if n factorises into 2, 3, 5 and 7 only. Exposed for testing. */
 bool isFastSize (int n);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

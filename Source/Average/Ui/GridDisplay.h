@@ -26,7 +26,7 @@
 #include "SinglePlotPanel.h"
 #include <VisualizerWindowHeaders.h>
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class MultiChannelAverageBuffer;
 class TriggerSource;
@@ -45,7 +45,7 @@ public:
 
     void resized() override;
     void setWindowSizeMs (float pre_ms, float post_ms);
-    void setPlotType (TriggeredAverage::DisplayMode plotType);
+    void setPlotType (EventTriggered::DisplayMode plotType);
 
     void addContChannel (const ContinuousChannel*,
                          const TriggerSource*,
@@ -111,4 +111,4 @@ private:
     DisplayMode plotType = DisplayMode::INDIVIDUAL_TRACES;
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

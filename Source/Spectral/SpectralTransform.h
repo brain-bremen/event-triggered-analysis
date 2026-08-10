@@ -28,7 +28,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** What the third axis of a TfCoefficients means.
@@ -131,4 +131,4 @@ private:
     int m_numBins = 0;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

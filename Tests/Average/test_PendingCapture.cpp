@@ -12,7 +12,7 @@
 #include <chrono>
 #include <thread>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 using namespace juce;
 
 // ---------------------------------------------------------------------------

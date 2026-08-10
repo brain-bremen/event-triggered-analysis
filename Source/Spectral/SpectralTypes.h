@@ -26,7 +26,7 @@
 #include <complex>
 #include <cstdint>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** Storage type for time-frequency coefficients handed to the display.
@@ -46,4 +46,4 @@ enum class EstimateMode : std::int_fast8_t
     Spectrum = 1
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

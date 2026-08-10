@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace TriggeredSpectra;
+using namespace EventTriggered;
 
 TEST (FastSize, RecognisesSevenSmoothNumbers)
 {

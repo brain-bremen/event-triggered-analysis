@@ -25,7 +25,7 @@
 
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 enum class FrequencySpacing
@@ -85,4 +85,4 @@ private:
     FrequencySpacing m_spacing = FrequencySpacing::Logarithmic;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

@@ -28,7 +28,7 @@
 #include <algorithm>
 #include <numeric>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -447,4 +447,4 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

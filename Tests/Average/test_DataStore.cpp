@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 using namespace juce;
 
 // Mock TriggerSource for testing

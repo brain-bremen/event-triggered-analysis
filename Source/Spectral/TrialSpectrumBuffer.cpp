@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <limits>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 void TrialSpectrumBuffer::setSize (TrialSpectrumBufferSize size)
@@ -170,4 +170,4 @@ bool TrialSpectrumBuffer::getChannelMinMax (int channelIndex,
     return true;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

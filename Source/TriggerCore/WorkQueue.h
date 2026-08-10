@@ -30,7 +30,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggerSource;
@@ -151,4 +151,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE (WorkQueue)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

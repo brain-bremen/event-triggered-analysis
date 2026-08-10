@@ -26,7 +26,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** A set of tapers of equal length, stored one after another.
@@ -78,4 +78,4 @@ private:
  */
 TaperBank makeHannTaper (int length);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

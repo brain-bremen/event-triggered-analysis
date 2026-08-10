@@ -31,7 +31,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** One tapered periodogram over the whole trial window — the Spectrum mode
@@ -144,4 +144,4 @@ private:
     Fftw::RealToComplexPlan m_plan;
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

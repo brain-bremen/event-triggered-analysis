@@ -26,7 +26,7 @@
 #include <span>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** How the aperiodic 1/f background is removed before display.
@@ -123,4 +123,4 @@ void aperiodicCurve (std::span<const double> frequencies,
                      const AperiodicFit& fit,
                      std::span<double> destination);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

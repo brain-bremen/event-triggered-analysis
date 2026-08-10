@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -225,4 +225,4 @@ juce::Image buildSpectrogramImage (std::span<const float> values,
     return image;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

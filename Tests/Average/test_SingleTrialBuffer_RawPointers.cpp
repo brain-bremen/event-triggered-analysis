@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 #include <gtest/gtest.h>
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 using namespace juce;
 
 // Test fixture for SingleTrialBufferJuce wrapper class

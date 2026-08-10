@@ -31,7 +31,7 @@
 #include <memory>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredSpectraNode;
@@ -127,4 +127,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AnalysisSettingsWindow)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

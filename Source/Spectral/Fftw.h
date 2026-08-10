@@ -33,7 +33,7 @@
 // transform. Fftw.cpp is the only file that includes it.
 struct fftw_plan_s;
 
-namespace TriggeredSpectra::Fftw
+namespace EventTriggered::Fftw
 {
 
 /** Planner effort. Maps onto FFTW_ESTIMATE / FFTW_MEASURE / FFTW_PATIENT.
@@ -270,4 +270,4 @@ bool saveWisdom (const std::string& path);
 /** Default wisdom location: the GUI's per-user config directory. */
 std::string defaultWisdomPath();
 
-} // namespace TriggeredSpectra::Fftw
+} // namespace EventTriggered::Fftw

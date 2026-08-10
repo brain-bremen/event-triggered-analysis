@@ -31,7 +31,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -626,4 +626,4 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
     triggerAsyncUpdate();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

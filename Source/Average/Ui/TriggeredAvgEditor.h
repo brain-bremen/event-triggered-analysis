@@ -27,7 +27,7 @@
 #include <VisualizerEditorHeaders.h>
 class Visualizer;
 
-namespace TriggeredAverage
+namespace EventTriggered
 {
 class TriggeredAvgCanvas;
 class TriggeredAvgNode;
@@ -79,4 +79,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgEditor);
 };
 
-} // namespace TriggeredAverage
+} // namespace EventTriggered

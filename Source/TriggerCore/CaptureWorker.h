@@ -36,7 +36,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** One trial to extract once its post-trigger data has arrived. */
@@ -133,4 +133,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CaptureWorker)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

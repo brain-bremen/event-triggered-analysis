@@ -27,7 +27,7 @@
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 bool SpectralEngine::prepare (const Settings& settings, int maxChannels)
@@ -126,7 +126,7 @@ bool SpectralEngine::prepare (const Settings& settings, int maxChannels)
             {
                 // Fall back to no baseline rather than failing the whole engine:
                 // the user still gets a usable spectrum.
-                DBG ("[TriggeredSpectra] pre-trigger window too short for a baseline spectrum");
+                DBG ("[TriggeredPower] pre-trigger window too short for a baseline spectrum");
                 m_hasSeparateBaseline = false;
             }
         }
@@ -223,4 +223,4 @@ void SpectralEngine::processSlice (const juce::AudioBuffer<float>& trial,
     periodogram.process (m_sliceScratch, channelIndices, output);
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

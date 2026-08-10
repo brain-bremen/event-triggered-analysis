@@ -26,7 +26,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -91,4 +91,4 @@ FrequencyGrid::FrequencyGrid (double minFrequency,
     m_frequencies.back() = high;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

@@ -31,7 +31,7 @@
 #include <map>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredCoherenceCanvas;
@@ -248,4 +248,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

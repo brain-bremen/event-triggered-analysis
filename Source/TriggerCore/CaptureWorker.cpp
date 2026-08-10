@@ -24,13 +24,13 @@
 */
 #include "CaptureWorker.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 CaptureWorker::CaptureWorker (MultiChannelRingBuffer* ringBuffer,
                                 WorkQueue* queue,
                                 Client* client)
-    : juce::Thread ("TriggeredSpectra Worker"),
+    : juce::Thread ("Capture Worker"),
       m_ringBuffer (ringBuffer),
       m_queue (queue),
       m_client (client)
@@ -168,4 +168,4 @@ void CaptureWorker::run()
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

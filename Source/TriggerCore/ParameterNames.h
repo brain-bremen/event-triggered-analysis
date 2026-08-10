@@ -23,7 +23,7 @@
 */
 #pragma once
 
-namespace TriggeredSpectra::ParameterNames
+namespace EventTriggered::ParameterNames
 {
 
 // --- Registered by TriggeredCaptureNode, so every triggered plugin has them ---
@@ -47,4 +47,4 @@ inline constexpr const char* captureAll[] = { channels,
                                               trigger_line,
                                               trigger_type };
 
-} // namespace TriggeredSpectra::ParameterNames
+} // namespace EventTriggered::ParameterNames

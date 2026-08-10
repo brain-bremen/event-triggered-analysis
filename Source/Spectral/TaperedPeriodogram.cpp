@@ -30,7 +30,7 @@
 #include <cmath>
 #include <numeric>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 bool TaperedPeriodogram::prepare (const Config& config, int maxChannels)
@@ -217,4 +217,4 @@ const std::vector<double>& TaperedPeriodogram::taperConcentrations() const
     return m_concentrations;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

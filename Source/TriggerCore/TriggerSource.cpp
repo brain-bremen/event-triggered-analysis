@@ -24,7 +24,7 @@
 */
 #include "TriggerSource.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggerSource::TriggerSource (const juce::String& name_, int line_, TriggerType type_)
@@ -264,4 +264,4 @@ void TriggerSources::clear()
         m_listener->triggerSourcesRemoved();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

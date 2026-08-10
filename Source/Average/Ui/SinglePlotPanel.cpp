@@ -27,7 +27,7 @@
 #include "TriggerSource.h"
 #include "TriggeredAvgCanvas.h"
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 const static Colour panelBackground { 30, 30, 40 };
 
 SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
@@ -216,7 +216,7 @@ void SinglePlotPanel::setWindowSizeMs (float pre, float post)
     repaint();
 }
 
-void SinglePlotPanel::setPlotType (TriggeredAverage::DisplayMode plotType)
+void SinglePlotPanel::setPlotType (EventTriggered::DisplayMode plotType)
 {
     switch (plotType)
     {

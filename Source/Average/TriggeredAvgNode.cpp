@@ -29,7 +29,7 @@
 #include "Ui/TriggeredAvgCanvas.h"
 #include "Ui/TriggeredAvgEditor.h"
 
-using namespace TriggeredAverage;
+using namespace EventTriggered;
 
 TriggeredAvgNode::TriggeredAvgNode()
     : GenericProcessor ("Triggered Avg"),

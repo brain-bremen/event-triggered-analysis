@@ -23,7 +23,7 @@
 */
 #include "ParameterControl.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 ParameterControl::ParameterControl (Parameter* parameter,
@@ -287,4 +287,4 @@ void ParameterControl::resized()
     }
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

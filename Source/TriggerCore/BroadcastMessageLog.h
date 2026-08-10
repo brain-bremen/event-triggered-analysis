@@ -29,7 +29,7 @@
 #include <atomic>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 /** One broadcast message as it arrived, and what each trigger source made of it.
@@ -138,4 +138,4 @@ private:
 juce::String formatBroadcastLogEntry (const BroadcastLogEntry& entry,
                                       const TriggerSources& sources);
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered
