@@ -163,8 +163,44 @@ void TriggeredAvgNode::analysisConfigurationChanged()
     for (auto* source : getTriggerSources().items())
         m_dataStore.ResetAndResizeBuffersForTriggerSource (source, numChannels, numSamples);
 
-    if (m_canvas != nullptr)
-        m_canvas->setWindowSizeMs (getPreWindowMs(), getPostWindowMs());
+    // The panels have to be rebuilt here, not only when the visualizer is opened.
+    // Everything they are keyed on has just changed: which channels exist, which
+    // sources exist, and which buffer each panel points at.
+    rebuildDisplayPanels();
+}
+
+void TriggeredAvgNode::rebuildDisplayPanels()
+{
+    if (m_canvas == nullptr)
+        return;
+
+    const auto lock = m_dataStore.GetLock();
+
+    m_canvas->prepareToUpdate();
+
+    const auto& selected = getSelectedChannels();
+
+    // Grouped by channel so the overlay works. The third argument is the *row* in
+    // the average buffer, which stopped being the global channel index when the
+    // accumulators narrowed to the selection.
+    for (int row = 0; row < selected.size(); ++row)
+    {
+        const ContinuousChannel* channel = getContinuousChannel (selected[row]);
+
+        if (channel == nullptr)
+            continue;
+
+        for (auto* source : getTriggerSources().items())
+            m_canvas->addContChannel (
+                channel, source, row, m_dataStore.getRefToAverageBufferForTriggerSource (source));
+    }
+
+    for (auto* source : getTriggerSources().items())
+        m_canvas->setTrialBuffersForSource (
+            source, m_dataStore.getRefToTrialBufferForTriggerSource (source));
+
+    m_canvas->setWindowSizeMs (getPreWindowMs(), getPostWindowMs());
+    m_canvas->resized();
 }
 
 void TriggeredAvgNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources)

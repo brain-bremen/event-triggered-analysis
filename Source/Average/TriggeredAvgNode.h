@@ -77,6 +77,16 @@ public:
 
     void setCanvas (TriggeredAvgCanvas* canvas) { m_canvas = canvas; }
 
+    /** Recreates the display's panels from the current channel selection and
+     *  trigger sources, and repoints each at its buffer.
+     *
+     *  Lives on the node rather than the editor because it is driven by the
+     *  configuration, not by the UI: it must run whenever the selection or the
+     *  source list changes, not only when the visualizer is opened. That was the
+     *  bug — the monitor counted trials while the canvas had no panels to draw
+     *  them in, because nothing rebuilt them after a channel was selected. */
+    void rebuildDisplayPanels();
+
     /** Samples in one trial window. Convenience for the display, which thinks in
         samples rather than in TrialGeometry. */
     int getNumberOfPreSamples() const { return getTrialGeometry().preSamples; }

@@ -78,7 +78,7 @@ void TriggeredAvgEditor::resized()
     VisualizerEditor::resized();
 
     const int y = EditorLayout::layoutCommonContents (
-        *this, { configureButton.get(), monitorButton.get() });
+        *this, { configureButton.get(), monitorButton.get() }, EditorLayout::buttonHeight);
 
     EditorLayout::layoutLastRow (*this, getParameterEditor (ParameterNames::max_trials), y);
 }
@@ -101,47 +101,14 @@ void TriggeredAvgEditor::updateSettings()
     if (canvas == nullptr)
         return;
 
-    canvas->prepareToUpdate();
-
-    TriggeredAvgNode* proc = dynamic_cast<TriggeredAvgNode*> (getProcessor());
+    // Both buffer sizing and panel construction belong to the node: they are
+    // driven by the channel selection and the source list, which change without
+    // the signal chain being updated. Doing either here left the display stale —
+    // the canvas kept whatever panels it had when the visualizer was opened.
+    auto* proc = dynamic_cast<TriggeredAvgNode*> (getProcessor());
     assert (proc);
-    DataStore* store = (proc->getDataStore());
-    assert (store);
 
-    // Buffer sizing belongs to the node's analysisConfigurationChanged(), which
-    // the base class calls on every rebuild. Doing it here as well used to be
-    // harmless duplication; it is not any more, because the two disagreed — the
-    // node sizes to the selected channels and this sized to every input, so a
-    // partial selection made every captured trial fail the shape check and be
-    // dropped in silence.
-
-    const auto& selected = proc->getSelectedChannels();
-
-    // Panels are grouped by channel so the overlay works, and carry the *row* in
-    // the average buffer rather than the global channel index. Those stopped
-    // being the same number when the accumulators narrowed to the selection.
-    for (int row = 0; row < selected.size(); ++row)
-    {
-        const ContinuousChannel* channel = proc->getContinuousChannel (selected[row]);
-
-        if (channel == nullptr)
-            continue;
-
-        for (auto source : proc->getTriggerSources().getAll())
-        {
-            canvas->addContChannel (
-                channel, source, row, store->getRefToAverageBufferForTriggerSource (source));
-        }
-    }
-
-    // Set trial buffers for all sources
-    for (auto source : proc->getTriggerSources().getAll())
-    {
-        canvas->setTrialBuffersForSource (source,
-                                          store->getRefToTrialBufferForTriggerSource (source));
-    }
-    canvas->setWindowSizeMs (proc->getPreWindowSizeMs(), proc->getPostWindowSizeMs());
-    canvas->resized();
+    proc->rebuildDisplayPanels();
 }
 
 void TriggeredAvgEditor::updateColours (TriggerSource* source)

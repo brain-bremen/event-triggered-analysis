@@ -73,7 +73,8 @@ inline int contentBottom (const GenericEditor& editor)
  *                  fewer buttons gets wider ones rather than a gap.
  */
 inline int layoutCommonContents (GenericEditor& editor,
-                                 std::initializer_list<juce::Component*> buttons)
+                                 std::initializer_list<juce::Component*> buttons,
+                                 int reservedForLastRow = buttonHeight)
 {
     const int width = contentWidth (editor);
 
@@ -104,12 +105,23 @@ inline int layoutCommonContents (GenericEditor& editor,
         y += channels->getHeight() + gap;
     }
 
-    if (auto* pre = editor.getParameterEditor (ParameterNames::pre_ms))
-        pre->setBounds (left, y, 100, windowRowHeight);
-    if (auto* post = editor.getParameterEditor (ParameterNames::post_ms))
-        post->setBounds (left + 112, y, 100, windowRowHeight);
+    // Four stacked rows do not fit the editor height the GUI hands out, so the
+    // pre/post row absorbs the shortfall rather than pushing the caller's row off
+    // the bottom edge. Measured, not assumed: the height comes from
+    // EditorViewport and is not ours to predict.
+    //
+    // Without this the last row was placed below the visible area and simply
+    // never drawn — which is exactly how the averaging plugin's Max Trials
+    // control was reported as "layout broken".
+    const int spaceForWindowRow = contentBottom (editor) - y - gap - reservedForLastRow;
+    const int rowHeight = juce::jlimit (20, windowRowHeight, spaceForWindowRow);
 
-    y += windowRowHeight + gap;
+    if (auto* pre = editor.getParameterEditor (ParameterNames::pre_ms))
+        pre->setBounds (left, y, 100, rowHeight);
+    if (auto* post = editor.getParameterEditor (ParameterNames::post_ms))
+        post->setBounds (left + 112, y, 100, rowHeight);
+
+    y += rowHeight + gap;
 
     return y;
 }
@@ -123,8 +135,11 @@ inline void layoutLastRow (GenericEditor& editor, juce::Component* control, int 
     if (control == nullptr)
         return;
 
-    control->setBounds (
-        left, y, contentWidth (editor), juce::jmax (16, juce::jmin (20, contentBottom (editor) - y)));
+    // Clamped to what is actually left. layoutCommonContents() has already made
+    // room for buttonHeight, so this normally gets it in full.
+    const int height = juce::jlimit (16, buttonHeight, contentBottom (editor) - y);
+
+    control->setBounds (left, y, contentWidth (editor), height);
 }
 
 } // namespace EventTriggered::EditorLayout
