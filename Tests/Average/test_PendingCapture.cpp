@@ -1,12 +1,11 @@
 /*
     Tests for:
     - DataStore pending capture (store / commit / discard / expire / hasPending)
-    - DataCollector routing captures to pending when commitPattern is set
     - TriggerSource XML save/load round-trip for pattern fields
 */
-#include "../Source/DataCollector.h"
-#include "../Source/MultiChannelRingBuffer.h"
-#include "../Source/TriggerSource.h"
+#include "Average/DataCollector.h"
+#include "TriggerCore/MultiChannelRingBuffer.h"
+#include "TriggerCore/TriggerSource.h"
 #include <JuceHeader.h>
 #include <gtest/gtest.h>
 #include <chrono>
@@ -146,7 +145,10 @@ TEST_F (PendingCaptureTests, ExpiredCaptureIsDiscarded)
     store->storePendingCapture (src.get(), buf, 1);
     std::this_thread::sleep_for (std::chrono::milliseconds (10));
 
-    store->discardExpiredPendingCaptures();
+    // Told what "now" is rather than reading the clock: expiry can be provoked
+    // without sleeping, and a timeout is measured from when the message arrived
+    // rather than from whenever the worker reached the item.
+    store->discardExpiredPendingCaptures (juce::Time::currentTimeMillis() + 50);
     EXPECT_FALSE (store->hasPendingCapture (src.get()));
 }
 
@@ -154,7 +156,7 @@ TEST_F (PendingCaptureTests, NonExpiredCaptureIsKept)
 {
     auto buf = makeTestBuffer (2, 100);
     store->storePendingCapture (src.get(), buf, 60000); // 60-second timeout
-    store->discardExpiredPendingCaptures();
+    store->discardExpiredPendingCaptures (juce::Time::currentTimeMillis());
     EXPECT_TRUE (store->hasPendingCapture (src.get()));
 }
 
@@ -163,7 +165,7 @@ TEST_F (PendingCaptureTests, ZeroTimeoutNeverExpires)
     auto buf = makeTestBuffer (2, 100);
     store->storePendingCapture (src.get(), buf, 0);
     std::this_thread::sleep_for (std::chrono::milliseconds (10));
-    store->discardExpiredPendingCaptures();
+    store->discardExpiredPendingCaptures (juce::Time::currentTimeMillis() + 1000000);
     EXPECT_TRUE (store->hasPendingCapture (src.get()));
 }
 
@@ -187,142 +189,14 @@ TEST_F (PendingCaptureTests, PendingIsPerSource)
     EXPECT_FALSE (store->hasPendingCapture (src2.get()));
 }
 
-// ---------------------------------------------------------------------------
-// DataCollector routing tests (pending vs immediate commit)
-// ---------------------------------------------------------------------------
-
-class DataCollectorPendingTests : public ::testing::Test
-{
-protected:
-    static constexpr int kNumChannels = 4;
-    static constexpr int kRingBufferSize = 10000;
-
-    void SetUp() override
-    {
-        ringBuffer = std::make_unique<MultiChannelRingBuffer> (kNumChannels, kRingBufferSize);
-        store = std::make_unique<DataStore>();
-
-        // Fill ring buffer so capture requests can be satisfied
-        AudioBuffer<float> data (kNumChannels, kRingBufferSize);
-        data.clear();
-        for (int ch = 0; ch < kNumChannels; ++ch)
-            for (int s = 0; s < kRingBufferSize; ++s)
-                data.setSample (ch, s, static_cast<float> (s) * 0.01f);
-        ringBuffer->addData (data, 0, kRingBufferSize);
-    }
-
-    void TearDown() override
-    {
-        if (collector)
-        {
-            collector->stopThread (1000);
-            collector.reset();
-        }
-    }
-
-    std::unique_ptr<DataCollector> collector;
-    std::unique_ptr<MultiChannelRingBuffer> ringBuffer;
-    std::unique_ptr<DataStore> store;
-};
-
-TEST_F (DataCollectorPendingTests, WithoutCommitPatternCommitsImmediately)
-{
-    auto src = std::make_unique<MockTriggerSource> (0);
-    // commitPattern is empty by default → immediate commit
-
-    collector = std::make_unique<DataCollector> (nullptr, ringBuffer.get(), store.get());
-    collector->startThread();
-
-    CaptureRequest req { src.get(), 500, 100, 100 };
-    collector->registerCaptureRequest (req);
-
-    std::this_thread::sleep_for (std::chrono::milliseconds (300));
-
-    auto* avg = store->getRefToAverageBufferForTriggerSource (src.get());
-    ASSERT_NE (avg, nullptr);
-    EXPECT_EQ (avg->getNumTrials(), 1);
-    EXPECT_FALSE (store->hasPendingCapture (src.get()));
-}
-
-TEST_F (DataCollectorPendingTests, WithCommitPatternStoresPending)
-{
-    auto src = std::make_unique<MockTriggerSource> (0);
-    src->commitPattern = "COMMIT";
-
-    collector = std::make_unique<DataCollector> (nullptr, ringBuffer.get(), store.get());
-    collector->startThread();
-
-    CaptureRequest req { src.get(), 500, 100, 100 };
-    collector->registerCaptureRequest (req);
-
-    std::this_thread::sleep_for (std::chrono::milliseconds (300));
-
-    // Average should NOT have been updated yet
-    auto* avg = store->getRefToAverageBufferForTriggerSource (src.get());
-    // Buffer may not exist at all, or may exist with 0 trials
-    if (avg != nullptr)
-        EXPECT_EQ (avg->getNumTrials(), 0);
-
-    // Pending capture should exist
-    EXPECT_TRUE (store->hasPendingCapture (src.get()));
-}
-
-TEST_F (DataCollectorPendingTests, CommitPendingAfterCapture)
-{
-    auto src = std::make_unique<MockTriggerSource> (0);
-    src->commitPattern = "OUTCOME OK";
-
-    collector = std::make_unique<DataCollector> (nullptr, ringBuffer.get(), store.get());
-    collector->startThread();
-
-    // Ensure buffers exist so commit has somewhere to write
-    store->ResetAndResizeBuffersForTriggerSource (src.get(), kNumChannels, 200);
-
-    CaptureRequest req { src.get(), 500, 100, 100 };
-    collector->registerCaptureRequest (req);
-
-    std::this_thread::sleep_for (std::chrono::milliseconds (300));
-    ASSERT_TRUE (store->hasPendingCapture (src.get()));
-
-    // Simulate commit message arriving on message thread
-    {
-        auto lock = store->GetLock();
-        store->commitPendingCapture (src.get());
-    }
-
-    EXPECT_FALSE (store->hasPendingCapture (src.get()));
-    auto* avg = store->getRefToAverageBufferForTriggerSource (src.get());
-    ASSERT_NE (avg, nullptr);
-    EXPECT_EQ (avg->getNumTrials(), 1);
-}
-
-TEST_F (DataCollectorPendingTests, DiscardPendingAfterCapture)
-{
-    auto src = std::make_unique<MockTriggerSource> (0);
-    src->commitPattern = "OUTCOME OK";
-
-    collector = std::make_unique<DataCollector> (nullptr, ringBuffer.get(), store.get());
-    collector->startThread();
-
-    store->ResetAndResizeBuffersForTriggerSource (src.get(), kNumChannels, 200);
-
-    CaptureRequest req { src.get(), 500, 100, 100 };
-    collector->registerCaptureRequest (req);
-
-    std::this_thread::sleep_for (std::chrono::milliseconds (300));
-    ASSERT_TRUE (store->hasPendingCapture (src.get()));
-
-    // Simulate cancel message
-    {
-        auto lock = store->GetLock();
-        store->discardPendingCapture (src.get());
-    }
-
-    EXPECT_FALSE (store->hasPendingCapture (src.get()));
-    auto* avg = store->getRefToAverageBufferForTriggerSource (src.get());
-    if (avg != nullptr)
-        EXPECT_EQ (avg->getNumTrials(), 0);
-}
+// The DataCollector routing tests that used to sit here are gone with the class
+// they drove. The decision they checked — a source with a commit pattern parks
+// its capture instead of accumulating it — now lives in
+// TriggeredAvgNode::processCapturedTrial(), which needs a GenericProcessor in a
+// running signal chain and so is not reachable from a unit test. What is
+// testable moved with it: CaptureWorker dispatch is covered by
+// Tests/TriggerCore/test_CaptureWorker.cpp, and the parking itself by the
+// PendingCaptureTests above.
 
 // ---------------------------------------------------------------------------
 // TriggerSource pattern field tests

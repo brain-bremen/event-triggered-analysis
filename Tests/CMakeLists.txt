@@ -42,6 +42,19 @@ set(SPECTRA_TEST_SOURCES
     Spectral/test_ParameterLayout.cpp
 )
 
+# The averaging plugin's own storage. Links trigger_core, like the plugin does,
+# and compiles the two source files under test directly — everything else in
+# Source/Average is display code these tests do not touch.
+set(AVERAGE_TEST_SOURCES
+    Average/test_DataStore.cpp
+    Average/test_AverageAccumulation.cpp
+    Average/test_PendingCapture.cpp
+    Average/test_SingleTrialBuffer.cpp
+    Average/test_SingleTrialBuffer_RawPointers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/Average/DataCollector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/Average/SingleTrialBuffer.cpp
+)
+
 # ---------------------------------------------------------------------------
 # Shared wiring for one test binary.
 #
@@ -124,5 +137,6 @@ endfunction()
 
 oe_add_test_binary(trigger_core_tests trigger_core OFF ${TRIGGER_CORE_TEST_SOURCES})
 oe_add_test_binary(spectra_tests      spectra_core ON  ${SPECTRA_TEST_SOURCES})
+oe_add_test_binary(average_tests      trigger_core OFF ${AVERAGE_TEST_SOURCES})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT spectra_tests)

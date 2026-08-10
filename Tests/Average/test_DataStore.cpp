@@ -1,5 +1,5 @@
-#include "../Source/DataCollector.h"
-#include "../Source/TriggerSource.h"
+#include "Average/DataCollector.h"
+#include "TriggerCore/TriggerSource.h"
 #include <JuceHeader.h>
 #include <gtest/gtest.h>
 #include <thread>

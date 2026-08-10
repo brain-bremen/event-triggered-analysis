@@ -1,4 +1,4 @@
-#include "../Source/SingleTrialBuffer.h"
+#include "Average/SingleTrialBuffer.h"
 #include <JuceHeader.h>
 #include <gtest/gtest.h>
 #include <numeric>

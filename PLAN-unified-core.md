@@ -410,11 +410,32 @@ gains the pending-timeout column it lacked.
 
 ---
 
-## Phase 5 — Tests **[todo]**
+## Phase 5 — Tests **[done]**
 
-Existing coverage: 209 tests here, 6 test files in `TriggeredAvg`. After the split,
-`trigger_core_tests` owns everything about triggering and buffering, and neither
-plugin re-tests it.
+**265 tests across three binaries**, up from the 209 baseline: `trigger_core_tests`
+(no FFTW), `spectra_tests`, `average_tests`. `trigger_core_tests` owns everything
+about triggering and buffering, and neither plugin re-tests it.
+
+**[changed]** `test_DataCollector.cpp` was rewritten rather than moved, as
+`test_AverageAccumulation.cpp`. Its fixture drove a `DataCollector` thread that no
+longer exists — the thread became `CaptureWorker`, whose lifecycle, retry loop,
+queue ordering and concurrency `test_CaptureWorker.cpp` already covers. What did
+not move is the arithmetic, so that is now tested against `DataStore` directly,
+without a thread or a signal chain. The replacement is also stricter: the old
+`AveragesMultipleTrialsCorrectly` only asserted the result was neither NaN nor
+infinite, which would have passed for almost any bug; the new one averages trials
+scaled 1x, 2x and 3x and requires exactly 2x.
+
+**[changed]** The `DataCollector` routing tests in `test_PendingCapture.cpp` were
+deleted rather than rewritten. The decision they checked — a source with a commit
+pattern parks its capture — now lives in `TriggeredAvgNode::processCapturedTrial()`,
+which needs a `GenericProcessor` in a running signal chain and is not reachable
+from a unit test. A comment stands where they were, saying so.
+
+Also deleted with the old harness: `Tests/Average/CMakeLists.txt`,
+`juce_colour_stub.cpp` (`gui_testable_source` provides `juce::Colour`),
+`TestHelpers.h` (unreferenced), and three stale setup documents describing a test
+target that no longer exists.
 
 ### Moved into `trigger_core_tests`
 
