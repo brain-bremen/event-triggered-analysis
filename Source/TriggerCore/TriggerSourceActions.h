@@ -22,10 +22,10 @@
 
 */
 
-#ifndef TriggeredAvgNodeActions_h
-#define TriggeredAvgNodeActions_h
+#pragma once
 
-#include "TriggeredAvgNode.h"
+#include "TriggeredCaptureNode.h"
+#include <EditorHeaders.h>
 #include <ProcessorHeaders.h>
 
 namespace EventTriggered
@@ -35,14 +35,14 @@ enum class TriggerType : std::int_fast8_t;
 class TriggerSource;
 
 /**
-    Adds trigger condition(s) to TriggeredAvgNode
+    Adds trigger condition(s) to TriggeredCaptureNode
 
-    Undo: removes the trigger condition(s) from TriggeredAvgNode.
+    Undo: removes the trigger condition(s) from TriggeredCaptureNode.
 */
 class AddTriggerConditions : public ProcessorAction
 {
 public:
-    AddTriggerConditions (TriggeredAvgNode* processor, Array<int> triggerLines, TriggerType type);
+    AddTriggerConditions (TriggeredCaptureNode* processor, Array<int> triggerLines, TriggerType type);
 
     ~AddTriggerConditions() override;
     void restoreOwner (GenericProcessor*) override;
@@ -52,7 +52,7 @@ public:
     std::unique_ptr<XmlElement> settings;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     Array<int> triggerLines;
     TriggerType type;
     Array<TriggerSource*> triggerSources;
@@ -63,7 +63,7 @@ private:
 class RemoveTriggerConditions : public ProcessorAction
 {
 public:
-    RemoveTriggerConditions (TriggeredAvgNode* processor,
+    RemoveTriggerConditions (TriggeredCaptureNode* processor,
                              Array<TriggerSource*> triggerSourcesToRemove);
 
     ~RemoveTriggerConditions() override;
@@ -75,14 +75,14 @@ public:
     std::unique_ptr<XmlElement> settings;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     Array<TriggerSource*> triggerSourcesToRemove;
 };
 
 class RenameTriggerSource : public ProcessorAction
 {
 public:
-    RenameTriggerSource (TriggeredAvgNode* processor,
+    RenameTriggerSource (TriggeredCaptureNode* processor,
                          TriggerSource* triggerSourcesToRename,
                          const String& newName);
     ~RenameTriggerSource() override = default;
@@ -92,7 +92,7 @@ public:
     bool undo() override;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     TriggerSource* triggerSourcesToRename;
     String newName;
     String oldName;
@@ -102,7 +102,7 @@ private:
 class ChangeTriggerTTLLine : public ProcessorAction
 {
 public:
-    ChangeTriggerTTLLine (TriggeredAvgNode* processor,
+    ChangeTriggerTTLLine (TriggeredCaptureNode* processor,
                           TriggerSource* triggerSourcesToRename,
                           const int newLine);
     ~ChangeTriggerTTLLine() override = default;
@@ -112,7 +112,7 @@ public:
     bool undo() override;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     TriggerSource* triggerSource;
     int newLine;
     int oldLine;
@@ -122,7 +122,7 @@ private:
 class ChangeTriggerType : public ProcessorAction
 {
 public:
-    ChangeTriggerType (TriggeredAvgNode* processor,
+    ChangeTriggerType (TriggeredCaptureNode* processor,
                        TriggerSource* triggerSourcesToRename,
                        TriggerType newType);
     ~ChangeTriggerType() override = default;
@@ -132,7 +132,7 @@ public:
     bool undo() override;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     TriggerSource* triggerSource;
     TriggerType newType;
     TriggerType oldType;
@@ -149,7 +149,7 @@ public:
         COMMIT
     };
 
-    SetTriggerSourcePattern (TriggeredAvgNode* processor,
+    SetTriggerSourcePattern (TriggeredCaptureNode* processor,
                              TriggerSource* source,
                              Field field,
                              const String& newPattern);
@@ -160,7 +160,7 @@ public:
     bool undo() override;
 
 private:
-    TriggeredAvgNode* processorNode;
+    TriggeredCaptureNode* processorNode;
     TriggerSource* triggerSource;
     Field field;
     String newPattern;
@@ -168,4 +168,3 @@ private:
     int triggerIndex = -1;
 };
 } // namespace EventTriggered
-#endif /* TriggeredAvgNodeActions_h */

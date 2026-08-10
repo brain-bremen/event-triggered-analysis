@@ -17,6 +17,7 @@ set(TRIGGER_CORE_SOURCES
     TriggerSource.cpp
     TriggerMessaging.cpp
     BroadcastMessageLog.cpp
+    TriggerSourceActions.cpp
     TriggeredCaptureNode.cpp
     Ui/ParameterControl.cpp
     Ui/TriggerSourceConfigWindow.cpp
@@ -32,6 +33,7 @@ set(TRIGGER_CORE_HEADERS
     TriggerSource.h
     TriggerMessaging.h
     BroadcastMessageLog.h
+    TriggerSourceActions.h
     TriggeredCaptureNode.h
     Ui/ParameterControl.h
     Ui/TriggerSourceConfigWindow.h

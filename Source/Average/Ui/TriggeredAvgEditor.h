@@ -61,12 +61,6 @@ public:
     /** Called when configure button is clicked */
     void buttonClicked (Button* button) override;
 
-    /** Adds triggers with a given type, through the undo stack. */
-    void addTriggerSources (Array<int> lines, TriggerType type) const;
-
-    /** Removes triggers, through the undo stack. */
-    void removeTriggerSources (Array<TriggerSource*> triggerSourcesToRemove) const;
-
 private:
     std::unique_ptr<UtilityButton> configureButton;
 

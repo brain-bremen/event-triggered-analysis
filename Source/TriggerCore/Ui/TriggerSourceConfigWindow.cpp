@@ -24,6 +24,7 @@
 */
 #include "TriggerSourceConfigWindow.h"
 
+#include "../TriggerSourceActions.h"
 #include "../TriggeredCaptureNode.h"
 
 namespace EventTriggered
@@ -31,6 +32,21 @@ namespace EventTriggered
 
 namespace
 {
+    /** Runs one trigger-source edit through the GUI's undo stack.
+     *
+     *  Every mutation this window makes goes through here rather than calling
+     *  TriggerSources directly. The window is the only route to editing a
+     *  trigger source, so anything that bypassed this would be silently
+     *  un-undoable — which is what happened when the averaging plugin was ported
+     *  onto the shared window and left its own undo actions unreferenced.
+     *
+     *  Takes ownership: UndoManager::perform() deletes the action. */
+    void performUndoable (ProcessorAction* action)
+    {
+        CoreServices::getUndoManager()->beginNewTransaction();
+        CoreServices::getUndoManager()->perform (action);
+    }
+
     constexpr int rowHeight = 26;
     constexpr int headerHeight = 24;
     constexpr int addRowHeight = 34;
@@ -160,8 +176,8 @@ namespace
             if (m_source == nullptr || m_node == nullptr)
                 return;
 
-            m_node->getTriggerSources().setTriggerSourceType (
-                m_source, static_cast<TriggerType> (m_box.getSelectedId()));
+            performUndoable (new ChangeTriggerType (
+                m_node, m_source, static_cast<TriggerType> (m_box.getSelectedId())));
         }
 
     private:
@@ -193,7 +209,7 @@ namespace
             if (m_source == nullptr || m_node == nullptr)
                 return;
 
-            m_node->getTriggerSources().removeTriggerSources ({ m_source });
+            performUndoable (new RemoveTriggerConditions (m_node, { m_source }));
             m_owner.update();
         }
 
@@ -297,7 +313,7 @@ juce::Component*
                 cell =
                     new TextCell ([] (TriggerSource& s) { return s.name; },
                                   [this] (TriggerSource& s, const juce::String& text)
-                                  { m_node->getTriggerSources().setTriggerSourceName (&s, text); },
+                                  { performUndoable (new RenameTriggerSource (m_node, &s, text)); },
                                   editable);
             }
 
@@ -343,21 +359,35 @@ juce::Component*
             {
                 delete existing;
 
+                // Assigning the field directly would edit the source behind the
+                // undo stack's back, leaving a pattern that Ctrl+Z cannot take
+                // away. SetTriggerSourcePattern records the old value.
+                auto* node = m_node;
+
                 if (column == armColumn)
-                    cell = new TextCell ([] (TriggerSource& s) { return s.armPattern; },
-                                         [] (TriggerSource& s, const juce::String& t)
-                                         { s.armPattern = t; },
-                                         patternsEditable);
+                    cell = new TextCell (
+                        [] (TriggerSource& s) { return s.armPattern; },
+                        [node] (TriggerSource& s, const juce::String& t) {
+                            performUndoable (new SetTriggerSourcePattern (
+                                node, &s, SetTriggerSourcePattern::Field::ARM, t));
+                        },
+                        patternsEditable);
                 else if (column == cancelColumn)
-                    cell = new TextCell ([] (TriggerSource& s) { return s.cancelPattern; },
-                                         [] (TriggerSource& s, const juce::String& t)
-                                         { s.cancelPattern = t; },
-                                         patternsEditable);
+                    cell = new TextCell (
+                        [] (TriggerSource& s) { return s.cancelPattern; },
+                        [node] (TriggerSource& s, const juce::String& t) {
+                            performUndoable (new SetTriggerSourcePattern (
+                                node, &s, SetTriggerSourcePattern::Field::CANCEL, t));
+                        },
+                        patternsEditable);
                 else
-                    cell = new TextCell ([] (TriggerSource& s) { return s.commitPattern; },
-                                         [] (TriggerSource& s, const juce::String& t)
-                                         { s.commitPattern = t; },
-                                         patternsEditable);
+                    cell = new TextCell (
+                        [] (TriggerSource& s) { return s.commitPattern; },
+                        [node] (TriggerSource& s, const juce::String& t) {
+                            performUndoable (new SetTriggerSourcePattern (
+                                node, &s, SetTriggerSourcePattern::Field::COMMIT, t));
+                        },
+                        patternsEditable);
             }
 
             cell->setSource (source);
@@ -486,7 +516,7 @@ void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
     const int line = juce::jlimit (-1, 255, m_newLineLabel->getText().getIntValue());
     const auto type = static_cast<TriggerType> (m_newTypeBox->getSelectedId());
 
-    m_node->addTriggerSource (line, type);
+    performUndoable (new AddTriggerConditions (m_node, { line }, type));
 
     update();
 }

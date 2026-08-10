@@ -8,8 +8,6 @@ oe_add_plugin(TriggeredAverage trigger_core
     ${CMAKE_CURRENT_SOURCE_DIR}/OpenEphysLib.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgNode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgNode.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgActions.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgActions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/DataCollector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DataCollector.h
     ${CMAKE_CURRENT_SOURCE_DIR}/SingleTrialBuffer.cpp

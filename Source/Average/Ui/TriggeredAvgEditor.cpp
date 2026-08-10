@@ -28,7 +28,6 @@
 #include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
-#include "../TriggeredAvgActions.h"
 #include "TriggeredAvgCanvas.h"
 #include "../TriggeredAvgNode.h"
 using namespace EventTriggered;
@@ -151,23 +150,3 @@ void TriggeredAvgEditor::buttonClicked (Button* button)
     }
 }
 
-void TriggeredAvgEditor::addTriggerSources (Array<int> lines, TriggerType type) const
-{
-    TriggeredAvgNode* proc = (TriggeredAvgNode*) getProcessor();
-
-    AddTriggerConditions* action = new AddTriggerConditions (proc, lines, type);
-
-    CoreServices::getUndoManager()->beginNewTransaction ("Disabled during acquisition");
-    CoreServices::getUndoManager()->perform ((UndoableAction*) action);
-}
-
-void TriggeredAvgEditor::removeTriggerSources (
-    juce::Array<TriggerSource*, juce::DummyCriticalSection, 0> triggerSourcesToRemove) const
-{
-    TriggeredAvgNode* proc = (TriggeredAvgNode*) getProcessor();
-
-    RemoveTriggerConditions* action = new RemoveTriggerConditions (proc, triggerSourcesToRemove);
-
-    CoreServices::getUndoManager()->beginNewTransaction ("Disabled during acquisition");
-    CoreServices::getUndoManager()->perform ((UndoableAction*) action);
-}

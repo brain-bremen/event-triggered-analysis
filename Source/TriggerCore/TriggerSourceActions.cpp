@@ -21,14 +21,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "TriggeredAvgActions.h"
+#include "TriggerSourceActions.h"
 #include "TriggerCore/TriggerSource.h"
-#include "TriggeredAvgNode.h"
-#include "Ui/TriggeredAvgEditor.h"
+#include "TriggeredCaptureNode.h"
 
 using namespace EventTriggered;
 
-AddTriggerConditions::AddTriggerConditions (EventTriggered::TriggeredAvgNode* processor_,
+AddTriggerConditions::AddTriggerConditions (EventTriggered::TriggeredCaptureNode* processor_,
                                             Array<int> lines,
                                             EventTriggered::TriggerType type_)
     : ProcessorAction ("AddTriggerConditions"),
@@ -46,7 +45,7 @@ AddTriggerConditions::~AddTriggerConditions() = default;
 void AddTriggerConditions::restoreOwner (GenericProcessor* owner)
 {
     LOGD ("RESTORING OWNER FOR: AddTriggerConditions");
-    processorNode = (TriggeredAvgNode*) owner;
+    processorNode = (TriggeredCaptureNode*) owner;
 }
 
 bool AddTriggerConditions::perform()
@@ -100,7 +99,7 @@ bool AddTriggerConditions::undo()
     return true;
 }
 
-RemoveTriggerConditions::RemoveTriggerConditions (TriggeredAvgNode* processor_,
+RemoveTriggerConditions::RemoveTriggerConditions (TriggeredCaptureNode* processor_,
                                                   Array<TriggerSource*> triggerSourcesToRemove_)
     : ProcessorAction ("RemoveTriggerConditions"),
       processorNode (processor_),
@@ -124,7 +123,7 @@ RemoveTriggerConditions::~RemoveTriggerConditions() = default;
 
 void RemoveTriggerConditions::restoreOwner (GenericProcessor* processor)
 {
-    processorNode = (TriggeredAvgNode*) processor;
+    processorNode = (TriggeredCaptureNode*) processor;
 }
 
 bool RemoveTriggerConditions::perform()
@@ -178,7 +177,7 @@ bool RemoveTriggerConditions::undo()
     return true;
 }
 
-RenameTriggerSource::RenameTriggerSource (TriggeredAvgNode* processor_,
+RenameTriggerSource::RenameTriggerSource (TriggeredCaptureNode* processor_,
                                           TriggerSource* source_,
                                           const String& newName_)
     : ProcessorAction ("RenameTriggerSource"),
@@ -192,7 +191,7 @@ RenameTriggerSource::RenameTriggerSource (TriggeredAvgNode* processor_,
 
 void RenameTriggerSource::restoreOwner (GenericProcessor* processor)
 {
-    processorNode = static_cast<TriggeredAvgNode*> (processor);
+    processorNode = static_cast<TriggeredCaptureNode*> (processor);
 }
 
 bool RenameTriggerSource::perform()
@@ -222,7 +221,7 @@ bool RenameTriggerSource::undo()
     return true;
 }
 
-ChangeTriggerTTLLine::ChangeTriggerTTLLine (TriggeredAvgNode* processor_,
+ChangeTriggerTTLLine::ChangeTriggerTTLLine (TriggeredCaptureNode* processor_,
                                             TriggerSource* source_,
                                             const int newLine_)
     : ProcessorAction ("ChangeTriggerTTLLine"),
@@ -236,7 +235,7 @@ ChangeTriggerTTLLine::ChangeTriggerTTLLine (TriggeredAvgNode* processor_,
 
 void ChangeTriggerTTLLine::restoreOwner (GenericProcessor* processor)
 {
-    processorNode = (TriggeredAvgNode*) processor;
+    processorNode = (TriggeredCaptureNode*) processor;
 }
 
 bool ChangeTriggerTTLLine::perform()
@@ -245,8 +244,12 @@ bool ChangeTriggerTTLLine::perform()
     if (source != nullptr)
     {
         processorNode->getTriggerSources().setTriggerSourceLine (source, newLine);
-        if (auto* editor = dynamic_cast<TriggeredAvgEditor*> (processorNode->getEditor()))
-            editor->updateConditionName (source);
+
+        // Generic rather than a downcast to one plugin's editor: every editor's
+        // updateSettings() rebuilds whatever it draws per source, and this class
+        // is now shared by all three.
+        processorNode->getEditor()->updateSettings();
+
         processorNode->registerUndoableAction (processorNode->getNodeId(), this);
         CoreServices::sendStatusMessage ("Changed trigger condition line from " + String (oldLine)
                                          + " to " + String (newLine));
@@ -268,7 +271,7 @@ bool ChangeTriggerTTLLine::undo()
     return true;
 }
 
-ChangeTriggerType::ChangeTriggerType (TriggeredAvgNode* processor_,
+ChangeTriggerType::ChangeTriggerType (TriggeredCaptureNode* processor_,
                                       TriggerSource* source_,
                                       TriggerType newType_)
     : ProcessorAction ("ChangeTriggerType"),
@@ -282,7 +285,7 @@ ChangeTriggerType::ChangeTriggerType (TriggeredAvgNode* processor_,
 
 void ChangeTriggerType::restoreOwner (GenericProcessor* processor)
 {
-    processorNode = (TriggeredAvgNode*) processor;
+    processorNode = (TriggeredCaptureNode*) processor;
 }
 
 bool ChangeTriggerType::perform()
@@ -314,7 +317,7 @@ bool ChangeTriggerType::undo()
     return true;
 }
 
-SetTriggerSourcePattern::SetTriggerSourcePattern (TriggeredAvgNode* processor_,
+SetTriggerSourcePattern::SetTriggerSourcePattern (TriggeredCaptureNode* processor_,
                                                   TriggerSource* source_,
                                                   Field field_,
                                                   const String& newPattern_)
@@ -335,7 +338,7 @@ SetTriggerSourcePattern::SetTriggerSourcePattern (TriggeredAvgNode* processor_,
 
 void SetTriggerSourcePattern::restoreOwner (GenericProcessor* processor)
 {
-    processorNode = static_cast<TriggeredAvgNode*> (processor);
+    processorNode = static_cast<TriggeredCaptureNode*> (processor);
 }
 
 bool SetTriggerSourcePattern::perform()
