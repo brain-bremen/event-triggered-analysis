@@ -162,7 +162,7 @@ Both spectral plugins build and install; 209/209 tests pass, unchanged.
 
 ---
 
-## Phase 2 — Split the core **[todo]**
+## Phase 2 — Split the core **[done]**
 
 Pure relabelling, and only possible once Phase 1 has landed. Both existing plugins
 must build and every existing test must pass at the end of this phase, unchanged.
@@ -182,8 +182,13 @@ in isolation, and it is worth doing even if the import never happens.
 | `Ui/TriggerSourceConfigWindow.{h,cpp}` | already retargeted to `TriggeredCaptureNode*` in Phase 1 |
 | `Ui/TriggerMonitorWindow.{h,cpp}` | likewise |
 | `TriggeredCaptureNode.{h,cpp}` | created by Phase 1 |
-| `Ui/ParameterControl.{h,cpp}`, `Ui/ParameterLayout.h`, `Ui/EditorLayout.h` | generic editor widgets |
-| `Ui/PanelGrid.{h,cpp}` | generic grid layout |
+| `Ui/ParameterControl.{h,cpp}` | generic editor widget |
+
+**[changed]** `Ui/ParameterLayout.h`, `Ui/EditorLayout.h` and `Ui/PanelGrid.{h,cpp}`
+were planned as generic and are not. The first two enumerate spectral parameter
+names; `PanelGrid` owns `SpectrumPanel`. All three stayed in `Spectral/Ui`. Only
+`ParameterControl` turned out to be the plugin-agnostic widget the plan assumed
+all four were.
 
 ### Files that split
 
@@ -205,9 +210,9 @@ Everything else — `Fftw`, `FastSize`, `Dpss`, `FrequencyGrid`, `MorletTransfor
 - FFTW discovery, the `find_library` fatal-errors and the runtime `install()` rules
   move from the top-level `CMakeLists.txt` down into `Source/Spectral/`.
 - `spectra_core` links `trigger_core` `PUBLIC`.
-- `spectra_apply_common_settings()` is renamed `oe_apply_common_settings()` and
-  `spectra_add_plugin()` to `oe_add_plugin()`, taking the core to link as an
-  argument. Three plugins, two cores — the function can no longer hardcode one.
+- **[changed]** `spectra_apply_common_settings()` and `spectra_add_plugin()` keep
+  their names for now. Generalising them needs a plugin that links a different
+  core, and that does not exist until Phase 4. Deferred rather than done blind.
 
 ### Checkpoints
 
@@ -219,9 +224,12 @@ Everything else — `Fftw`, `FastSize`, `Dpss`, `FrequencyGrid`, `MorletTransfor
    25 suites, green.)
 4. `trigger_core_tests` links and runs with no `libfftw3-3.dll` beside it.
 
-### Two build defects to fix while in here
+### Two build defects to fix while in here **[done]**
 
-Both were hit taking the baseline and both are pre-existing:
+Both were hit taking the baseline and both are pre-existing. Both are fixed: the
+output directory now carries `$<CONFIG>` and the runtime copy takes
+`TestBin/common/$<CONFIG>`, so `gtest_discover_tests` finds the binary and `ctest`
+runs all 209.
 
 - `RUNTIME_OUTPUT_DIRECTORY` is set without a per-config generator expression, so
   under a multi-config generator the binary lands in `TestBin/TriggeredSpectra/
