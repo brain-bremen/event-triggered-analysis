@@ -121,6 +121,12 @@ private:
     };
 
     DataRange calculateDataRange (const float* channelData, int numSamples);
+
+    /** Min/max across exactly the trials that are drawn, or false if there are
+     *  none. Shared by the average and the trials so that the two are plotted
+     *  against the same volts-per-pixel. */
+    bool calculateDisplayedTrialRange (DataRange& range) const;
+
     TimeRange calculateTimeRange (int numSamples) const;
     void plotWithDirectMapping (const float* channelData,
                                 int numSamples,

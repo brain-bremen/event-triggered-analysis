@@ -238,10 +238,16 @@ void SinglePlotPanel::setPlotType (EventTriggered::DisplayMode plotType)
             break;
     }
 
-    // Update trial paths if needed
+    // Both caches, not just the trials'. The average's scale depends on whether
+    // the trials are on screen — it borrows their range so the two agree — so
+    // toggling the plot type changes the average even though the trial count,
+    // which is what its cache is keyed on, has not moved.
+    cachedNumTrials = -1;
+    updateCachedAveragPath();
+
     if (plotAllTraces)
     {
-        cachedTrialCount = -1; // force update
+        cachedTrialCount = -1;
         updateCachedTrialPaths();
     }
 
@@ -317,6 +323,37 @@ SinglePlotPanel::DataRange SinglePlotPanel::calculateDataRange (const float* cha
         result.range = 1.0f;
 
     return result;
+}
+
+bool SinglePlotPanel::calculateDisplayedTrialRange (DataRange& range) const
+{
+    if (m_trialBuffer == nullptr)
+        return false;
+
+    const int currentTrialCount = m_trialBuffer->getNumStoredTrials();
+
+    if (currentTrialCount == 0)
+        return false;
+
+    // Exactly the trials updateCachedTrialPaths() draws, so the average is scaled
+    // against what is actually on screen rather than against trials scrolled out
+    // of the display window.
+    const int trialsToPlot = std::min (maxTrialsToDisplay, currentTrialCount);
+    const int startIndex = currentTrialCount - trialsToPlot;
+
+    range.minVal = std::numeric_limits<float>::max();
+    range.maxVal = std::numeric_limits<float>::lowest();
+
+    if (! m_trialBuffer->getChannelMinMax (
+            channelIndexInAverageBuffer, startIndex, currentTrialCount, range.minVal, range.maxVal))
+        return false;
+
+    range.range = range.maxVal - range.minVal;
+
+    if (range.range < 1e-6f)
+        range.range = 1.0f;
+
+    return true;
 }
 
 SinglePlotPanel::TimeRange SinglePlotPanel::calculateTimeRange (int numSamples) const
@@ -742,34 +779,24 @@ bool SinglePlotPanel::updateCachedTrialPaths()
     int trialsToPlot = std::min (maxTrialsToDisplay, currentTrialCount);
     int startIndex = currentTrialCount - trialsToPlot; // Start from most recent trials
 
-    // Calculate data range for all trials (for consistent scaling)
+    // One range for every trial, and the same one updateCachedAveragPath() uses.
     DataRange globalDataRange;
-    globalDataRange.minVal = std::numeric_limits<float>::max();
-    globalDataRange.maxVal = std::numeric_limits<float>::lowest();
 
     if (useCustomYLimits)
     {
         globalDataRange.minVal = yMin;
         globalDataRange.maxVal = yMax;
-    }
-    else
-    {
-        // Use the SingleTrialBuffer's optimized min/max calculation
-        if (! m_trialBuffer->getChannelMinMax (channelIndexInAverageBuffer,
-                                               startIndex,
-                                               currentTrialCount,
-                                               globalDataRange.minVal,
-                                               globalDataRange.maxVal))
-        {
-            // Fallback if method fails
-            globalDataRange.minVal = 0.0f;
-            globalDataRange.maxVal = 1.0f;
-        }
-    }
+        globalDataRange.range = globalDataRange.maxVal - globalDataRange.minVal;
 
-    globalDataRange.range = globalDataRange.maxVal - globalDataRange.minVal;
-    if (globalDataRange.range < 1e-6f)
+        if (globalDataRange.range < 1e-6f)
+            globalDataRange.range = 1.0f;
+    }
+    else if (! calculateDisplayedTrialRange (globalDataRange))
+    {
+        globalDataRange.minVal = 0.0f;
+        globalDataRange.maxVal = 1.0f;
         globalDataRange.range = 1.0f;
+    }
 
     // Get time range (assuming all trials have same time window)
     // Use the known number of samples from the buffer
@@ -831,7 +858,22 @@ bool SinglePlotPanel::updateCachedAveragPath()
     const int numSamples = avgBuffer.getNumSamples();
     const float* channelData = avgBuffer.getReadPointer (channelIndexInAverageBuffer);
 
-    auto dataRange = calculateDataRange (channelData, numSamples);
+    // Auto-scale has to agree with the trials, or the two are drawn at different
+    // volts-per-pixel on the same axes and the average appears to swing wider
+    // than the data it was computed from.
+    //
+    // The trials' range is the right shared one whenever they are on screen: a
+    // mean lies between the min and max of the values it averages, sample by
+    // sample, so the trials' global range always contains the average's. No union
+    // is needed, and no second pass over the average.
+    //
+    // With trials hidden there is nothing to agree with, so the average scales to
+    // itself as before.
+    DataRange dataRange;
+
+    if (useCustomYLimits || ! plotAllTraces || ! calculateDisplayedTrialRange (dataRange))
+        dataRange = calculateDataRange (channelData, numSamples);
+
     auto timeRange = calculateTimeRange (numSamples);
 
     cachedAveragePath.clear();
