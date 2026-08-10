@@ -107,9 +107,9 @@ bool TaperedPeriodogram::prepare (const Config& config, int maxChannels)
             m_psdScale[static_cast<std::size_t> (f)] = 1.0 / config.sampleRate;
     }
 
-    m_concentrations = (config.method == Method::Multitaper)
-                           ? Dpss::concentrations (m_tapers, config.timeBandwidth)
-                           : std::vector<double> {};
+    // Concentrations are computed on demand; see taperConcentrations().
+    m_concentrations.clear();
+    m_concentrationsValid = false;
 
     // --- Buffers and plan -------------------------------------------------
     const int batchSize = m_maxChannels * m_tapers.numTapers();
@@ -117,8 +117,10 @@ bool TaperedPeriodogram::prepare (const Config& config, int maxChannels)
     m_taperedInput.resize (static_cast<std::size_t> (batchSize) * m_fftLength);
     m_spectra.resize (static_cast<std::size_t> (batchSize) * m_numSpectrumBins);
 
+    // Estimate rather than Measure: this plan is rebuilt on every reconfiguration
+    // and would need ~19,000 transforms to repay the measuring. See PlanRigor.
     m_plan = Fftw::RealToComplexPlan (
-        m_fftLength, batchSize, m_taperedInput.data(), m_spectra.data(), Fftw::PlanRigor::Measure);
+        m_fftLength, batchSize, m_taperedInput.data(), m_spectra.data(), Fftw::PlanRigor::Estimate);
 
     if (! m_plan.isValid())
         return false;
@@ -198,6 +200,21 @@ void TaperedPeriodogram::process (const juce::AudioBuffer<float>& trial,
             }
         }
     }
+}
+
+const std::vector<double>& TaperedPeriodogram::taperConcentrations() const
+{
+    if (! m_concentrationsValid)
+    {
+        if (m_prepared && m_config.method == Method::Multitaper)
+            m_concentrations = Dpss::concentrations (m_tapers, m_config.timeBandwidth);
+        else
+            m_concentrations.clear();
+
+        m_concentrationsValid = true;
+    }
+
+    return m_concentrations;
 }
 
 } // namespace TriggeredSpectra

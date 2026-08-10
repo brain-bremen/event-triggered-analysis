@@ -166,6 +166,12 @@ void SpectrumPanel::setErrorBand (std::span<const float> errors)
     m_cacheValid = false;
 }
 
+void SpectrumPanel::setReferenceCurve (std::span<const float> curve)
+{
+    m_reference.assign (curve.begin(), curve.end());
+    m_cacheValid = false;
+}
+
 void SpectrumPanel::setTrialCurves (const std::vector<std::vector<float>>& trials)
 {
     m_trials = trials;
@@ -277,6 +283,7 @@ void SpectrumPanel::rebuildPaths()
 {
     m_meanPath.clear();
     m_errorPath.clear();
+    m_referencePath.clear();
     m_trialPaths.clear();
 
     const auto plot = getPlotBounds();
@@ -326,6 +333,19 @@ void SpectrumPanel::rebuildPaths()
             m_meanPath.startNewSubPath (point);
         else
             m_meanPath.lineTo (point);
+    }
+
+    if (m_reference.size() >= static_cast<std::size_t> (count))
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            const auto point = toPoint (i, m_reference[static_cast<std::size_t> (i)]);
+
+            if (i == 0)
+                m_referencePath.startNewSubPath (point);
+            else
+                m_referencePath.lineTo (point);
+        }
     }
 
     // Error band as a closed polygon: up the top edge, back along the bottom.
@@ -449,6 +469,21 @@ void SpectrumPanel::paint (juce::Graphics& g)
 
         g.setColour (m_titleColour);
         g.strokePath (m_meanPath, juce::PathStrokeType (1.6f));
+
+        // The aperiodic background, dashed so it cannot be mistaken for data.
+        // Drawn over the mean rather than under it: the whole point is to see
+        // where the two part company.
+        if (! m_referencePath.isEmpty())
+        {
+            juce::Path dashed;
+            const float dashes[] = { 5.0f, 4.0f };
+
+            juce::PathStrokeType (1.2f).createDashedStroke (
+                dashed, m_referencePath, dashes, juce::numElementsInArray (dashes));
+
+            g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.75f));
+            g.fillPath (dashed);
+        }
 
         drawValueAxis (g, plot);
 

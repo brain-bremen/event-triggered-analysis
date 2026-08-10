@@ -23,7 +23,10 @@
 #include "TriggeredCoherenceEditor.h"
 
 #include "../TriggeredCoherenceNode.h"
+#include "PairConfigWindow.h"
 #include "TriggeredCoherenceCanvas.h"
+#include "Core/Ui/AnalysisSettingsWindow.h"
+#include "Core/Ui/EditorLayout.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
 
@@ -31,34 +34,50 @@ namespace TriggeredSpectra
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG COHER", 220)
+    // Wider than TriggeredPower's 250: there is a fourth button, and four
+    // buttons in 220 px of content are too narrow to read.
+    : VisualizerEditor (parentNode, "TRIG COHER", 310)
 {
+    // See TriggeredPowerEditor: the editor carries collection and computation,
+    // the canvas carries display.
     m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     m_configureButton->addListener (this);
-    m_configureButton->setBounds (15, 30, 120, 22);
     addAndMakeVisible (m_configureButton.get());
+
+    m_analysisButton = std::make_unique<UtilityButton> ("ANALYSIS");
+    m_analysisButton->addListener (this);
+    addAndMakeVisible (m_analysisButton.get());
 
     m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     m_monitorButton->addListener (this);
-    m_monitorButton->setBounds (139, 30, 66, 22);
     addAndMakeVisible (m_monitorButton.get());
 
+    m_pairsButton = std::make_unique<UtilityButton> ("PAIRS");
+    m_pairsButton->addListener (this);
+    addAndMakeVisible (m_pairsButton.get());
+
+    // Positions come from resized(); the coordinates here only decide creation
+    // order, which is the order they are stacked in.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
     for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-    {
         if (auto* parameterEditor = getParameterEditor (name))
-        {
             parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
-            parameterEditor->setBounds (
-                parameterEditor->getX(), parameterEditor->getY(), 90, 36);
-        }
-    }
 
     addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+}
+
+void TriggeredCoherenceEditor::resized()
+{
+    VisualizerEditor::resized();
+    layoutEditorContents (*this,
+                          m_configureButton.get(),
+                          m_analysisButton.get(),
+                          m_monitorButton.get(),
+                          m_pairsButton.get());
 }
 
 void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
@@ -71,10 +90,22 @@ void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)
             std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button),
             button);
     }
+    else if (button == m_analysisButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<AnalysisSettingsWindow> (node, acquisitionIsActive, button), button);
+    }
     else if (button == m_monitorButton.get())
     {
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<TriggerMonitorWindow> (node, button), button);
+    }
+    else if (button == m_pairsButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<PairConfigWindow> (
+                static_cast<TriggeredCoherenceNode*> (getProcessor()), acquisitionIsActive, button),
+            button);
     }
 }
 

@@ -64,6 +64,21 @@ int outputBinCount (const TfCoefficients& coefficients)
 {
     return coefficients.binAxis() == BinAxis::Taper ? 1 : coefficients.numBins();
 }
+
+/** The phase of `value` as a unit vector, discarding the magnitude.
+ *
+ *  A cross-spectrum of exactly zero has no phase, so it contributes nothing
+ *  rather than an arbitrary direction. That biases PPC very slightly downward
+ *  for that bin, which is the right way to be wrong: it can only understate
+ *  consistency, never invent it. In practice it takes a channel that is
+ *  identically zero to reach.
+ */
+std::complex<double> unitVector (const std::complex<double>& value)
+{
+    const double magnitude = std::abs (value);
+
+    return magnitude > 0.0 ? value / magnitude : std::complex<double> {};
+}
 } // namespace
 
 // --- PowerAccumulator ------------------------------------------------------
@@ -207,23 +222,38 @@ bool CrossSpectrumAccumulator::addTrial (const TfCoefficients& coefficients,
                                          int channelA,
                                          int channelB)
 {
-    if (! matches (coefficients.numFrequencies(), outputBinCount (coefficients)))
+    return addTrial (coefficients, channelA, coefficients, channelB);
+}
+
+bool CrossSpectrumAccumulator::addTrial (const TfCoefficients& coefficientsA,
+                                         int channelA,
+                                         const TfCoefficients& coefficientsB,
+                                         int channelB)
+{
+    if (! matches (coefficientsA.numFrequencies(), outputBinCount (coefficientsA)))
+        return false;
+
+    // The two blocks have to describe the same estimate for a cross-spectrum
+    // between them to mean anything.
+    if (coefficientsB.numFrequencies() != coefficientsA.numFrequencies()
+        || coefficientsB.numBins() != coefficientsA.numBins()
+        || coefficientsB.binAxis() != coefficientsA.binAxis())
         return false;
 
     if (m_crossSum.empty())
         return false;
 
-    if (channelA < 0 || channelA >= coefficients.numChannels() || channelB < 0
-        || channelB >= coefficients.numChannels())
+    if (channelA < 0 || channelA >= coefficientsA.numChannels() || channelB < 0
+        || channelB >= coefficientsB.numChannels())
         return false;
 
-    const bool poolTapers = (coefficients.binAxis() == BinAxis::Taper);
-    m_binsPooledPerTrial = poolTapers ? coefficients.numBins() : 1;
+    const bool poolTapers = (coefficientsA.binAxis() == BinAxis::Taper);
+    m_binsPooledPerTrial = poolTapers ? coefficientsA.numBins() : 1;
 
     for (int frequency = 0; frequency < m_numFrequencies; ++frequency)
     {
-        const auto a = coefficients.bins (channelA, frequency);
-        const auto b = coefficients.bins (channelB, frequency);
+        const auto a = coefficientsA.bins (channelA, frequency);
+        const auto b = coefficientsB.bins (channelB, frequency);
 
         if (poolTapers)
         {
@@ -371,6 +401,139 @@ double CrossSpectrumAccumulator::significanceThreshold (int degreesOfFreedom, do
         return 1.0;
 
     return 1.0 - std::pow (alpha, 1.0 / (static_cast<double> (degreesOfFreedom) - 1.0));
+}
+
+// --- PpcAccumulator --------------------------------------------------------
+
+void PpcAccumulator::setSize (int numFrequencies, int numBins)
+{
+    m_numFrequencies = std::max (0, numFrequencies);
+    m_numBins = std::max (0, numBins);
+
+    m_unitSum.assign (static_cast<std::size_t> (m_numFrequencies) * m_numBins,
+                      std::complex<double> {});
+    m_numTrials = 0;
+}
+
+void PpcAccumulator::reset()
+{
+    std::fill (m_unitSum.begin(), m_unitSum.end(), std::complex<double> {});
+    m_numTrials = 0;
+}
+
+bool PpcAccumulator::addTrial (const TfCoefficients& coefficients, int channelA, int channelB)
+{
+    if (! matches (coefficients.numFrequencies(), outputBinCount (coefficients)))
+        return false;
+
+    if (m_unitSum.empty())
+        return false;
+
+    if (channelA < 0 || channelA >= coefficients.numChannels() || channelB < 0
+        || channelB >= coefficients.numChannels())
+        return false;
+
+    const bool averageTapers = (coefficients.binAxis() == BinAxis::Taper);
+
+    for (int frequency = 0; frequency < m_numFrequencies; ++frequency)
+    {
+        const auto a = coefficients.bins (channelA, frequency);
+        const auto b = coefficients.bins (channelB, frequency);
+
+        if (averageTapers)
+        {
+            // One phase per trial. Averaging the cross-spectrum over tapers
+            // first is a better estimate of that single phase; counting the
+            // tapers as separate observations would be a different, wrong,
+            // quantity. See the class comment.
+            std::complex<double> cross {};
+
+            for (std::size_t taper = 0; taper < a.size(); ++taper)
+                cross += std::complex<double> (a[taper].real(), a[taper].imag())
+                         * std::conj (std::complex<double> (b[taper].real(), b[taper].imag()));
+
+            m_unitSum[offset (frequency, 0)] += unitVector (cross);
+        }
+        else
+        {
+            for (int bin = 0; bin < m_numBins; ++bin)
+            {
+                const auto& sampleA = a[static_cast<std::size_t> (bin)];
+                const auto& sampleB = b[static_cast<std::size_t> (bin)];
+
+                const std::complex<double> cross =
+                    std::complex<double> (sampleA.real(), sampleA.imag())
+                    * std::conj (std::complex<double> (sampleB.real(), sampleB.imag()));
+
+                m_unitSum[offset (frequency, bin)] += unitVector (cross);
+            }
+        }
+    }
+
+    ++m_numTrials;
+    return true;
+}
+
+int PpcAccumulator::numObservations (int smoothTimeBins, int smoothFreqBins) const
+{
+    const int pooledBins = (2 * std::max (0, smoothTimeBins) + 1)
+                           * (2 * std::max (0, smoothFreqBins) + 1);
+
+    return m_numTrials * pooledBins;
+}
+
+void PpcAccumulator::ppc (int frequency,
+                          std::span<double> destination,
+                          int smoothTimeBins,
+                          int smoothFreqBins) const
+{
+    if (destination.size() < static_cast<std::size_t> (m_numBins))
+        return;
+
+    const int pooledBins = (2 * std::max (0, smoothTimeBins) + 1)
+                           * (2 * std::max (0, smoothFreqBins) + 1);
+    const double observations = static_cast<double> (m_numTrials) * pooledBins;
+
+    // Two observations are the minimum that can be compared with each other at
+    // all, and the estimator divides by (M - 1).
+    if (observations < 2.0 || frequency < 0 || frequency >= m_numFrequencies)
+    {
+        std::fill (destination.begin(), destination.begin() + m_numBins, 0.0);
+        return;
+    }
+
+    const int firstFrequency = std::max (0, frequency - std::max (0, smoothFreqBins));
+    const int lastFrequency =
+        std::min (m_numFrequencies - 1, frequency + std::max (0, smoothFreqBins));
+
+    for (int bin = 0; bin < m_numBins; ++bin)
+    {
+        const int firstBin = std::max (0, bin - std::max (0, smoothTimeBins));
+        const int lastBin = std::min (m_numBins - 1, bin + std::max (0, smoothTimeBins));
+
+        std::complex<double> resultant {};
+
+        for (int f = firstFrequency; f <= lastFrequency; ++f)
+            for (int t = firstBin; t <= lastBin; ++t)
+                resultant += m_unitSum[offset (f, t)];
+
+        // Clamped at the top only: the lower bound of -1/(M-1) is a real value
+        // this estimator is meant to be able to report, and flooring it at zero
+        // would hide exactly the scatter that shows it is unbiased.
+        destination[static_cast<std::size_t> (bin)] =
+            std::min (1.0,
+                      (std::norm (resultant) - observations) / (observations * (observations - 1.0)));
+    }
+}
+
+double PpcAccumulator::significanceThreshold (int numObservations, double alpha)
+{
+    if (numObservations < 2 || alpha <= 0.0 || alpha >= 1.0)
+        return 1.0;
+
+    const double z = -std::log (alpha);
+
+    return std::min (1.0, (z - 1.0) / (static_cast<double> (numObservations) - 1.0));
 }
 
 } // namespace TriggeredSpectra

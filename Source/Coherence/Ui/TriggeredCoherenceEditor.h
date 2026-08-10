@@ -42,14 +42,27 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
+    /** Lays the inline controls out from the editor's measured height. Fixed
+        coordinates put the mode selector below the visible area. */
+    void resized() override;
+
 private:
     /** Opens the trigger-source table. Without at least one source nothing is
         ever captured, so this is the first thing a user needs. */
     std::unique_ptr<UtilityButton> m_configureButton;
 
+    /** Opens every parameter that changes what is computed. Display-only settings
+        deliberately live on the canvas instead. */
+    std::unique_ptr<UtilityButton> m_analysisButton;
+
     /** Opens the live trigger counters, for when a source is configured but no
         trials appear. */
     std::unique_ptr<UtilityButton> m_monitorButton;
+
+    /** Opens the channel-pair table. Coherence is defined on pairs, so with an
+        empty list this plugin transforms every trial and then has nowhere to put
+        the result. */
+    std::unique_ptr<UtilityButton> m_pairsButton;
 
     TriggeredCoherenceCanvas* m_canvas = nullptr;
 

@@ -96,4 +96,31 @@ void applyFittedWhitening (std::span<const double> frequencies,
                            std::span<double> values,
                            const AperiodicFit& fit);
 
+/** The background implied by a *fixed* exponent, positioned on the data.
+ *
+ *  Fixed-exponent whitening names only a slope, so on its own there is nothing
+ *  to draw: a line needs an intercept. This picks the intercept that puts the
+ *  line on the spectrum, as the median of `log10 P + chi * log10 f`.
+ *
+ *  Median rather than mean, for the same reason `fitAperiodic` avoids ordinary
+ *  least squares: oscillatory peaks are one-sided, so a mean would let them lift
+ *  the whole line off the background it is supposed to trace. The exponent is
+ *  taken as given and never adjusted — the point of the manual mode is that the
+ *  slope is the user's to set, and silently fitting it would make the control
+ *  appear not to work.
+ *
+ *  @param power  linear power; non-positive entries are ignored
+ *  @return an invalid fit when nothing usable was supplied
+ */
+AperiodicFit anchorFixedExponent (std::span<const double> frequencies,
+                                  std::span<const double> power,
+                                  double exponent);
+
+/** Samples an aperiodic background across `frequencies` into `destination`, in
+    linear power. Used to draw the line that whitening removes; empty or invalid
+    input leaves the destination untouched. */
+void aperiodicCurve (std::span<const double> frequencies,
+                     const AperiodicFit& fit,
+                     std::span<double> destination);
+
 } // namespace TriggeredSpectra

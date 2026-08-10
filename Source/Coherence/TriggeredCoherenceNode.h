@@ -23,6 +23,7 @@
 #pragma once
 
 #include "Core/Accumulators.h"
+#include "Core/PairRules.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TriggeredSpectraNode.h"
 
@@ -57,11 +58,22 @@ struct ChannelPair
     bool isResolved() const { return selectedA >= 0 && selectedB >= 0; }
 };
 
-/** What a coherence panel draws. */
+/** What a coherence panel draws.
+ *
+ *  Appended to, never reordered: the index is what goes into the saved signal
+ *  chain, so inserting in the middle would silently change what a reloaded
+ *  configuration displays.
+ */
 enum class CoherenceDisplay
 {
     Coherence = 0,
-    Phase = 1
+    Phase = 1,
+    /** The trial-shifted null: the same estimate with channel B taken from the
+        previous trial. Whatever is left is explained by the trigger alone. */
+    ShiftPredictor = 2,
+    /** Pairwise phase consistency: the same question as coherence, without the
+        1/nu bias that makes a live coherence curve sag as trials accumulate. */
+    Ppc = 3
 };
 
 /** Event-triggered pairwise coherence.
@@ -84,6 +96,12 @@ public:
 
     // --- Pairs -------------------------------------------------------------
 
+    // Every mutator here rebuilds the accumulators, which **discards accumulated
+    // trials**: the pair set decides how many cross-spectra there are, so it
+    // cannot change underneath them. rebuildConfiguration() also asserts
+    // acquisition is stopped, which is why the pair window is read-only while
+    // running, exactly like the trigger table.
+
     /** Adds a pair by global channel index. Returns false if it duplicates an
         existing pair, pairs a channel with itself, or exceeds the cap. */
     bool addPair (int globalA, int globalB, const juce::String& name = {});
@@ -95,6 +113,12 @@ public:
         the common case, and tedious to build one pair at a time. */
     void generateSeedPairs (int globalSeedChannel);
 
+    // These two only change how a pair is labelled, so they deliberately do
+    // *not* rebuild: renaming a pair must never cost you the trials behind it.
+
+    void setPairName (int index, const juce::String& name);
+    void setPairColour (int index, juce::Colour colour);
+
     const std::vector<ChannelPair>& getPairs() const { return m_pairs; }
     int getMaxPairs() const { return maxPairs; }
 
@@ -104,11 +128,22 @@ public:
 
     int getNumTrials (TriggerSource* source) const;
 
+    /** Trials behind the shift predictor. Always one fewer than getNumTrials()
+        once running — the first trial has no predecessor to pair against — and
+        zero when the predictor is switched off. */
+    int getNumShiftPredictorTrials (TriggerSource* source) const;
+
     /** Degrees of freedom behind the current estimate: trials x tapers x
         smoothing neighbourhood. */
     int getDegreesOfFreedom (TriggerSource* source) const;
 
-    /** Coherence above which zero coherence is rejected at alpha = 0.05. */
+    /** Observations behind the PPC estimate: trials x smoothing neighbourhood.
+        Tapers deliberately do not multiply this — see PpcAccumulator. */
+    int getNumPpcObservations (TriggerSource* source) const;
+
+    /** The value above which the null is rejected at alpha = 0.05, for whichever
+        estimator is on display — the two have different null distributions, so
+        one threshold cannot serve both. */
     double getSignificanceThreshold (TriggerSource* source) const;
 
     /** Fills `destination` (numBins values) for one pair and frequency, applying
@@ -117,6 +152,18 @@ public:
                                  int pairIndex,
                                  int frequencyIndex,
                                  std::span<double> destination) const;
+
+    /** The shift-predictor coherence for one pair and frequency, whatever the
+        display mode is set to — so a panel can draw it *beside* the real
+        estimate rather than instead of it, which is how it is actually read.
+        False when the predictor is off or has no trials yet. */
+    bool getShiftPredictorForDisplay (TriggerSource* source,
+                                      int pairIndex,
+                                      int frequencyIndex,
+                                      std::span<double> destination) const;
+
+    /** Whether the trial-shifted null is being accumulated. */
+    bool isShiftPredictorEnabled() const;
 
     int getNumFrequencies() const { return m_engine.numFrequencies(); }
     int getNumBins() const { return m_engine.numAccumulatorBins(); }
@@ -132,6 +179,12 @@ protected:
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
 
+    /** Adds `shift_predictor` to the base list: toggling it allocates a second
+        accumulator per pair, and the estimate it holds cannot be reconstructed
+        for trials that have already gone by, so it has to reset like any other
+        analysis parameter rather than pretending to apply retroactively. */
+    bool isAnalysisParameter (const juce::String& parameterName) const override;
+
     bool processCapturedTrial (const CaptureRequest& request,
                                const juce::AudioBuffer<float>& trial) override;
 
@@ -140,6 +193,14 @@ protected:
 private:
     /** Recomputes selectedA/selectedB from the current channel selection. */
     void resolvePairs();
+
+    /** Adds without announcing it. Used where a batch is being built — seed
+        generation and XML load — so the configuration is rebuilt once at the
+        end rather than once per pair. */
+    bool addPairWithoutNotifying (int globalA, int globalB, const juce::String& name);
+
+    /** Resizes the accumulators to the current pair list and repaints. */
+    void pairsChanged();
 
     int getSmoothTimeBins() const;
     int getSmoothFreqBins() const;
@@ -157,8 +218,32 @@ private:
 
     mutable juce::CriticalSection m_dataLock;
 
-    /** One accumulator per (trigger source, pair index). */
-    std::map<std::pair<TriggerSource*, int>, CrossSpectrumAccumulator> m_accumulators;
+    /** The real estimate and its trial-shifted null, kept together so they
+        cannot drift out of step the way two parallel maps would. */
+    struct PairAccumulators
+    {
+        CrossSpectrumAccumulator observed;
+        CrossSpectrumAccumulator shifted;
+
+        /** Always accumulated, with no parameter gating it. It is half the size
+            of the cross-spectrum accumulator, it cannot be reconstructed from
+            one afterwards, and it is the estimate that does not mislead while
+            trials are still coming in — so paying for it unconditionally is
+            cheaper than a switch the user has to know to find. */
+        PpcAccumulator ppc;
+    };
+
+    /** One pair of accumulators per (trigger source, pair index). */
+    std::map<std::pair<TriggerSource*, int>, PairAccumulators> m_accumulators;
+
+    /** The previous trial's coefficients, per trigger source, waiting to be
+        paired against the next one.
+     *
+     *  Per source rather than one global slot: trials from different sources are
+     *  different conditions, and crossing them would make the null answer a
+     *  question nobody asked. Empty when the predictor is off.
+     */
+    std::map<TriggerSource*, TfCoefficients> m_previousTrial;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceNode)
 };

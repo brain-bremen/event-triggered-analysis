@@ -194,4 +194,51 @@ void applyFittedWhitening (std::span<const double> frequencies,
     }
 }
 
+AperiodicFit anchorFixedExponent (std::span<const double> frequencies,
+                                  std::span<const double> power,
+                                  double exponent)
+{
+    const std::size_t count = std::min (frequencies.size(), power.size());
+
+    // offset_i is what the intercept would have to be for the line to pass
+    // exactly through point i. The median of those is the line that sits on the
+    // spectrum without being dragged up by its peaks.
+    std::vector<double> offsets;
+    offsets.reserve (count);
+
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        if (frequencies[i] <= 0.0 || power[i] <= 0.0)
+            continue;
+
+        offsets.push_back (std::log10 (power[i]) + exponent * std::log10 (frequencies[i]));
+    }
+
+    if (offsets.empty())
+        return {};
+
+    const std::size_t middle = offsets.size() / 2;
+    std::nth_element (offsets.begin(), offsets.begin() + middle, offsets.end());
+
+    AperiodicFit fit;
+    fit.offset = offsets[middle];
+    fit.exponent = exponent;
+    fit.valid = true;
+
+    return fit;
+}
+
+void aperiodicCurve (std::span<const double> frequencies,
+                     const AperiodicFit& fit,
+                     std::span<double> destination)
+{
+    if (! fit.valid)
+        return;
+
+    const std::size_t count = std::min (frequencies.size(), destination.size());
+
+    for (std::size_t i = 0; i < count; ++i)
+        destination[i] = frequencies[i] > 0.0 ? fit.evaluate (frequencies[i]) : 0.0;
+}
+
 } // namespace TriggeredSpectra

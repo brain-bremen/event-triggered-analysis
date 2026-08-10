@@ -70,10 +70,35 @@ inline constexpr auto baseline_end_ms = "baseline_end_ms";
 inline constexpr auto whitening_mode = "whitening_mode";
 inline constexpr auto whitening_exponent = "whitening_exponent";
 
+/** Draw the aperiodic background over the un-whitened spectrum instead of
+    plotting the whitened result. The tuning view for `whitening_exponent`. */
+inline constexpr auto whitening_overlay = "whitening_overlay";
+
 // --- TriggeredCoherence only -----------------------------------------------
 
 inline constexpr auto smooth_time_bins = "smooth_time_bins";
 inline constexpr auto smooth_freq_bins = "smooth_freq_bins";
 inline constexpr auto coherence_display = "coherence_display";
+
+/** Accumulate the trial-shifted null alongside the real estimate. Analysis-time:
+    it needs its own accumulator per pair and the previous trial held back. */
+inline constexpr auto shift_predictor = "shift_predictor";
+
+// --- Every name above ------------------------------------------------------
+
+/** The full set, so that "does this parameter have a control anywhere?" can be
+    asked as a test rather than discovered by a user who cannot reach it.
+    Add a parameter above and it must be added here too, which is the point:
+    Ui/ParameterLayout.h then has to place it. */
+inline constexpr const char* all[] = {
+    channels,        pre_ms,           post_ms,           mode,
+    freq_min,        freq_max,         num_freqs,         freq_spacing,
+    tf_method,       n_cycles_low,     n_cycles_high,     stft_window_ms,
+    stft_hop_ms,     line_method,      nw,                n_tapers,
+    trigger_line,    trigger_type,     max_trials,        baseline_mode,
+    baseline_start_ms, baseline_end_ms, whitening_mode,   whitening_exponent,
+    whitening_overlay, smooth_time_bins, smooth_freq_bins, coherence_display,
+    shift_predictor
+};
 
 } // namespace TriggeredSpectra::ParameterNames

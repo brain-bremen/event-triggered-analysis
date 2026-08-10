@@ -2,14 +2,12 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
-Phases 1–3 are complete. Phase 4 is partly done — coherence estimates fully, but
-the pair-configuration UI is missing, so no pairs can be created. Phase 5 is
-outstanding. Places where implementation diverged from this plan are marked
-**[changed]**; each says why.
+Phases 1–4 are complete. Phase 5 is outstanding. Places where implementation
+diverged from this plan are marked **[changed]**; each says why.
 
 **Almost nothing here has been verified visually.** Both plugins now load, and the
 trigger-source table opens and creates sources — that much has been seen working.
-Everything else rests on 160 unit tests and a clean build/install: neither plugin
+Everything else rests on 197 unit tests and a clean build/install: neither plugin
 has been watched rendering a spectrum, and the display layer has no test coverage
 at all.
 
@@ -99,7 +97,7 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `TaperedPeriodogram.{h,cpp}` | **[done]** |
 | `StftTransform.{h,cpp}` | **[todo]** Morlet is used meanwhile |
 | `SpectralEngine.{h,cpp}` | **[done]** picks the estimator from parameters |
-| `Accumulators.{h,cpp}` | **[done]** |
+| `Accumulators.{h,cpp}` | **[done]** power, cross-spectrum (+ shift predictor), PPC |
 | `Baseline.{h,cpp}` | **[done]** **[changed]** — extracted from the Power node so it is testable |
 | `DataStore.{h,cpp}` | **[done]** folded into each node |
 | `Ui/ColorMap.{h,cpp}` | **[done]** viridis/magma/diverging/grey |
@@ -107,6 +105,10 @@ using the `install(DIRECTORY libs/windows/bin/x64/ ...)` recipe from
 | `Ui/PanelGrid.{h,cpp}` | **[done]** |
 | `Ui/TriggerSourceConfigWindow.{h,cpp}` | **[done]** shared by both plugins |
 | `Ui/TriggerMonitorWindow.{h,cpp}` | **[done]** live trigger counters, see below |
+| `Ui/AnalysisSettingsWindow.{h,cpp}` | **[done]** every computation parameter |
+| `Ui/ParameterControl.{h,cpp}` | **[done]** one control bound to one Parameter |
+| `Ui/ParameterLayout.h` | **[done]** declares the editor/canvas split |
+| `PairRules.{h,cpp}` | **[done]** pair add/seed rules, split out to be testable |
 
 ### **[changed]** A shared node base class was added
 
@@ -282,6 +284,126 @@ UI must show `nTrials` and the null threshold `1 − 0.05^(1/(ν−1))` with
 neighbouring bins into the sums before the ratio, raising `ν` — the main stabiliser
 for wavelet coherence.
 
+### Shift predictor **[done]**
+
+Coherence cannot tell two channels that interact from two channels that merely
+share a stimulus-locked response. Both fix the phase difference across trials,
+which is the only thing the estimate looks at:
+
+```
+ΣSxy = Σ Aₙ Bₙ · e^{i(αₙ − βₙ)}
+```
+
+and a shared evoked response, or a common reference, pins `αₙ − βₙ` by
+construction. Triggered coherence is the design in which that confound is
+*maximal*, so it cannot be left to a footnote.
+
+The shift predictor re-pairs channel A of trial *n* with channel B of trial
+*n−1*, both at the same latency relative to their own triggers. Anything locked
+to the trigger is present in both trials and survives; anything genuinely
+trial-by-trial does not. The gap between the two curves is the part of the
+coherence that the trigger does not explain.
+
+It was chosen over subtracting the ERP, which addresses the same confound:
+
+- It **measures** the confound rather than modelling it. ERP subtraction assumes
+  the evoked response is additive with fixed latency and amplitude; under latency
+  jitter the mean is a smeared version of every trial, so subtracting it leaves
+  time-locked residuals *and* carves a notch that was in no single trial.
+- It is non-destructive. ERP subtraction happens per trial before the transform,
+  so it cannot be a display-time toggle the way baseline and whitening are —
+  turning it on or off has to discard the accumulators.
+- It doubles as an **empirical null**, which matters because the analytic
+  threshold assumes independent estimates. That is false once `smooth_time_bins`
+  pools overlapping Morlet kernels, where the analytic line is anticonservative.
+  The predictor inherits the same ν, leakage and smoothing dependence.
+
+Implementation: `CrossSpectrumAccumulator::addTrial` gained an overload taking
+the two channels from *different* coefficient blocks, and the node keeps one
+`PairAccumulators { observed, shifted }` per (source, pair) plus the previous
+trial's coefficients **per trigger source** — crossing sources would pair two
+different conditions. The held trial is swapped rather than copied, which is free
+and safe because every transform begins with `TfCoefficients::setSize()`, which
+reassigns the whole block.
+
+Held trials are dropped on reconfiguration and on CLEAR, so the first trial after
+either is never paired across the boundary.
+
+Two consequences worth knowing:
+
+- The shifted estimate always has **one fewer trial**, since the first has no
+  predecessor. The panel says so rather than reusing the observed count.
+- `shift_predictor` is an *analysis* parameter, not a display one. It allocates a
+  second accumulator and accumulates as trials arrive, so it cannot be applied
+  retroactively — toggling it resets, like everything else in the ANALYSIS
+  window.
+
+**[todo]**: drawing the predictor *beside* the real estimate rather than as a
+separate display mode. `getShiftPredictorForDisplay()` exists for exactly that
+and is not yet called; it belongs with the pair-configuration window, which is
+where the ν and threshold readouts also live.
+
+### Pairwise phase consistency **[done]**
+
+Coherence carries an upward bias of about 1/ν. Offline that is a footnote. On a
+canvas somebody watches while the experiment runs it is actively misleading: the
+displayed value is **highest when the fewest trials have arrived** and sags as
+the bias decays, which reads as an effect fading when nothing has changed.
+
+PPC (Vinck et al. 2010) is the debiased estimator of the same thing. It averages
+`cos(θₙ − θₘ)` over all *distinct* pairs of observations — never pairing one with
+itself, which is what removes the bias — and the pairwise form collapses:
+
+```
+Σ_{n<m} cos(θₙ − θₘ) = ( |Σₙ e^{iθₙ}|² − N ) / 2
+
+PPC = ( |Σₙ e^{iθₙ}|² − N ) / ( N (N − 1) )
+```
+
+so the whole estimator is **a running complex sum and a count**. O(1) state per
+frequency and bin, nothing stored per trial, nothing to revisit when trial N+1
+arrives. That is what makes it usable online at all, and it is the reason it is
+a better fit here than in an offline script.
+
+Three things follow, and all three are load-bearing:
+
+- **It cannot be read off the cross-spectrum accumulator.** `ΣSxy` has already
+  discarded the per-trial magnitude, and PPC needs each trial normalised to unit
+  modulus *before* summing. Hence a separate `PpcAccumulator` rather than another
+  method on the existing one.
+- **Tapers must be averaged *within* the trial, not counted.** For coherence,
+  pooling K tapers legitimately buys degrees of freedom. For PPC it does not:
+  tapers from one trial all observe the same phase realisation, so counting them
+  as K observations measures within-trial SNR and reports it as consistency
+  across trials. `numObservations()` is trials × pooled bins, with no K.
+- **It must be able to go negative**, since an unbiased estimator of something
+  genuinely zero has to scatter either side of it. Range is `[−1/(N−1), 1]`. The
+  canvas therefore uses a diverging colour map and a symmetric `[−1, 1]` scale
+  in this mode; `[0, 1]` would clip exactly the half of the scatter that shows
+  the estimator is working.
+
+The null is centred on zero with spread ≈ `1/(M−1)`, giving a threshold of
+`(ln(1/α) − 1)/(M − 1)` — about `2/(M−1)` at α = 0.05. That is a different
+distribution from coherence's, so `getSignificanceThreshold()` switches on the
+display mode; drawing the coherence line over a PPC plot would put it roughly a
+factor of two too high.
+
+Two things PPC is **not**. It is not amplitude-weighted, and that is not purely
+a gain: coherence's `|Xa||Xb|` weighting is implicit SNR weighting, whereas in
+PPC a trial that was mostly noise contributes a random phase at full weight, so
+in weak bands PPC can be the noisier of the two. And it is **not a confound
+control** — a shared evoked response or a common reference pins the phase
+difference by construction, and PPC reports that as enthusiastically as
+coherence does. The shift predictor above is the control; these are orthogonal.
+
+Accumulated unconditionally, with no parameter gating it: it is half the size of
+a cross-spectrum accumulator, cannot be reconstructed after the fact, and is the
+estimate that does not mislead while trials are still arriving.
+
+**[todo]**: making PPC the *default* view rather than an option. The bias
+argument says it should be, but that changes what a fresh drop shows, so it is
+left as a deliberate decision rather than folded into this work.
+
 ---
 
 ## Parameters **[done]**
@@ -309,11 +431,14 @@ mandatory for a readable spectrogram, and is applied at *display* time so changi
 does not discard accumulated spectra. Plus the whitening parameters below.
 
 **Coherence only:** `smooth_time_bins`, `smooth_freq_bins`, `coherence_display`
-{Coherence, Phase}, plus the pair table. Same rule: none of these invalidate the
-accumulators.
+{Coherence, Phase, Shift predictor, PPC}, plus the pair table. Same rule: none of these
+invalidate the accumulators. `shift_predictor` {Off, On} is the exception and is
+therefore an *analysis* parameter, on the editor rather than the canvas — see the
+shift predictor section above.
 
 Trigger sources persist via `saveCustomParametersToXml` **[done]**; canvas display
-state via `Visualizer::saveCustomParametersToXml` **[todo]**.
+state via `Visualizer::saveCustomParametersToXml` **[done]** (`TriggeredPowerCanvas.cpp`,
+`TriggeredCoherenceCanvas.cpp`).
 
 ---
 
@@ -484,12 +609,48 @@ trials with an adjustable time constant, and reports `P(f) / R(f)`. It adapts to
 drift and needs no functional form, at the cost of also suppressing sustained genuine
 effects — a trade-off the user has to be told about, not hidden.
 
+### Manual whitening: the tuning view **[done]**
+
+Fixed-exponent whitening is the manual mode — the user names χ instead of
+letting the fit find it. Two things made it unusable in practice, and neither
+was visible from inside:
+
+1. **There was nothing to aim at.** Setting an exponent against an
+   already-whitened spectrum is guesswork: the background you are trying to
+   match has been divided out by the time you see it.
+2. **The control was a type-in field with a 0.1 step.** You cannot see a
+   spectrum respond while you type a number into it.
+
+`whitening_overlay` {Off, On} is the fix. With it on the panel plots the
+**un-whitened** spectrum and draws the aperiodic background over it as a dashed
+line, so the slider has a target; with it off you see the whitened result. And
+`whitening_exponent` gets a **slider** (`ParameterControl::Style::Slider`,
+committing continuously) rather than a field, so the line moves with the drag.
+
+Drawing the line needs an intercept, which fixed-exponent whitening does not
+supply — it names only a slope. `anchorFixedExponent()` picks one, as the median
+of `log10 P + χ·log10 f`. Median rather than mean for the same reason
+`fitAperiodic` avoids least squares: oscillatory peaks are one-sided and a mean
+would let them lift the whole line off the background it is meant to trace. **The
+exponent itself is never adjusted** — a control that silently fits what it was
+told to set is a control that does nothing, and a test pins that.
+
+Gated to **Spectrum mode**: a slope drawn across a heat map means nothing. Also
+gated on no baseline being active, since a baseline takes whitening out of the
+picture entirely. Greyed rather than hidden in both cases, so the bar still
+documents that the option exists.
+
+In fitted mode the panel subtitle now carries **χ** as well. It is a result, not
+a nuisance parameter, and it is what the manual exponent should be aimed at —
+it was computed and displayed nowhere.
+
 ### Parameters (Power only)
 
 | Name | Type | Default | Notes |
 |---|---|---|---|
 | `whitening_mode` | Categorical | `None` | None / Fixed exponent / Fitted aperiodic / Running reference |
-| `whitening_exponent` | Float | 1.0 | fixed-exponent mode only, 0–4 |
+| `whitening_exponent` | Float | 1.0 | fixed-exponent mode only, 0–4; slider, tuned against the overlay |
+| `whitening_overlay` | Categorical | `Off` | plot un-whitened with the background drawn over it |
 | `whitening_fit_knee` | Boolean | false | fitted mode only |
 | `whitening_time_constant` | Float | 30 s | running-reference mode only |
 
@@ -554,10 +715,34 @@ side, and it applied to both canvases.
 for and rebuilds when they differ. Detecting staleness beats adding another
 notification: no future caller can forget to announce itself.
 
-**Pair configuration** — port `TriggeredAvg`'s `PopupConfigurationWindow`
-`TableListBoxModel`: channel A, channel B, name, colour, delete — plus a **seed mode**
-button generating "seed × all selected" pairs in one click, which is how these are
-used in practice. Mutations wrapped in `ProcessorAction` subclasses for undo/redo.
+### Pair configuration **[done]**
+
+`Coherence/Ui/PairConfigWindow` (editor button **PAIRS**): name, channel A,
+channel B, colour, status, delete — plus **seed mode**, one click for "seed ×
+every other selected channel", which is how these are used in practice and
+tedious enough one at a time that people give up.
+
+Channels are picked from the *selected* list rather than typed, because a pair
+naming an unanalysed channel can never produce anything. Pairs whose channels
+later leave the selection stay configured and read **inactive** rather than being
+deleted — losing a pair list because the selection was narrowed for a moment is
+worse than showing a row that does nothing — and "inactive" distinguishes *will
+never produce data* from *no data yet*, which look identical on the plot.
+
+Two structural points:
+
+- **Editing the pair list rebuilds the accumulators, which discards trials.**
+  The pair set decides how many cross-spectra exist, so it cannot change
+  underneath them; there is nothing honest to carry over. `rebuildConfiguration()`
+  also asserts acquisition is stopped, so the window is read-only while running
+  and says why. Renaming and recolouring deliberately do *not* rebuild — a label
+  is not part of the estimate.
+- **The rules moved to `Core/PairRules.h`.** `TriggeredCoherenceNode` is a
+  `GenericProcessor` and cannot be instantiated outside a running GUI, so
+  duplicate/self-pair/capacity/seed behaviour was untestable where it lived.
+  Pulling out the pure decisions made it checkable without a signal chain.
+
+**[todo]**: mutations wrapped in `ProcessorAction` subclasses for undo/redo.
 
 **[done]**: `ColorMap` (viridis / magma / diverging / greyscale via a 256-entry LUT),
 `SpectrumPanel` (heatmap and line modes, cached image and paths, log-aware frequency
@@ -596,6 +781,53 @@ Two decisions matter more than the rest:
 The window turns those counts into one line of plain English (`diagnose()`) naming
 the most likely cause, rather than leaving the user to interpret the columns.
 
+### Parameter UI: editor computes, canvas draws **[done]**
+
+The rule, and the reason nineteen parameters had no control for so long: **a
+parameter that changes what is collected or computed is edited from the editor; a
+parameter that changes only how the result is drawn is edited on the canvas,
+beside the plot it changes.** That places every registered parameter exactly once,
+and the placement is declared in `Ui/ParameterLayout.h` rather than being implicit
+in the three UI files that consume it.
+
+| Where | What |
+|---|---|
+| Editor, inline | `channels`, `pre_ms`, `post_ms`, `mode` — the four most-edited |
+| Editor → **ANALYSIS** | frequency axis, Morlet, STFT, line/taper settings, `max_trials` |
+| Power canvas | `baseline_*`, `whitening_*` |
+| Coherence canvas | `coherence_display`, `smooth_time_bins`, `smooth_freq_bins` |
+| Neither | `trigger_line`, `trigger_type` — backing store for the trigger table |
+
+`Ui/ParameterControl.{h,cpp}` binds one control to one `Parameter`, chosen from the
+parameter's type, clamped to the parameter's own range, with the accepted value
+written back so a control can never misreport what is set. It is shared by all
+three panels; the GUI's own `ParameterEditor` was not used because it expects to be
+owned by a `ParameterEditorOwner` and rebound by `Visualizer::update()`, which is
+more ceremony than a plain option bar needs.
+
+Sections in the ANALYSIS window are greyed rather than hidden when the mode makes
+them irrelevant, and say what would have to change, so the window also documents
+which estimator is actually running.
+
+**Two hazards the split has to handle**, both of which would otherwise be
+destructive rather than merely untidy:
+
+- Every analysis parameter is `deactivateDuringAcquisition`, and
+  `rebuildConfiguration()` asserts acquisition is stopped before reallocating the
+  ring buffer under the audio thread. The ANALYSIS window is disabled while
+  running, and says why.
+- **`baseline_mode` is the one genuine exception to the rule.** It is display-time
+  in Spectrogram mode but analysis-time in Spectrum mode, where it splits the
+  trial. It is registered as editable during acquisition, so before this it was
+  simply unreachable; giving it a control made a latent assertion failure
+  reachable. The canvas therefore locks it during acquisition *in Spectrum mode
+  only*, and warns on both sides of that.
+
+`Tests/test_ParameterLayout.cpp` pins the split: every registered parameter has
+exactly one home, no name appears twice, no name is a typo, and the display groups
+hold nothing that reaches the estimator. That is what makes "registered, working,
+tested, and reachable from nowhere" a build failure rather than a discovery.
+
 **[todo]**: the pair-configuration window, and a shared colour bar showing the
 value scale.
 
@@ -617,11 +849,10 @@ so transform-based drawing does not link in a plugin.
 3. **[done] TriggeredPower.** Spectra accumulate, per-trial line spectra are kept,
    baseline normalisation (None/dB/%/z) and whitening both apply at display time,
    and the panel grid renders both modes.
-4. **[part done] TriggeredCoherence.** Pair data model with seed generation and XML
-   persistence, cross-spectrum accumulation, coherence/phase, significance threshold
-   and smoothing all wired, and the panel grid renders. **[todo]**: the pair
-   configuration window — without it no pair can be created, so the plugin shows
-   "no pairs configured" and computes nothing.
+4. **[done] TriggeredCoherence.** Pair data model with seed generation and XML
+   persistence, cross-spectrum accumulation, coherence/phase/PPC, the shift
+   predictor, significance thresholds and smoothing all wired, the panel grid
+   renders, and the pair-configuration window makes it reachable.
 5. **[todo] Performance pass.** Batched `fftw_plan_many` everywhere, wisdom caching,
    profiling, and *only if measurements demand it* a thread pool over channels.
 
@@ -632,29 +863,7 @@ per-trial cross-spectra — ~131 kB/trial for 16 pairs × 1025 freqs, affordable
 
 ## Known gaps **[todo]**
 
-The estimation core is complete and tested; the controls that make it reachable are
-not. These are ordered by how much they block actual use.
-
-### Most analysis parameters have no UI control
-
-The editor exposes six things: **TRIGGERS**, **MONITOR**, channels, pre, post, mode.
-Everything else is registered, functional and tested, but has no control anywhere —
-so it can only ever run at its default:
-
-`freq_min`, `freq_max`, `num_freqs`, `freq_spacing`, `tf_method`, `n_cycles_low`,
-`n_cycles_high`, `stft_window_ms`, `stft_hop_ms`, `line_method`, `nw`, `n_tapers`,
-`max_trials`, `baseline_mode`, `baseline_start_ms`, `baseline_end_ms`,
-`whitening_mode`, `whitening_exponent`, `smooth_time_bins`, `smooth_freq_bins`,
-`coherence_display`.
-
-Nineteen parameters will not fit in a 220 px editor, so this wants a settings popup
-in the same style as the trigger table, with the two or three most-used promoted
-onto the editor itself.
-
-### Coherence pairs cannot be created
-
-Covered above. The node supports add / remove / seed-against-all and persists pairs
-to XML; there is simply no window.
+These are ordered by how much they block actual use.
 
 ### Nothing has been seen rendering
 
@@ -695,7 +904,7 @@ and doing that from the base constructor is a pure-virtual call.
 
 ### Unit tests
 
-**[done]** — 160 tests passing:
+**[done]** — 197 tests passing:
 
 - *FastSize*: 7-smooth recognition; `nextFastSize` minimality checked exhaustively to 5000.
 - *Ring buffer*: exact readback; trigger sample is the first post sample; wraparound
@@ -722,13 +931,30 @@ and doing that from the base constructor is a pure-virtual call.
 - *Accumulators*: mean/SEM, psdScale application, taper-vs-time reduction, coherence
   at both extremes, the 1/ν bias, taper and smoothing degrees of freedom, and the
   significance threshold.
+- *Shift predictor*: the two cases it exists to separate, measured the same way —
+  a trigger-locked component in both channels leaves the shifted estimate as high
+  as the real one, while a component redrawn each trial leaves it at the null.
+  Plus: the cross-block form agreeing exactly with the single-block form on the
+  same input, tapers still pooling through it, and blocks that do not describe
+  the same estimate being refused rather than silently crossed.
+- *PPC*: exactly 1 at perfect consistency and exactly −1 for two opposed trials;
+  and the comparison that justifies it — over 400 realisations of 8 independent
+  trials, coherence lands on its 1/ν bias while PPC lands on zero, and PPC's
+  expectation does not move between 5 and 50 trials. Plus: identical phases with
+  wildly different amplitudes give the same PPC but very different coherence;
+  tapers are averaged within the trial rather than counted; the threshold
+  formula; and the case where pooling correlated bins *reintroduces* the bias,
+  pinned rather than hidden.
 - *Pipeline*: coherence isolates a shared component from an equally strong
   phase-independent one; independent channels sit near the null; Morlet and
   multitaper agree on band power; induced power survives random per-trial phase.
 - *Whitening*: exponent recovery on a pure power law and under noise; a realistic
   alpha peak leaves χ intact; the ~29% breakdown point is pinned rather than
   hidden; fitted whitening flattens the background and leaves the peak proud;
-  peak frequency never moves.
+  peak frequency never moves. Plus the drawn overlay: an anchored line lies on a
+  matching power law exactly, a peak eight times the background moves its
+  intercept by under 1%, the requested exponent is never quietly corrected, and
+  a wrong exponent diverges from the background at both ends of the axis.
 - *Trigger messaging*: substring/case-insensitive matching; empty patterns are
   disabled not wildcards; cancel beats commit; a plain TTL source is never
   disarmed; per-source timeout expiry; move-only payloads; the full
@@ -747,6 +973,16 @@ and doing that from the base constructor is a pure-virtual call.
 - *Trigger counters*: a successful capture counted against its source, a failed
   one not counted, a committed pending capture counted, `reset()` zeroing every
   field, and counts not surviving a copy.
+- *Pair rules*: a self-pair, an unset channel and a duplicate in **either**
+  order are all refused, with the reason distinguished — "you already have that"
+  and "you have reached the limit" call for different responses, and a silent
+  rejection for either makes the button look broken. Plus seed generation
+  excluding the seed, yielding nothing for a seed outside the analysed set,
+  stopping at the cap, and producing a list that satisfies the add rules — so
+  seeding cannot build something that could not have been built by hand.
+- *Parameter layout*: every registered parameter has exactly one home in the UI,
+  no name appears twice, no name is a typo, the display groups hold nothing that
+  reaches the estimator, and the editor covers every analysis parameter.
 - *Baseline*: bin-range selection including inverted, empty and out-of-range
   windows; dB / percent / z-score against both a slice of the time axis and a
   separately estimated pre-trigger spectrum; log(0) clamped instead of producing

@@ -70,10 +70,42 @@ void TriggeredCoherenceNode::registerAdditionalParameters()
     addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
                              ParameterNames::coherence_display,
                              "Show",
-                             "Coherence magnitude or the phase of the coherency",
-                             { "Coherence", "Phase" },
+                             "Coherence magnitude, the phase of the coherency, the "
+                             "trial-shifted null, or pairwise phase consistency",
+                             { "Coherence", "Phase", "Shift predictor", "PPC" },
                              0,
                              false);
+
+    // Defaults to on. It doubles the accumulator memory for a pair, which is
+    // small, and without it there is no way to tell coherence driven by a shared
+    // evoked response or a common reference from a real interaction — both look
+    // identical on the plot.
+    addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
+                             ParameterNames::shift_predictor,
+                             "Shift pred",
+                             "Also accumulate the trial-shifted null: channel A of each "
+                             "trial against channel B of the previous one",
+                             { "Off", "On" },
+                             1,
+                             true);
+}
+
+bool TriggeredCoherenceNode::isAnalysisParameter (const juce::String& parameterName) const
+{
+    if (parameterName.equalsIgnoreCase (ParameterNames::shift_predictor))
+        return true;
+
+    return TriggeredSpectraNode::isAnalysisParameter (parameterName);
+}
+
+bool TriggeredCoherenceNode::isShiftPredictorEnabled() const
+{
+    auto* parameter = getParameter (ParameterNames::shift_predictor);
+
+    if (parameter == nullptr)
+        return false;
+
+    return static_cast<CategoricalParameter*> (parameter)->getSelectedIndex() == 1;
 }
 
 CoherenceDisplay TriggeredCoherenceNode::getDisplayMode() const
@@ -103,22 +135,57 @@ int TriggeredCoherenceNode::getSmoothFreqBins() const
 
 bool TriggeredCoherenceNode::addPair (int globalA, int globalB, const juce::String& name)
 {
-    if (globalA == globalB || globalA < 0 || globalB < 0)
+    if (! addPairWithoutNotifying (globalA, globalB, name))
         return false;
 
-    if (static_cast<int> (m_pairs.size()) >= maxPairs)
-        return false;
+    pairsChanged();
+    return true;
+}
 
-    // Coherence is symmetric, so (a,b) and (b,a) are the same pair.
-    const auto duplicate = std::find_if (m_pairs.begin(),
-                                         m_pairs.end(),
-                                         [&] (const ChannelPair& pair)
-                                         {
-                                             return (pair.globalA == globalA && pair.globalB == globalB)
-                                                    || (pair.globalA == globalB && pair.globalB == globalA);
-                                         });
+void TriggeredCoherenceNode::pairsChanged()
+{
+    // The pair set decides how many cross-spectrum accumulators exist, so it
+    // cannot change without reallocating them - which discards what they hold.
+    // There is no honest alternative: trials accumulated for a pair that no
+    // longer exists have nowhere to go, and a pair that has just appeared has
+    // no history to invent.
+    rebuildConfiguration();
+    triggerAsyncUpdate();
+}
 
-    if (duplicate != m_pairs.end())
+void TriggeredCoherenceNode::setPairName (int index, const juce::String& name)
+{
+    if (index < 0 || index >= static_cast<int> (m_pairs.size()))
+        return;
+
+    m_pairs[static_cast<std::size_t> (index)].name = name;
+
+    // No rebuild: a label is not part of the estimate.
+    triggerAsyncUpdate();
+}
+
+void TriggeredCoherenceNode::setPairColour (int index, juce::Colour colour)
+{
+    if (index < 0 || index >= static_cast<int> (m_pairs.size()))
+        return;
+
+    m_pairs[static_cast<std::size_t> (index)].colour = colour;
+    triggerAsyncUpdate();
+}
+
+bool TriggeredCoherenceNode::addPairWithoutNotifying (int globalA,
+                                                      int globalB,
+                                                      const juce::String& name)
+{
+    // The rules live in Core/PairRules.h so they can be tested: this node is a
+    // GenericProcessor and cannot be instantiated outside a running GUI.
+    std::vector<PairKey> existing;
+    existing.reserve (m_pairs.size());
+
+    for (const auto& pair : m_pairs)
+        existing.emplace_back (pair.globalA, pair.globalB);
+
+    if (checkPair (existing, globalA, globalB, maxPairs) != PairRejection::None)
         return false;
 
     ChannelPair pair;
@@ -141,17 +208,34 @@ void TriggeredCoherenceNode::removePair (int index)
         return;
 
     m_pairs.erase (m_pairs.begin() + index);
+    pairsChanged();
 }
 
-void TriggeredCoherenceNode::clearPairs() { m_pairs.clear(); }
+void TriggeredCoherenceNode::clearPairs()
+{
+    if (m_pairs.empty())
+        return;
+
+    m_pairs.clear();
+    pairsChanged();
+}
 
 void TriggeredCoherenceNode::generateSeedPairs (int globalSeedChannel)
 {
     m_pairs.clear();
 
-    for (const int channel : getSelectedChannels())
-        if (channel != globalSeedChannel)
-            addPair (globalSeedChannel, channel);
+    const auto& channels = getSelectedChannels();
+
+    // Without notifying per pair: a 32-channel seed would otherwise reallocate
+    // every accumulator 31 times over.
+    for (const auto& [a, b] :
+         seedPairs (globalSeedChannel,
+                    std::span<const int> (channels.getRawDataPointer(),
+                                          static_cast<std::size_t> (channels.size())),
+                    maxPairs))
+        addPairWithoutNotifying (a, b, {});
+
+    pairsChanged();
 }
 
 void TriggeredCoherenceNode::resolvePairs()
@@ -172,6 +256,12 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
     const juce::ScopedLock lock (m_dataLock);
 
     m_accumulators.clear();
+
+    // The held trial belongs to the shape that is being torn down. Keeping it
+    // would pair the first trial of the new configuration against a stale one;
+    // the shape check in addTrial would reject that, but silently, so drop it
+    // here where the reason is visible.
+    m_previousTrial.clear();
 
     const auto& geometry = getTrialGeometry();
     const auto& channels = getSelectedChannels();
@@ -219,12 +309,25 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
         return;
     }
 
+    const bool shiftPredictor = isShiftPredictorEnabled();
+
     for (auto* source : m_triggerSources.getAll())
     {
         for (int pairIndex = 0; pairIndex < static_cast<int> (m_pairs.size()); ++pairIndex)
         {
-            auto& accumulator = m_accumulators[{ source, pairIndex }];
-            accumulator.setSize (m_engine.numFrequencies(), m_engine.numAccumulatorBins());
+            auto& accumulators = m_accumulators[{ source, pairIndex }];
+            accumulators.observed.setSize (m_engine.numFrequencies(),
+                                           m_engine.numAccumulatorBins());
+            accumulators.ppc.setSize (m_engine.numFrequencies(),
+                                      m_engine.numAccumulatorBins());
+
+            // Sized to zero when off, so the memory is not paid for and
+            // addTrial() rejects anything that reaches it by mistake.
+            if (shiftPredictor)
+                accumulators.shifted.setSize (m_engine.numFrequencies(),
+                                              m_engine.numAccumulatorBins());
+            else
+                accumulators.shifted.setSize (0, 0);
         }
     }
 }
@@ -234,8 +337,16 @@ void TriggeredCoherenceNode::clearAllData()
     {
         const juce::ScopedLock lock (m_dataLock);
 
-        for (auto& [key, accumulator] : m_accumulators)
-            accumulator.reset();
+        for (auto& [key, accumulators] : m_accumulators)
+        {
+            accumulators.observed.reset();
+            accumulators.shifted.reset();
+            accumulators.ppc.reset();
+        }
+
+        // Otherwise the first trial after a clear would be paired against one
+        // from before it, which is exactly the data the user asked to discard.
+        m_previousTrial.clear();
     }
 
     triggerAsyncUpdate();
@@ -264,6 +375,20 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 
     const juce::ScopedLock lock (m_dataLock);
 
+    const bool shiftPredictor = isShiftPredictorEnabled();
+
+    // The trial before this one, from this same source. Absent for the first
+    // trial of a run, and after a clear or a reconfiguration.
+    TfCoefficients* previous = nullptr;
+
+    if (shiftPredictor)
+    {
+        const auto held = m_previousTrial.find (request.triggerSource);
+
+        if (held != m_previousTrial.end() && ! held->second.empty())
+            previous = &held->second;
+    }
+
     bool anyAdded = false;
 
     for (int pairIndex = 0; pairIndex < static_cast<int> (m_pairs.size()); ++pairIndex)
@@ -280,8 +405,26 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
         if (accumulator == m_accumulators.end())
             continue;
 
-        if (accumulator->second.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
+        if (accumulator->second.observed.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
             anyAdded = true;
+
+        accumulator->second.ppc.addTrial (m_coefficients, pair.selectedA, pair.selectedB);
+
+        // Channel A from this trial against channel B from the last one. The
+        // shift is one-directional on purpose: swapping which side is delayed
+        // would estimate the same null twice over rather than differently.
+        if (previous != nullptr)
+            accumulator->second.shifted.addTrial (
+                m_coefficients, pair.selectedA, *previous, pair.selectedB);
+    }
+
+    if (shiftPredictor)
+    {
+        // Hand this trial to the next one. Swapping rather than copying is free
+        // and safe: every transform begins with TfCoefficients::setSize(), which
+        // reassigns the whole block, so whatever m_coefficients is left holding
+        // is overwritten before it is read again.
+        std::swap (m_previousTrial[request.triggerSource], m_coefficients);
     }
 
     return anyAdded;
@@ -292,7 +435,13 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 int TriggeredCoherenceNode::getNumTrials (TriggerSource* source) const
 {
     const auto it = m_accumulators.find ({ source, 0 });
-    return it != m_accumulators.end() ? it->second.numTrials() : 0;
+    return it != m_accumulators.end() ? it->second.observed.numTrials() : 0;
+}
+
+int TriggeredCoherenceNode::getNumShiftPredictorTrials (TriggerSource* source) const
+{
+    const auto it = m_accumulators.find ({ source, 0 });
+    return it != m_accumulators.end() ? it->second.shifted.numTrials() : 0;
 }
 
 int TriggeredCoherenceNode::getDegreesOfFreedom (TriggerSource* source) const
@@ -302,11 +451,35 @@ int TriggeredCoherenceNode::getDegreesOfFreedom (TriggerSource* source) const
     if (it == m_accumulators.end())
         return 0;
 
-    return it->second.degreesOfFreedom (getSmoothTimeBins(), getSmoothFreqBins());
+    return it->second.observed.degreesOfFreedom (getSmoothTimeBins(), getSmoothFreqBins());
+}
+
+int TriggeredCoherenceNode::getNumPpcObservations (TriggerSource* source) const
+{
+    const auto it = m_accumulators.find ({ source, 0 });
+
+    if (it == m_accumulators.end())
+        return 0;
+
+    return it->second.ppc.numObservations (getSmoothTimeBins(), getSmoothFreqBins());
 }
 
 double TriggeredCoherenceNode::getSignificanceThreshold (TriggerSource* source) const
 {
+    // PPC is centred on zero under the null and coherence is not, so they need
+    // different lines. Drawing the coherence threshold over a PPC plot would
+    // put it roughly a factor of two too high.
+    if (getDisplayMode() == CoherenceDisplay::Ppc)
+    {
+        const auto it = m_accumulators.find ({ source, 0 });
+
+        if (it == m_accumulators.end())
+            return 1.0;
+
+        return PpcAccumulator::significanceThreshold (
+            it->second.ppc.numObservations (getSmoothTimeBins(), getSmoothFreqBins()));
+    }
+
     return CrossSpectrumAccumulator::significanceThreshold (getDegreesOfFreedom (source));
 }
 
@@ -315,21 +488,49 @@ bool TriggeredCoherenceNode::getCoherenceForDisplay (TriggerSource* source,
                                                      int frequencyIndex,
                                                      std::span<double> destination) const
 {
+    const auto mode = getDisplayMode();
+
+    if (mode == CoherenceDisplay::ShiftPredictor)
+        return getShiftPredictorForDisplay (source, pairIndex, frequencyIndex, destination);
+
     const auto it = m_accumulators.find ({ source, pairIndex });
 
-    if (it == m_accumulators.end() || it->second.numTrials() == 0)
+    if (it == m_accumulators.end() || it->second.observed.numTrials() == 0)
         return false;
 
-    if (destination.size() < static_cast<std::size_t> (it->second.numBins()))
+    if (destination.size() < static_cast<std::size_t> (it->second.observed.numBins()))
         return false;
 
     const int smoothTime = getSmoothTimeBins();
     const int smoothFrequency = getSmoothFreqBins();
 
-    if (getDisplayMode() == CoherenceDisplay::Phase)
-        it->second.phase (frequencyIndex, destination, smoothTime, smoothFrequency);
+    if (mode == CoherenceDisplay::Ppc)
+        it->second.ppc.ppc (frequencyIndex, destination, smoothTime, smoothFrequency);
+    else if (mode == CoherenceDisplay::Phase)
+        it->second.observed.phase (frequencyIndex, destination, smoothTime, smoothFrequency);
     else
-        it->second.coherence (frequencyIndex, destination, smoothTime, smoothFrequency);
+        it->second.observed.coherence (frequencyIndex, destination, smoothTime, smoothFrequency);
+
+    return true;
+}
+
+bool TriggeredCoherenceNode::getShiftPredictorForDisplay (TriggerSource* source,
+                                                          int pairIndex,
+                                                          int frequencyIndex,
+                                                          std::span<double> destination) const
+{
+    const auto it = m_accumulators.find ({ source, pairIndex });
+
+    if (it == m_accumulators.end() || it->second.shifted.numTrials() == 0)
+        return false;
+
+    if (destination.size() < static_cast<std::size_t> (it->second.shifted.numBins()))
+        return false;
+
+    // Deliberately the same smoothing as the real estimate. A null drawn with
+    // different degrees of freedom is not comparable to what it is a null for.
+    it->second.shifted.coherence (
+        frequencyIndex, destination, getSmoothTimeBins(), getSmoothFreqBins());
 
     return true;
 }
@@ -375,7 +576,9 @@ void TriggeredCoherenceNode::loadCustomParametersFromXml (XmlElement* xml)
             const int a = pairXml->getIntAttribute ("a", -1);
             const int b = pairXml->getIntAttribute ("b", -1);
 
-            if (addPair (a, b, pairXml->getStringAttribute ("name")))
+            // Without notifying: the base call below rebuilds once, and doing it
+            // per pair here would run before the channel selection is restored.
+            if (addPairWithoutNotifying (a, b, pairXml->getStringAttribute ("name")))
                 m_pairs.back().colour = juce::Colour::fromString (
                     pairXml->getStringAttribute ("colour", m_pairs.back().colour.toString()));
         }

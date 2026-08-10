@@ -100,6 +100,29 @@ void TriggeredPowerNode::registerAdditionalParameters()
                        4.0f,
                        0.1f,
                        false);
+
+    // The tuning view. Setting an exponent by hand against an already-whitened
+    // spectrum is guesswork: the background you are trying to match has been
+    // divided out. With this on, the panel plots the raw spectrum and draws the
+    // line that would be removed, so the slider has something to aim at.
+    addCategoricalParameter (Parameter::PROCESSOR_SCOPE,
+                             ParameterNames::whitening_overlay,
+                             "Show 1/f",
+                             "Plot the un-whitened spectrum with the aperiodic background "
+                             "drawn over it (Spectrum mode only)",
+                             { "Off", "On" },
+                             0,
+                             false);
+}
+
+bool TriggeredPowerNode::isWhiteningOverlayEnabled() const
+{
+    auto* parameter = getParameter (ParameterNames::whitening_overlay);
+
+    if (parameter == nullptr)
+        return false;
+
+    return static_cast<CategoricalParameter*> (parameter)->getSelectedIndex() == 1;
 }
 
 WhiteningMode TriggeredPowerNode::getWhiteningMode() const
@@ -606,7 +629,8 @@ bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
 
 bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
                                                  int channelIndex,
-                                                 std::span<double> grid) const
+                                                 std::span<double> grid,
+                                                 bool bypassWhitening) const
 {
     const auto it = m_accumulators.find (source);
 
@@ -647,7 +671,7 @@ bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
         return true;
     }
 
-    if (getWhiteningMode() != WhiteningMode::None)
+    if (! bypassWhitening && getWhiteningMode() != WhiteningMode::None)
     {
         if (m_fitsTrialCount != it->second.numTrials())
             refreshAperiodicFits();
@@ -670,6 +694,75 @@ bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
         }
     }
 
+    return true;
+}
+
+bool TriggeredPowerNode::getAperiodicCurveForDisplay (TriggerSource* source,
+                                                      int channelIndex,
+                                                      std::span<double> destination) const
+{
+    const auto mode = getWhiteningMode();
+
+    if (mode == WhiteningMode::None || getBaselineMode() != BaselineMode::None)
+        return false;
+
+    const auto it = m_accumulators.find (source);
+
+    if (it == m_accumulators.end() || it->second.numTrials() == 0)
+        return false;
+
+    const auto frequencies = m_engine.frequencies();
+    const int numFrequencies = static_cast<int> (frequencies.size());
+    const int numBins = m_engine.numAccumulatorBins();
+
+    if (numFrequencies <= 0 || numBins <= 0
+        || destination.size() < static_cast<std::size_t> (numFrequencies))
+        return false;
+
+    if (mode == WhiteningMode::FittedAperiodic)
+    {
+        // The fits are refreshed lazily by the whitening path, which the caller
+        // has just bypassed to get an unwhitened spectrum to draw against.
+        if (m_fitsTrialCount != it->second.numTrials())
+            refreshAperiodicFits();
+
+        const auto fit = m_aperiodicFits.find ({ source, channelIndex });
+
+        if (fit == m_aperiodicFits.end() || ! fit->second.valid)
+            return false;
+
+        aperiodicCurve (frequencies, fit->second, destination);
+        return true;
+    }
+
+    // Fixed exponent: the slope is the user's, but the line still has to be put
+    // somewhere, so anchor it on the trial- and time-averaged spectrum.
+    std::vector<double> averaged (static_cast<std::size_t> (numFrequencies), 0.0);
+
+    for (int f = 0; f < numFrequencies; ++f)
+    {
+        const auto mean = it->second.mean (channelIndex, f);
+
+        if (mean.empty())
+            return false;
+
+        double total = 0.0;
+        for (const double value : mean)
+            total += value;
+
+        averaged[static_cast<std::size_t> (f)] = total / static_cast<double> (mean.size());
+    }
+
+    double exponent = 1.0;
+    if (auto* parameter = getParameter (ParameterNames::whitening_exponent))
+        exponent = parameter->getValue();
+
+    const auto anchored = anchorFixedExponent (frequencies, averaged, exponent);
+
+    if (! anchored.valid)
+        return false;
+
+    aperiodicCurve (frequencies, anchored, destination);
     return true;
 }
 

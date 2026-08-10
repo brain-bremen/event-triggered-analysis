@@ -23,6 +23,7 @@
 #include "TriggeredCoherenceCanvas.h"
 
 #include "../TriggeredCoherenceNode.h"
+#include "Core/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,7 +33,9 @@ namespace TriggeredSpectra
 
 namespace
 {
-constexpr int optionsBarHeight = 34;
+/** Two rows: plot appearance on top, what-is-shown below. */
+constexpr int optionsRowHeight = 34;
+constexpr int optionsBarHeight = optionsRowHeight * 2;
 } // namespace
 
 TriggeredCoherenceCanvas::TriggeredCoherenceCanvas (TriggeredCoherenceNode* node) : m_node (node)
@@ -77,7 +80,43 @@ TriggeredCoherenceCanvas::TriggeredCoherenceCanvas (TriggeredCoherenceNode* node
     m_grid.setColumns (2);
     m_grid.setPanelHeight (180);
 
+    buildDisplayControls();
     rebuildPanels();
+}
+
+void TriggeredCoherenceCanvas::buildDisplayControls()
+{
+    if (m_node == nullptr)
+        return;
+
+    // All three are applied when the display reads the accumulators, so none of
+    // them discards a trial. Whitening is deliberately absent: coherence is a
+    // normalised ratio, so any per-frequency gain cancels exactly and a whitening
+    // control here would promise an effect that is mathematically a no-op.
+    for (const auto* name : ParameterLayout::coherenceDisplay)
+    {
+        auto* parameter = m_node->getParameter (name);
+
+        if (parameter == nullptr)
+            continue;
+
+        const bool isMode = parameter->getType() == Parameter::CATEGORICAL_PARAM;
+
+        auto control = std::make_unique<ParameterControl> (parameter, 62, isMode ? 110 : 46);
+        control->onChange = [this] { displayParameterChanged(); };
+
+        addAndMakeVisible (control.get());
+        m_displayControls.push_back (std::move (control));
+    }
+}
+
+void TriggeredCoherenceCanvas::displayParameterChanged()
+{
+    // Switching between coherence and phase changes the colour map a panel wants,
+    // which is decided in rebuildPanels() rather than updatePanelData().
+    rebuildPanels();
+    m_grid.repaintPanels();
+    repaint();
 }
 
 void TriggeredCoherenceCanvas::refreshState() { rebuildPanels(); }
@@ -108,18 +147,36 @@ void TriggeredCoherenceCanvas::refresh()
     // See TriggeredPowerCanvas::refresh(): adding a trigger source or a pair
     // reaches the canvas only through triggerAsyncUpdate(), which lands here, so
     // a stale panel set would otherwise never be rebuilt.
-    if (m_panelKeys != currentPanelKeys())
+    // The shape is checked alongside the set: an estimate-mode change leaves the
+    // (source, pair) keys untouched but changes the panel's draw mode and axes.
+    if (m_panelKeys != currentPanelKeys() || ! (m_panelLayout == currentPanelLayout()))
         rebuildPanels();
     else
         updatePanelData();
+
+    // Values can change from outside this bar — loading a saved chain, or undo —
+    // so re-read them rather than assuming this canvas is the only writer.
+    for (auto& control : m_displayControls)
+        control->refresh();
 
     m_grid.repaintPanels();
     repaint();
 }
 
+TriggeredCoherenceCanvas::PanelLayout TriggeredCoherenceCanvas::currentPanelLayout() const
+{
+    if (m_node == nullptr)
+        return {};
+
+    return { .mode = m_node->getEstimateMode(),
+             .numFrequencies = m_node->getNumFrequencies(),
+             .numBins = m_node->getNumBins() };
+}
+
 void TriggeredCoherenceCanvas::rebuildPanels()
 {
     m_panelKeys = currentPanelKeys();
+    m_panelLayout = currentPanelLayout();
 
     if (m_node == nullptr)
     {
@@ -133,7 +190,13 @@ void TriggeredCoherenceCanvas::rebuildPanels()
     m_grid.setNumPanels (static_cast<int> (m_panelKeys.size()));
 
     const bool spectrogram = (m_node->getEstimateMode() == EstimateMode::Spectrogram);
-    const bool showPhase = (m_node->getDisplayMode() == CoherenceDisplay::Phase);
+    const auto displayMode = m_node->getDisplayMode();
+    const bool showPhase = (displayMode == CoherenceDisplay::Phase);
+
+    // PPC is unbiased, so at the null it has to scatter *below* zero as often as
+    // above. A [0, 1] sequential scale would clip exactly the half of that
+    // scatter which shows the estimator is behaving.
+    const bool showPpc = (displayMode == CoherenceDisplay::Ppc);
 
     for (int i = 0; i < m_grid.getNumPanels(); ++i)
     {
@@ -142,7 +205,7 @@ void TriggeredCoherenceCanvas::rebuildPanels()
         const auto& pair = pairs[static_cast<std::size_t> (key.pairIndex)];
 
         panel->setMode (spectrogram ? SpectrumPanel::Mode::Heatmap : SpectrumPanel::Mode::Line);
-        panel->setColorMap (showPhase ? ColorMapType::Diverging : m_colorMapType);
+        panel->setColorMap ((showPhase || showPpc) ? ColorMapType::Diverging : m_colorMapType);
         panel->setFrequencies (m_node->getFrequencies());
         panel->setBinTimes (m_node->getBinTimes());
         panel->setEmptyMessage ("waiting for triggers");
@@ -156,11 +219,13 @@ void TriggeredCoherenceCanvas::rebuildPanels()
         panel->setTitle (title);
         panel->setTitleColour (pair.colour);
 
-        // Coherence and phase both have fixed, meaningful ranges, so fixing the
-        // scale is more useful than autoscaling: a coherence of 0.3 should look
-        // the same in every panel.
+        // These all have fixed, meaningful ranges, so fixing the scale is more
+        // useful than autoscaling: a coherence of 0.3 should look the same in
+        // every panel.
         if (showPhase)
             panel->setValueRange (-juce::MathConstants<float>::pi, juce::MathConstants<float>::pi);
+        else if (showPpc)
+            panel->setValueRange (-1.0f, 1.0f);
         else
             panel->setValueRange (0.0f, 1.0f);
     }
@@ -184,7 +249,10 @@ void TriggeredCoherenceCanvas::updatePanelData()
     m_valueScratch.resize (static_cast<std::size_t> (numFrequencies) * numBins);
 
     const bool spectrogram = (m_node->getEstimateMode() == EstimateMode::Spectrogram);
-    const bool showPhase = (m_node->getDisplayMode() == CoherenceDisplay::Phase);
+    const auto displayMode = m_node->getDisplayMode();
+    const bool showPhase = (displayMode == CoherenceDisplay::Phase);
+    const bool showShiftPredictor = (displayMode == CoherenceDisplay::ShiftPredictor);
+    const bool showPpc = (displayMode == CoherenceDisplay::Ppc);
 
     const auto lock = m_node->lockData();
 
@@ -193,18 +261,29 @@ void TriggeredCoherenceCanvas::updatePanelData()
         auto* panel = m_grid.getPanel (i);
         const auto& key = m_panelKeys[static_cast<std::size_t> (i)];
 
-        const int numTrials = m_node->getNumTrials (key.source);
-        const int dof = m_node->getDegreesOfFreedom (key.source);
+        const int numTrials = showShiftPredictor
+                                  ? m_node->getNumShiftPredictorTrials (key.source)
+                                  : m_node->getNumTrials (key.source);
+
+        // PPC counts observations differently: tapers do not multiply it, so
+        // reusing the coherence figure would overstate what it rests on.
+        const int support = showPpc ? m_node->getNumPpcObservations (key.source)
+                                    : m_node->getDegreesOfFreedom (key.source);
         const double threshold = m_node->getSignificanceThreshold (key.source);
 
         // The trial count and the significance level are not decoration here:
         // coherence from a handful of trials is biased high enough to look like
-        // a real effect, so the panel must always say what it is based on.
-        panel->setSubtitle (juce::String (numTrials) + " trials, dof " + juce::String (dof));
+        // a real effect, so the panel must always say what it is based on. The
+        // shift-predictor view says so too, or it reads as the real estimate.
+        panel->setSubtitle ((showShiftPredictor ? "SHIFTED: " : (showPpc ? "PPC: " : ""))
+                            + juce::String (numTrials) + " trials, "
+                            + (showPpc ? "n " : "dof ") + juce::String (support));
 
-        panel->setThreshold (
-            (! showPhase && dof >= 2) ? static_cast<float> (threshold)
-                                      : std::numeric_limits<float>::quiet_NaN());
+        // Both threshold functions return 1.0 when there is not enough to judge
+        // on, which is the same as having no line to draw.
+        panel->setThreshold ((! showPhase && threshold < 1.0)
+                                 ? static_cast<float> (threshold)
+                                 : std::numeric_limits<float>::quiet_NaN());
 
         if (numTrials == 0)
         {
@@ -292,33 +371,45 @@ void TriggeredCoherenceCanvas::paint (juce::Graphics& g)
 void TriggeredCoherenceCanvas::resized()
 {
     auto bounds = getLocalBounds();
-    auto optionsBar = bounds.removeFromBottom (optionsBarHeight).reduced (6, 4);
+    auto optionsBar = bounds.removeFromBottom (optionsBarHeight);
 
     m_viewport.setBounds (bounds);
 
     const int gridWidth = m_viewport.getWidth() - m_viewport.getScrollBarThickness();
     m_grid.setBounds (0, 0, std::max (100, gridWidth), std::max (1, m_grid.getRequiredHeight()));
 
-    if (m_colorMapBox != nullptr)
-        m_colorMapBox->setBounds (optionsBar.removeFromLeft (110));
+    // --- Display row ---------------------------------------------------------
+    auto displayRow = optionsBar.removeFromTop (optionsRowHeight).reduced (6, 4);
 
-    optionsBar.removeFromLeft (6);
+    for (auto& control : m_displayControls)
+    {
+        control->setBounds (displayRow.removeFromLeft (control->getDesiredWidth()));
+        displayRow.removeFromLeft (8);
+    }
+
+    // --- Appearance row ------------------------------------------------------
+    auto appearanceRow = optionsBar.reduced (6, 4);
+
+    if (m_colorMapBox != nullptr)
+        m_colorMapBox->setBounds (appearanceRow.removeFromLeft (110));
+
+    appearanceRow.removeFromLeft (6);
 
     if (m_columnsBox != nullptr)
-        m_columnsBox->setBounds (optionsBar.removeFromLeft (80));
+        m_columnsBox->setBounds (appearanceRow.removeFromLeft (80));
 
-    optionsBar.removeFromLeft (6);
+    appearanceRow.removeFromLeft (6);
 
     if (m_panelHeightBox != nullptr)
-        m_panelHeightBox->setBounds (optionsBar.removeFromLeft (90));
+        m_panelHeightBox->setBounds (appearanceRow.removeFromLeft (90));
 
-    optionsBar.removeFromLeft (10);
+    appearanceRow.removeFromLeft (10);
 
     if (m_sharedScaleButton != nullptr)
-        m_sharedScaleButton->setBounds (optionsBar.removeFromLeft (120));
+        m_sharedScaleButton->setBounds (appearanceRow.removeFromLeft (120));
 
     if (m_clearButton != nullptr)
-        m_clearButton->setBounds (optionsBar.removeFromRight (70));
+        m_clearButton->setBounds (appearanceRow.removeFromRight (70));
 }
 
 void TriggeredCoherenceCanvas::comboBoxChanged (juce::ComboBox* comboBox)

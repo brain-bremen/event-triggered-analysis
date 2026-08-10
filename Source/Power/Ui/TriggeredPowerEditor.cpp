@@ -24,6 +24,8 @@
 
 #include "../TriggeredPowerNode.h"
 #include "TriggeredPowerCanvas.h"
+#include "Core/Ui/AnalysisSettingsWindow.h"
+#include "Core/Ui/EditorLayout.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
 
@@ -31,34 +33,45 @@ namespace TriggeredSpectra
 {
 
 TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG POWER", 220)
+    : VisualizerEditor (parentNode, "TRIG POWER", 250)
 {
+    // The editor carries what governs collection and computation; everything that
+    // only changes how the result is drawn lives on the canvas. Sixteen analysis
+    // parameters do not fit here, so the four most-edited stay inline and the rest
+    // are behind ANALYSIS.
     m_configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     m_configureButton->addListener (this);
-    m_configureButton->setBounds (15, 30, 120, 22);
     addAndMakeVisible (m_configureButton.get());
+
+    m_analysisButton = std::make_unique<UtilityButton> ("ANALYSIS");
+    m_analysisButton->addListener (this);
+    addAndMakeVisible (m_analysisButton.get());
 
     m_monitorButton = std::make_unique<UtilityButton> ("MONITOR");
     m_monitorButton->addListener (this);
-    m_monitorButton->setBounds (139, 30, 66, 22);
     addAndMakeVisible (m_monitorButton.get());
 
+    // Positions come from resized(); the coordinates here only decide creation
+    // order, which is the order they are stacked in.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
     for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-    {
         if (auto* parameterEditor = getParameterEditor (name))
-        {
             parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
-            parameterEditor->setBounds (
-                parameterEditor->getX(), parameterEditor->getY(), 90, 36);
-        }
-    }
 
     addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+}
+
+void TriggeredPowerEditor::resized()
+{
+    VisualizerEditor::resized();
+    layoutEditorContents (*this,
+                          m_configureButton.get(),
+                          m_analysisButton.get(),
+                          m_monitorButton.get());
 }
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)
@@ -70,6 +83,11 @@ void TriggeredPowerEditor::buttonClicked (juce::Button* button)
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<TriggerSourceConfigWindow> (node, acquisitionIsActive, button),
             button);
+    }
+    else if (button == m_analysisButton.get())
+    {
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<AnalysisSettingsWindow> (node, acquisitionIsActive, button), button);
     }
     else if (button == m_monitorButton.get())
     {

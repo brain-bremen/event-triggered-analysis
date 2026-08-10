@@ -80,9 +80,31 @@ public:
      *  Whitening needs the entire frequency axis at once, so it cannot be done
      *  through the per-frequency accessor above. Prefer this from the display.
      */
+    /** @param bypassWhitening  return the spectrum with the 1/f background still
+                                in it. The overlay needs that: an aperiodic line
+                                drawn over an already-whitened spectrum has
+                                nothing left to trace. */
     bool getPowerGridForDisplay (TriggerSource* source,
                                  int channelIndex,
-                                 std::span<double> grid) const;
+                                 std::span<double> grid,
+                                 bool bypassWhitening = false) const;
+
+    /** Fills `destination` (numFrequencies values) with the aperiodic background
+     *  that whitening is currently dividing out, in linear power.
+     *
+     *  For the fitted mode that is the fit itself. For the fixed-exponent mode
+     *  the slope is the user's and only the intercept is estimated, so the line
+     *  moves when they move the exponent — which is what makes it a control
+     *  rather than a readout.
+     *
+     *  False when no whitening mode is active, when a baseline has taken over,
+     *  or when there is nothing accumulated to anchor against. */
+    bool getAperiodicCurveForDisplay (TriggerSource* source,
+                                      int channelIndex,
+                                      std::span<double> destination) const;
+
+    /** Whether the aperiodic overlay is switched on. Display-only. */
+    bool isWhiteningOverlayEnabled() const;
 
     int getNumFrequencies() const { return m_engine.numFrequencies(); }
     int getNumBins() const { return m_engine.numAccumulatorBins(); }

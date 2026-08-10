@@ -23,7 +23,9 @@
 #pragma once
 
 #include "Core/TriggerSource.h"
+#include "Core/Types.h"
 #include "Core/Ui/PanelGrid.h"
+#include "Core/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
 #include <VisualizerWindowHeaders.h>
@@ -76,6 +78,15 @@ private:
         compared by eye. */
     void applySharedScale();
 
+    /** Builds the display-parameter row: what to show, and how much neighbouring
+        bins are pooled. Smoothing is display-time here because it is applied to
+        the accumulated cross-spectra at read time, not folded into them — so it
+        can be turned up and down freely without discarding trials. */
+    void buildDisplayControls();
+
+    /** Repaints after a display parameter changed. */
+    void displayParameterChanged();
+
     TriggeredCoherenceNode* m_node = nullptr;
 
     juce::Viewport m_viewport;
@@ -87,6 +98,9 @@ private:
     std::unique_ptr<juce::ComboBox> m_panelHeightBox;
     std::unique_ptr<juce::ToggleButton> m_sharedScaleButton;
     std::unique_ptr<juce::TextButton> m_clearButton;
+
+    /** Display-time parameters, in the order they are laid out. */
+    std::vector<std::unique_ptr<ParameterControl>> m_displayControls;
 
     /** Panel index -> (trigger source, pair) it shows. */
     struct PanelKey
@@ -105,6 +119,29 @@ private:
     std::vector<PanelKey> currentPanelKeys() const;
 
     std::vector<PanelKey> m_panelKeys;
+
+    /** What rebuildPanels() baked into the panels, so refresh() can tell that the
+     *  data's *shape* changed even when the panel set did not.
+     *
+     *  Switching Spectrogram <-> Spectrum keeps every (source, pair), so a check on
+     *  the panel set alone misses it: the panels stay heat maps with the old time
+     *  axis while being fed a one-bin spectrum. */
+    struct PanelLayout
+    {
+        EstimateMode mode = EstimateMode::Spectrogram;
+        int numFrequencies = 0;
+        int numBins = 0;
+
+        bool operator== (const PanelLayout& other) const
+        {
+            return mode == other.mode && numFrequencies == other.numFrequencies
+                   && numBins == other.numBins;
+        }
+    };
+
+    PanelLayout currentPanelLayout() const;
+
+    PanelLayout m_panelLayout;
 
     /** Scratch reused across updates so a refresh does not allocate. */
     std::vector<double> m_binScratch;
