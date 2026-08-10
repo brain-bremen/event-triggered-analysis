@@ -110,8 +110,14 @@ public:
     int numOutputFrequencies() const noexcept { return static_cast<int> (m_frequencies.size()); }
     int fftLength() const noexcept { return m_fftLength; }
 
-    /** Spectral concentration of each taper, or empty for Hann. Diagnostic. */
-    const std::vector<double>& taperConcentrations() const noexcept { return m_concentrations; }
+    /** Spectral concentration of each taper, or empty for Hann. Diagnostic.
+     *
+     *  Computed on first use rather than in prepare(). Dpss::concentrations() is
+     *  a quadratic form against a dense sinc kernel — O(numTapers * length^2),
+     *  which at a 1.5 s window and 3 kHz was the single largest term in prepare()
+     *  after FFT planning. Nothing reads it today, so paying for it on every
+     *  reconfiguration bought nothing at all. */
+    const std::vector<double>& taperConcentrations() const;
 
 private:
     Config m_config;
@@ -128,7 +134,10 @@ private:
     TaperBank m_tapers;
     std::vector<double> m_frequencies;
     std::vector<double> m_psdScale;
-    std::vector<double> m_concentrations;
+
+    /** Filled in by taperConcentrations() on demand; see there. */
+    mutable std::vector<double> m_concentrations;
+    mutable bool m_concentrationsValid = false;
 
     Fftw::RealBuffer m_taperedInput;   // maxChannels * numTapers * fftLength
     Fftw::ComplexBuffer m_spectra;     // maxChannels * numTapers * numSpectrumBins
