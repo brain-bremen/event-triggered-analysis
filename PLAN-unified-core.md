@@ -99,12 +99,66 @@ of the GUI.
 
 ---
 
-## Phase 1 — Split the core **[todo]**
+## Phase 1 — Extract `TriggeredCaptureNode` **[wip]**
 
-Pure relabelling. Both existing plugins must build and every existing test must
-pass at the end of this phase, unchanged. Nothing else may be true of it: this is
-the phase whose correctness is verifiable in isolation, and it is worth doing even
-if the import never happens.
+> Ordering correction, made after writing the first draft of this plan: the node
+> extraction has to come **before** the directory split, not after. Both
+> `TriggerSourceConfigWindow` and `TriggerMonitorWindow` hold a
+> `TriggeredSpectraNode*`, so moving them into an FFTW-free `trigger_core` while
+> that class still lives in the spectral layer would make the two libraries
+> circular. Extracting the base class first turns the subsequent move into a pure
+> file relocation.
+>
+> Checked before committing to it: between them the two windows call exactly ten
+> node methods — `getTriggerSources`, `addTriggerSource`, `getNumTtlEdgesSeen`,
+> `getLastTtlLine`, `getNumBroadcastMessagesSeen`, `getLastBroadcastMessage`,
+> `resetTriggerCounters`, `isLoggingBroadcastMessages`, `setLogBroadcastMessages`
+> and the trigger-source accessors. Every one is generic, so the base class carries
+> the whole of both windows' API surface and neither window needs a downcast.
+
+Done in place, in `Source/Core`, with no files moved. `TriggeredSpectraNode` is
+already close to two classes stacked in one file; split it along the seam that is
+already there.
+
+`TriggeredCaptureNode` takes:
+
+- `m_ringBuffer`, `m_workQueue`, `m_worker`, `m_triggerSources`
+- `process()`, `handleTTLEvent()`, `handleBroadcastMessage()`, `handleAsyncUpdate()`
+- all counters, `resetTriggerCounters()`, the broadcast log and its console toggle
+- `TrialGeometry`, `m_selectedChannels`, `rebuildConfiguration()`,
+  `computeRingCapacity()`, `startWorker()` / `stopWorker()`
+- `startAcquisition()` / `stopAcquisition()`
+- `saveCustomParametersToXml()` / `loadCustomParametersFromXml()` — the trigger
+  source schema is **already byte-identical** between the two repos, attribute for
+  attribute, so no migration is needed
+- the `TriggerSources::Listener` and `CaptureWorker::Client` implementations
+- registration of `channels`, `pre_ms`, `post_ms` only
+
+`TriggeredSpectraNode` keeps the estimator, the frequency parameters and the
+display, and is reparented onto it.
+
+Two new hooks are needed; the rest already exist (`registerAdditionalParameters()`,
+`analysisConfigurationChanged()`, `isAnalysisParameter()`, `clearAllData()`,
+`refreshDisplay()`):
+
+| Hook | Default | Why |
+|---|---|---|
+| `virtual int computePadSamples (float sampleRate) const` | `0` | Only Morlet needs padding; the periodogram, the STFT and a time-domain average are computed on exactly the samples they are given |
+| `virtual const char* getPluginTag() const` | — | Console lines are currently prefixed `[TriggeredSpectra]` by hand |
+
+### Checkpoint
+
+Both spectral plugins behave identically, and all 209 tests still pass. No test
+changes at all in this phase.
+
+---
+
+## Phase 2 — Split the core **[todo]**
+
+Pure relabelling, and only possible once Phase 1 has landed. Both existing plugins
+must build and every existing test must pass at the end of this phase, unchanged.
+Nothing else may be true of it: this is the phase whose correctness is verifiable
+in isolation, and it is worth doing even if the import never happens.
 
 ### Files that move to `TriggerCore/`
 
@@ -116,8 +170,9 @@ if the import never happens.
 | `TriggerSource.{h,cpp}` | already generic |
 | `TriggerMessaging.{h,cpp}` | already generic |
 | `BroadcastMessageLog.{h,cpp}` | already generic |
-| `Ui/TriggerSourceConfigWindow.{h,cpp}` | retarget to `TriggeredCaptureNode*` |
-| `Ui/TriggerMonitorWindow.{h,cpp}` | retarget to `TriggeredCaptureNode*` |
+| `Ui/TriggerSourceConfigWindow.{h,cpp}` | already retargeted to `TriggeredCaptureNode*` in Phase 1 |
+| `Ui/TriggerMonitorWindow.{h,cpp}` | likewise |
+| `TriggeredCaptureNode.{h,cpp}` | created by Phase 1 |
 | `Ui/ParameterControl.{h,cpp}`, `Ui/ParameterLayout.h`, `Ui/EditorLayout.h` | generic editor widgets |
 | `Ui/PanelGrid.{h,cpp}` | generic grid layout |
 
@@ -168,44 +223,6 @@ Both were hit taking the baseline and both are pre-existing:
   `ctest -R TriggeredSpectra` reports **"No tests were found!!!"** rather than
   failing. A test suite that silently reports success when it never ran is worse
   than one that fails, and this needs fixing before the suite is split three ways.
-
----
-
-## Phase 2 — Extract `TriggeredCaptureNode` **[todo]**
-
-`TriggeredSpectraNode` is already close to two classes stacked in one file. Split it
-along the seam that is already there.
-
-`TriggeredCaptureNode` (in `TriggerCore/`) takes:
-
-- `m_ringBuffer`, `m_workQueue`, `m_worker`, `m_triggerSources`
-- `process()`, `handleTTLEvent()`, `handleBroadcastMessage()`, `handleAsyncUpdate()`
-- all counters, `resetTriggerCounters()`, the broadcast log and its console toggle
-- `TrialGeometry`, `m_selectedChannels`, `rebuildConfiguration()`,
-  `computeRingCapacity()`, `startWorker()` / `stopWorker()`
-- `startAcquisition()` / `stopAcquisition()`
-- `saveCustomParametersToXml()` / `loadCustomParametersFromXml()` — the trigger
-  source schema is **already byte-identical** between the two repos, attribute for
-  attribute, so no migration is needed
-- the `TriggerSources::Listener` and `CaptureWorker::Client` implementations
-- registration of `channels`, `pre_ms`, `post_ms` only
-
-`TriggeredSpectraNode` keeps the estimator, the frequency parameters and the
-display, and is reparented onto it.
-
-Two new hooks are needed; the rest already exist (`registerAdditionalParameters()`,
-`analysisConfigurationChanged()`, `isAnalysisParameter()`, `clearAllData()`,
-`refreshDisplay()`):
-
-| Hook | Default | Why |
-|---|---|---|
-| `virtual int computePadSamples (float sampleRate) const` | `0` | Only Morlet needs padding; the periodogram, the STFT and a time-domain average are computed on exactly the samples they are given |
-| `virtual const char* getPluginTag() const` | — | Console lines are currently prefixed `[TriggeredSpectra]` by hand |
-
-### Checkpoint
-
-Both spectral plugins behave identically. No test changes beyond the include paths
-and the `SpectralWorker` → `CaptureWorker` rename.
 
 ---
 
