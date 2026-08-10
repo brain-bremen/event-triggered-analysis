@@ -373,6 +373,12 @@ void TriggeredPowerCanvas::updatePanelData()
                 subtitle += "   chi " + juce::String (chi, 2);
         }
 
+        // In the tuning view the plotted spectrum is the raw one, with only the
+        // dashed line responding to the exponent. Without saying so, the slider
+        // looks broken: it is moving something the eye is not on.
+        if (overlay)
+            subtitle += "   un-whitened + 1/f fit";
+
         panel->setSubtitle (subtitle);
 
         if (numTrials == 0)
