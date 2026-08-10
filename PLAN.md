@@ -2,6 +2,11 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
+> Scope note: this document covers the two spectral plugins and their estimators.
+> The structural work of splitting the shared trigger layer out of `spectra_core`
+> and bringing the `TriggeredAvg` plugin into this repository on top of it lives in
+> [`PLAN-unified-core.md`](PLAN-unified-core.md).
+
 Phases 1–4 are complete. Phase 5 is outstanding. Places where implementation
 diverged from this plan are marked **[changed]**; each says why.
 
