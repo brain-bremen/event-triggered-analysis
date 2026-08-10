@@ -31,7 +31,7 @@
 namespace TriggeredSpectra
 {
 
-class TriggeredSpectraNode;
+class TriggeredCaptureNode;
 
 /** Live counts of what each trigger source is doing, refreshed on a timer.
  *
@@ -56,7 +56,7 @@ class TriggerMonitorWindow : public PopupComponent, public juce::Timer
 public:
     /** @param anchor  the component the popup is shown from. PopupComponent
                        dereferences it in its constructor, so it must not be null. */
-    TriggerMonitorWindow (TriggeredSpectraNode* node, juce::Component* anchor);
+    TriggerMonitorWindow (TriggeredCaptureNode* node, juce::Component* anchor);
     ~TriggerMonitorWindow() override;
 
     void updatePopup() override;
@@ -122,7 +122,7 @@ private:
     static constexpr int maxVisibleRows = 12;
     static constexpr int refreshIntervalMs = 100;
 
-    TriggeredSpectraNode* m_node = nullptr;
+    TriggeredCaptureNode* m_node = nullptr;
 
     std::vector<Row> m_rows;
     int m_edgesSeen = 0;

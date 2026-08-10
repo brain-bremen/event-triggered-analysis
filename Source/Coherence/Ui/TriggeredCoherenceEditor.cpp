@@ -23,12 +23,13 @@
 #include "TriggeredCoherenceEditor.h"
 
 #include "../TriggeredCoherenceNode.h"
-#include "PairConfigWindow.h"
-#include "TriggeredCoherenceCanvas.h"
+#include "Core/ParameterNames.h"
 #include "Core/Ui/AnalysisSettingsWindow.h"
 #include "Core/Ui/EditorLayout.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
+#include "PairConfigWindow.h"
+#include "TriggeredCoherenceCanvas.h"
 
 namespace TriggeredSpectra
 {

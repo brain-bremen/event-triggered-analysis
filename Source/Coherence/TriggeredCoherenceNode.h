@@ -176,7 +176,7 @@ public:
     void loadCustomParametersFromXml (XmlElement* xml) override;
 
 protected:
-    void registerAdditionalParameters() override;
+    void registerPluginParameters() override;
     void analysisConfigurationChanged() override;
 
     /** Adds `shift_predictor` to the base list: toggling it allocates a second

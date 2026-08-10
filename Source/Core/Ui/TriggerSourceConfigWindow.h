@@ -34,7 +34,7 @@
 namespace TriggeredSpectra
 {
 
-class TriggeredSpectraNode;
+class TriggeredCaptureNode;
 
 /** Table of trigger sources, shown from the editor's TRIGGERS button.
  *
@@ -42,8 +42,9 @@ class TriggeredSpectraNode;
  *  plugin captures anything at all — a TTL edge is matched against the source
  *  list, and an empty list matches nothing.
  *
- *  Shared by both plugins: it talks to TriggeredSpectraNode rather than to either
- *  concrete node type.
+ *  Shared by every triggered plugin: it talks to TriggeredCaptureNode rather than
+ *  to any concrete node type, so power, coherence and time-domain averaging all
+ *  present the same table.
  *
  *  Columns are name, TTL line, trigger type, colour, the three message patterns,
  *  and a delete button. The pattern columns matter as much as the rest: the
@@ -56,7 +57,7 @@ public:
     /** @param anchor  the component the popup is shown from, usually the button that
         opened it. PopupComponent listens to it so the call-out closes if it
         disappears, and dereferences it unconditionally, so it must not be null. */
-    TriggerSourceConfigWindow (TriggeredSpectraNode* node,
+    TriggerSourceConfigWindow (TriggeredCaptureNode* node,
                                bool acquisitionIsActive,
                                juce::Component* anchor);
     ~TriggerSourceConfigWindow() override = default;
@@ -77,11 +78,22 @@ private:
     class Model : public juce::TableListBoxModel
     {
     public:
-        Model (TriggerSourceConfigWindow& owner, TriggeredSpectraNode* node, bool acquisitionIsActive);
+        Model (TriggerSourceConfigWindow& owner,
+               TriggeredCaptureNode* node,
+               bool acquisitionIsActive);
 
         int getNumRows() override;
-        void paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected) override;
-        void paintCell (juce::Graphics& g, int row, int column, int width, int height, bool selected) override;
+        void paintRowBackground (juce::Graphics& g,
+                                 int row,
+                                 int width,
+                                 int height,
+                                 bool selected) override;
+        void paintCell (juce::Graphics& g,
+                        int row,
+                        int column,
+                        int width,
+                        int height,
+                        bool selected) override;
 
         juce::Component* refreshComponentForCell (int row,
                                                   int column,
@@ -94,7 +106,7 @@ private:
 
     private:
         TriggerSourceConfigWindow& m_owner;
-        TriggeredSpectraNode* m_node;
+        TriggeredCaptureNode* m_node;
         bool m_acquisitionIsActive;
     };
 
@@ -112,7 +124,7 @@ private:
         deleteColumn
     };
 
-    TriggeredSpectraNode* m_node = nullptr;
+    TriggeredCaptureNode* m_node = nullptr;
     bool m_acquisitionIsActive = false;
 
     std::unique_ptr<Model> m_model;

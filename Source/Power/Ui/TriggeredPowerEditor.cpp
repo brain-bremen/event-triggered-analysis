@@ -23,11 +23,12 @@
 #include "TriggeredPowerEditor.h"
 
 #include "../TriggeredPowerNode.h"
-#include "TriggeredPowerCanvas.h"
+#include "Core/ParameterNames.h"
 #include "Core/Ui/AnalysisSettingsWindow.h"
 #include "Core/Ui/EditorLayout.h"
 #include "Core/Ui/TriggerMonitorWindow.h"
 #include "Core/Ui/TriggerSourceConfigWindow.h"
+#include "TriggeredPowerCanvas.h"
 
 namespace TriggeredSpectra
 {
@@ -68,10 +69,8 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
 void TriggeredPowerEditor::resized()
 {
     VisualizerEditor::resized();
-    layoutEditorContents (*this,
-                          m_configureButton.get(),
-                          m_analysisButton.get(),
-                          m_monitorButton.get());
+    layoutEditorContents (
+        *this, m_configureButton.get(), m_analysisButton.get(), m_monitorButton.get());
 }
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)

@@ -26,14 +26,14 @@
 #include "Core/Baseline.h"
 #include "Core/SpectralEngine.h"
 #include "Core/TrialSpectrumBuffer.h"
-#include "Core/Whitening.h"
 #include "Core/TriggerMessaging.h"
 #include "Core/TriggeredSpectraNode.h"
+#include "Core/Whitening.h"
 
 #include <JuceHeader.h>
 #include <cstdint>
-#include <memory>
 #include <map>
+#include <memory>
 #include <unordered_map>
 
 namespace TriggeredSpectra
@@ -123,7 +123,7 @@ public:
     const TrialSpectrumBuffer* getTrialBuffer (TriggerSource* source) const;
 
 protected:
-    void registerAdditionalParameters() override;
+    void registerPluginParameters() override;
     void analysisConfigurationChanged() override;
     bool isAnalysisParameter (const juce::String& parameterName) const override;
 

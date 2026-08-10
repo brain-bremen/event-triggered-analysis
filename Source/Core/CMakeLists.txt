@@ -31,6 +31,7 @@ set(SPECTRA_CORE_SOURCES
     Ui/TriggerMonitorWindow.cpp
     Ui/AnalysisSettingsWindow.cpp
     Ui/ParameterControl.cpp
+    TriggeredCaptureNode.cpp
     TriggeredSpectraNode.cpp
 )
 
@@ -66,6 +67,7 @@ set(SPECTRA_CORE_HEADERS
     Ui/ParameterLayout.h
     Ui/EditorLayout.h
     ParameterNames.h
+    TriggeredCaptureNode.h
     TriggeredSpectraNode.h
 )
 

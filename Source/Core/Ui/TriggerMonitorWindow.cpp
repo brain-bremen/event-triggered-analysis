@@ -23,7 +23,7 @@
 */
 #include "TriggerMonitorWindow.h"
 
-#include "../TriggeredSpectraNode.h"
+#include "../TriggeredCaptureNode.h"
 
 #include <algorithm>
 #include <numeric>
@@ -33,45 +33,46 @@ namespace TriggeredSpectra
 
 namespace
 {
-/** Column widths, in the order they are drawn. The name column takes what is
+    /** Column widths, in the order they are drawn. The name column takes what is
     left, so it is not listed here. */
-constexpr int lineWidth = 46;
-constexpr int stateWidth = 78;
-constexpr int countWidth = 56;
+    constexpr int lineWidth = 46;
+    constexpr int stateWidth = 78;
+    constexpr int countWidth = 56;
 
-/** edges, queued, captured, failed, dropped | arm, cancel, commit, kept.
+    /** edges, queued, captured, failed, dropped | arm, cancel, commit, kept.
     The first five follow a TTL edge through the pipeline, the last four follow a
     broadcast message. */
-constexpr int numCountColumns = 9;
-constexpr int firstMessageColumn = 5;
+    constexpr int numCountColumns = 9;
+    constexpr int firstMessageColumn = 5;
 
-/** Columns whose non-zero value is bad news rather than progress. */
-constexpr bool isProblemColumn (int column) { return column == 3 || column == 4; }
+    /** Columns whose non-zero value is bad news rather than progress. */
+    constexpr bool isProblemColumn (int column) { return column == 3 || column == 4; }
 
-constexpr int swatchWidth = 14;
+    constexpr int swatchWidth = 14;
 
-juce::String describeState (const TriggerSource& source)
-{
-    switch (source.type)
+    juce::String describeState (const TriggerSource& source)
     {
-        case TriggerType::TTL_TRIGGER:
-            return "live";
+        switch (source.type)
+        {
+            case TriggerType::TTL_TRIGGER:
+                return "live";
 
-        case TriggerType::TTL_AND_MSG_TRIGGER:
-            return source.canTrigger.load (std::memory_order_relaxed) ? "armed" : "disarmed";
+            case TriggerType::TTL_AND_MSG_TRIGGER:
+                return source.canTrigger.load (std::memory_order_relaxed) ? "armed" : "disarmed";
 
-        case TriggerType::MSG_TRIGGER:
-            // Selectable in the config table but not implemented, so say so here
-            // rather than let it read as a source that simply never fired.
-            return "not impl.";
+            case TriggerType::MSG_TRIGGER:
+                // Selectable in the config table but not implemented, so say so here
+                // rather than let it read as a source that simply never fired.
+                return "not impl.";
+        }
+
+        return "?";
     }
-
-    return "?";
-}
 } // namespace
 
-TriggerMonitorWindow::TriggerMonitorWindow (TriggeredSpectraNode* node, juce::Component* anchor)
-    : PopupComponent (anchor), m_node (node)
+TriggerMonitorWindow::TriggerMonitorWindow (TriggeredCaptureNode* node, juce::Component* anchor)
+    : PopupComponent (anchor),
+      m_node (node)
 {
     jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor
 
@@ -149,26 +150,22 @@ bool TriggerMonitorWindow::refreshRows()
                           .commitMessages = c.commitMessages.load (std::memory_order_relaxed) });
     }
 
-    const bool changed = edgesSeen != m_edgesSeen || lastLine != m_lastLine
-                         || messagesSeen != m_messagesSeen || lastMessage != m_lastMessage
-                         || rows.size() != m_rows.size()
-                         || ! std::equal (rows.begin(),
-                                          rows.end(),
-                                          m_rows.begin(),
-                                          [] (const Row& a, const Row& b)
-                                          {
-                                              return a.edges == b.edges && a.queued == b.queued
-                                                     && a.dropped == b.dropped
-                                                     && a.captured == b.captured
-                                                     && a.failed == b.failed
-                                                     && a.committed == b.committed
-                                                     && a.armMessages == b.armMessages
-                                                     && a.cancelMessages == b.cancelMessages
-                                                     && a.commitMessages == b.commitMessages
-                                                     && a.state == b.state && a.line == b.line
-                                                     && a.name == b.name
-                                                     && a.colour == b.colour;
-                                          });
+    const bool changed =
+        edgesSeen != m_edgesSeen || lastLine != m_lastLine || messagesSeen != m_messagesSeen
+        || lastMessage != m_lastMessage || rows.size() != m_rows.size()
+        || ! std::equal (rows.begin(),
+                         rows.end(),
+                         m_rows.begin(),
+                         [] (const Row& a, const Row& b)
+                         {
+                             return a.edges == b.edges && a.queued == b.queued
+                                    && a.dropped == b.dropped && a.captured == b.captured
+                                    && a.failed == b.failed && a.committed == b.committed
+                                    && a.armMessages == b.armMessages
+                                    && a.cancelMessages == b.cancelMessages
+                                    && a.commitMessages == b.commitMessages && a.state == b.state
+                                    && a.line == b.line && a.name == b.name && a.colour == b.colour;
+                         });
 
     m_rows = std::move (rows);
     m_edgesSeen = edgesSeen;
@@ -207,7 +204,7 @@ juce::String TriggerMonitorWindow::diagnose() const
     const bool anyQueued =
         std::any_of (m_rows.begin(), m_rows.end(), [] (const Row& r) { return r.queued > 0; });
 
-    const auto total = [this] (int Row::*field)
+    const auto total = [this] (int Row::* field)
     {
         return std::accumulate (m_rows.begin(),
                                 m_rows.end(),
@@ -293,8 +290,7 @@ void TriggerMonitorWindow::drawRow (juce::Graphics& g,
 
     area.removeFromLeft (6);
 
-    const int nameWidth =
-        area.getWidth() - lineWidth - stateWidth - numCountColumns * countWidth;
+    const int nameWidth = area.getWidth() - lineWidth - stateWidth - numCountColumns * countWidth;
 
     g.setColour (findColour (ThemeColours::defaultText));
     g.drawText (row.name,
@@ -302,9 +298,8 @@ void TriggerMonitorWindow::drawRow (juce::Graphics& g,
                 juce::Justification::centredLeft,
                 true);
 
-    g.drawText (juce::String (row.line),
-                area.removeFromLeft (lineWidth),
-                juce::Justification::centred);
+    g.drawText (
+        juce::String (row.line), area.removeFromLeft (lineWidth), juce::Justification::centred);
 
     // A disarmed or unimplemented source is the usual reason edges arrive and
     // nothing is queued, so it is worth making it stand out from a live one.
@@ -312,15 +307,9 @@ void TriggerMonitorWindow::drawRow (juce::Graphics& g,
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (willFire ? 0.9f : 0.5f));
     g.drawText (row.state, area.removeFromLeft (stateWidth), juce::Justification::centred);
 
-    const int counts[numCountColumns] = { row.edges,
-                                          row.queued,
-                                          row.captured,
-                                          row.failed,
-                                          row.dropped,
-                                          row.armMessages,
-                                          row.cancelMessages,
-                                          row.commitMessages,
-                                          row.committed };
+    const int counts[numCountColumns] = { row.edges,          row.queued,         row.captured,
+                                          row.failed,         row.dropped,        row.armMessages,
+                                          row.cancelMessages, row.commitMessages, row.committed };
 
     for (int i = 0; i < numCountColumns; ++i)
     {
@@ -383,10 +372,10 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
     // actually arrived rather than against what it was supposed to be.
     auto lastMessage = bounds.removeFromTop (lastMessageHeight).reduced (12, 0);
 
-    g.setFont (juce::FontOptions (
-        juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
-    g.setColour (findColour (ThemeColours::defaultText)
-                     .withAlpha (m_lastMessage.isEmpty() ? 0.4f : 0.75f));
+    g.setFont (
+        juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
+    g.setColour (
+        findColour (ThemeColours::defaultText).withAlpha (m_lastMessage.isEmpty() ? 0.4f : 0.75f));
     g.drawText (m_lastMessage.isEmpty() ? "Last message: (none yet)" : "Last: " + m_lastMessage,
                 lastMessage,
                 juce::Justification::centredLeft,
@@ -430,8 +419,7 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
         g.drawText ("No trigger sources configured.", table, juce::Justification::centred);
     }
 
-    for (std::size_t i = 0; i < m_rows.size() && i < static_cast<std::size_t> (maxVisibleRows);
-         ++i)
+    for (std::size_t i = 0; i < m_rows.size() && i < static_cast<std::size_t> (maxVisibleRows); ++i)
     {
         auto rowBounds = table.removeFromTop (rowHeight);
 

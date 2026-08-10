@@ -23,6 +23,7 @@
 #include "TriggeredPowerCanvas.h"
 
 #include "../TriggeredPowerNode.h"
+#include "Core/ParameterNames.h"
 #include "Core/Ui/ParameterLayout.h"
 
 #include <algorithm>
@@ -33,11 +34,11 @@ namespace TriggeredSpectra
 
 namespace
 {
-/** Two rows: plot appearance on top, normalisation below. Normalisation earns a
+    /** Two rows: plot appearance on top, normalisation below. Normalisation earns a
     row of its own because it is what makes a spectrogram readable at all — a raw
     1/f-dominated map shows nothing above ~30 Hz. */
-constexpr int optionsRowHeight = 34;
-constexpr int optionsBarHeight = optionsRowHeight * 2;
+    constexpr int optionsRowHeight = 34;
+    constexpr int optionsBarHeight = optionsRowHeight * 2;
 } // namespace
 
 TriggeredPowerCanvas::TriggeredPowerCanvas (TriggeredPowerNode* node) : m_node (node)
@@ -52,7 +53,8 @@ TriggeredPowerCanvas::TriggeredPowerCanvas (TriggeredPowerNode* node) : m_node (
                              ColorMapType::Diverging,
                              ColorMapType::Greyscale })
         m_colorMapBox->addItem (ColorMap::getName (type), static_cast<int> (type) + 1);
-    m_colorMapBox->setSelectedId (static_cast<int> (m_colorMapType) + 1, juce::dontSendNotification);
+    m_colorMapBox->setSelectedId (static_cast<int> (m_colorMapType) + 1,
+                                  juce::dontSendNotification);
     m_colorMapBox->addListener (this);
     addAndMakeVisible (m_colorMapBox.get());
 
@@ -206,7 +208,8 @@ std::vector<TriggeredPowerCanvas::PanelKey> TriggeredPowerCanvas::currentPanelKe
 
     // One panel per (source, channel), grouped by channel so the same channel's
     // conditions sit next to each other and can be compared directly.
-    keys.reserve (static_cast<std::size_t> (channels.size()) * static_cast<std::size_t> (sources.size()));
+    keys.reserve (static_cast<std::size_t> (channels.size())
+                  * static_cast<std::size_t> (sources.size()));
 
     for (int channelIndex = 0; channelIndex < channels.size(); ++channelIndex)
         for (auto* source : sources)
@@ -329,8 +332,7 @@ void TriggeredPowerCanvas::updatePanelData()
     // to aim at. Meaningless over a heat map, and meaningless once a baseline has
     // taken whitening out of the picture, so it is gated on both.
     const bool overlay = ! spectrogram && mode == BaselineMode::None
-                         && whitening != WhiteningMode::None
-                         && m_node->isWhiteningOverlayEnabled();
+                         && whitening != WhiteningMode::None && m_node->isWhiteningOverlayEnabled();
 
     // dB / percent / z-score are already signed and comparable; whitened power is
     // a ratio around 1, which reads best in dB. Only raw power needs the log to
@@ -343,9 +345,9 @@ void TriggeredPowerCanvas::updatePanelData()
     const bool signedQuantity =
         (mode != BaselineMode::None) || (whitening != WhiteningMode::None && ! overlay);
 
-    const ColorMapType effectiveMap =
-        (signedQuantity && m_colorMapType == ColorMapType::Viridis) ? ColorMapType::Diverging
-                                                                   : m_colorMapType;
+    const ColorMapType effectiveMap = (signedQuantity && m_colorMapType == ColorMapType::Viridis)
+                                          ? ColorMapType::Diverging
+                                          : m_colorMapType;
 
     // Hold the node's lock only while copying values out.
     const auto lock = m_node->lockData();
@@ -359,8 +361,7 @@ void TriggeredPowerCanvas::updatePanelData()
 
         const int numTrials = m_node->getNumTrials (key.source);
 
-        juce::String subtitle =
-            juce::String (numTrials) + (numTrials == 1 ? " trial" : " trials");
+        juce::String subtitle = juce::String (numTrials) + (numTrials == 1 ? " trial" : " trials");
 
         // chi is a result, not just a nuisance parameter: it is what the fit
         // recovered, and in manual mode it is what the exponent should be aimed
@@ -392,8 +393,7 @@ void TriggeredPowerCanvas::updatePanelData()
         // at once, so it cannot go through the per-frequency accessor.
         m_gridScratch.resize (static_cast<std::size_t> (numFrequencies) * numBins);
 
-        if (! m_node->getPowerGridForDisplay (
-                key.source, key.channelIndex, m_gridScratch, overlay))
+        if (! m_node->getPowerGridForDisplay (key.source, key.channelIndex, m_gridScratch, overlay))
         {
             panel->setValues ({}, 0, 0);
             panel->setReferenceCurve ({});
@@ -413,8 +413,8 @@ void TriggeredPowerCanvas::updatePanelData()
                 for (int f = 0; f < numFrequencies; ++f)
                     m_referenceCurve[static_cast<std::size_t> (f)] = static_cast<float> (
                         10.0
-                        * std::log10 (std::max (m_referenceScratch[static_cast<std::size_t> (f)],
-                                                1e-30)));
+                        * std::log10 (
+                            std::max (m_referenceScratch[static_cast<std::size_t> (f)], 1e-30)));
 
                 panel->setReferenceCurve (m_referenceCurve);
             }
@@ -438,8 +438,9 @@ void TriggeredPowerCanvas::updatePanelData()
                 // Raw power spans decades, so plot it in dB unless a baseline or
                 // whitening mode has already produced a comparable quantity.
                 m_valueScratch[index] =
-                    plotInDecibels ? static_cast<float> (10.0 * std::log10 (std::max (value, 1e-30)))
-                                   : static_cast<float> (value);
+                    plotInDecibels
+                        ? static_cast<float> (10.0 * std::log10 (std::max (value, 1e-30)))
+                        : static_cast<float> (value);
             }
         }
 
@@ -451,10 +452,10 @@ void TriggeredPowerCanvas::updatePanelData()
         {
             // Line mode has a single bin per frequency; the grid is already in
             // the right order, so it can be passed through directly.
-            panel->setValues (
-                std::span<const float> (m_valueScratch.data(), static_cast<std::size_t> (numFrequencies)),
-                numFrequencies,
-                1);
+            panel->setValues (std::span<const float> (m_valueScratch.data(),
+                                                      static_cast<std::size_t> (numFrequencies)),
+                              numFrequencies,
+                              1);
         }
     }
 

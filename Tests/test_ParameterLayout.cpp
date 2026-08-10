@@ -58,10 +58,9 @@ TEST (ParameterUiLayout, EveryRegisteredParameterHasAHome)
 
     for (const auto* name : ParameterNames::all)
     {
-        const bool found =
-            std::any_of (placed.begin(),
-                         placed.end(),
-                         [name] (const auto& entry) { return entry.first == name; });
+        const bool found = std::any_of (placed.begin(),
+                                        placed.end(),
+                                        [name] (const auto& entry) { return entry.first == name; });
 
         EXPECT_TRUE (found) << "'" << name
                             << "' is registered but appears in no UI group. Add it to "
@@ -107,19 +106,19 @@ TEST (ParameterUiLayout, EveryPlacedParameterIsRegistered)
     the canvas gets only what is applied when the accumulators are read. */
 TEST (ParameterUiLayout, DisplayGroupsHoldNoAnalysisParameters)
 {
-    // Mirrors TriggeredSpectraNode::isAnalysisParameter. Duplicated deliberately:
-    // if the node's list changes, this test should fail and force the UI split to
-    // be reconsidered rather than silently following along.
+    // Mirrors the union of the isAnalysisParameter() chain: the three window
+    // parameters declared by TriggeredCaptureNode, the frequency-domain set added
+    // by TriggeredSpectraNode, and max_trials from TriggeredPowerNode. Duplicated
+    // deliberately: if any link in that chain changes its list, this test should
+    // fail and force the UI split to be reconsidered rather than silently
+    // following along.
     const std::vector<std::string> analysisParameters {
-        ParameterNames::channels,      ParameterNames::pre_ms,
-        ParameterNames::post_ms,       ParameterNames::mode,
-        ParameterNames::freq_min,      ParameterNames::freq_max,
-        ParameterNames::num_freqs,     ParameterNames::freq_spacing,
-        ParameterNames::tf_method,     ParameterNames::n_cycles_low,
-        ParameterNames::n_cycles_high, ParameterNames::stft_window_ms,
-        ParameterNames::stft_hop_ms,   ParameterNames::line_method,
-        ParameterNames::nw,            ParameterNames::n_tapers,
-        ParameterNames::max_trials
+        ParameterNames::channels,     ParameterNames::pre_ms,        ParameterNames::post_ms,
+        ParameterNames::mode,         ParameterNames::freq_min,      ParameterNames::freq_max,
+        ParameterNames::num_freqs,    ParameterNames::freq_spacing,  ParameterNames::tf_method,
+        ParameterNames::n_cycles_low, ParameterNames::n_cycles_high, ParameterNames::stft_window_ms,
+        ParameterNames::stft_hop_ms,  ParameterNames::line_method,   ParameterNames::nw,
+        ParameterNames::n_tapers,     ParameterNames::max_trials
     };
 
     for (const auto* name : ParameterLayout::coherenceDisplay)

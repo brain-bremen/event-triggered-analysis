@@ -24,205 +24,213 @@
 */
 #include "TriggerSourceConfigWindow.h"
 
-#include "../TriggeredSpectraNode.h"
+#include "../TriggeredCaptureNode.h"
 
 namespace TriggeredSpectra
 {
 
 namespace
 {
-constexpr int rowHeight = 26;
-constexpr int headerHeight = 24;
-constexpr int addRowHeight = 34;
-constexpr int windowWidth = 780;
-constexpr int maxVisibleRows = 12;
+    constexpr int rowHeight = 26;
+    constexpr int headerHeight = 24;
+    constexpr int addRowHeight = 34;
+    constexpr int windowWidth = 780;
+    constexpr int maxVisibleRows = 12;
 
-/** Cell that edits a juce::String field of a TriggerSource in place. */
-class TextCell : public juce::Label
-{
-public:
-    using Getter = std::function<juce::String (TriggerSource&)>;
-    using Setter = std::function<void (TriggerSource&, const juce::String&)>;
-
-    TextCell (Getter getter, Setter setter, bool editable)
-        : m_getter (std::move (getter)), m_setter (std::move (setter))
+    /** Cell that edits a juce::String field of a TriggerSource in place. */
+    class TextCell : public juce::Label
     {
-        setEditable (false, editable, false);
-        setColour (juce::Label::textColourId, juce::Colours::white);
-        setFont (juce::FontOptions (13.0f));
-        setJustificationType (juce::Justification::centredLeft);
+    public:
+        using Getter = std::function<juce::String (TriggerSource&)>;
+        using Setter = std::function<void (TriggerSource&, const juce::String&)>;
 
-        // onTextChange rather than the Listener interface: editorHidden lives on
-        // Label::Listener, not on Label itself.
-        onTextChange = [this]
+        TextCell (Getter getter, Setter setter, bool editable)
+            : m_getter (std::move (getter)),
+              m_setter (std::move (setter))
         {
+            setEditable (false, editable, false);
+            setColour (juce::Label::textColourId, juce::Colours::white);
+            setFont (juce::FontOptions (13.0f));
+            setJustificationType (juce::Justification::centredLeft);
+
+            // onTextChange rather than the Listener interface: editorHidden lives on
+            // Label::Listener, not on Label itself.
+            onTextChange = [this]
+            {
+                if (m_source != nullptr)
+                    m_setter (*m_source, getText());
+            };
+        }
+
+        void setSource (TriggerSource* source)
+        {
+            m_source = source;
+
             if (m_source != nullptr)
-                m_setter (*m_source, getText());
-        };
-    }
+                setText (m_getter (*m_source), juce::dontSendNotification);
+        }
 
-    void setSource (TriggerSource* source)
+    private:
+        TriggerSource* m_source = nullptr;
+        Getter m_getter;
+        Setter m_setter;
+    };
+
+    /** Colour swatch that opens a picker. */
+    class ColourCell : public juce::Component, public juce::ChangeListener
     {
-        m_source = source;
+    public:
+        explicit ColourCell (bool enabled) : m_enabled (enabled) {}
 
-        if (m_source != nullptr)
-            setText (m_getter (*m_source), juce::dontSendNotification);
-    }
-
-private:
-    TriggerSource* m_source = nullptr;
-    Getter m_getter;
-    Setter m_setter;
-};
-
-/** Colour swatch that opens a picker. */
-class ColourCell : public juce::Component, public juce::ChangeListener
-{
-public:
-    explicit ColourCell (bool enabled) : m_enabled (enabled) {}
-
-    void setSource (TriggerSource* source)
-    {
-        m_source = source;
-        repaint();
-    }
-
-    void paint (juce::Graphics& g) override
-    {
-        if (m_source == nullptr)
-            return;
-
-        g.setColour (m_source->colour);
-        g.fillRoundedRectangle (getLocalBounds().reduced (5).toFloat(), 3.0f);
-
-        g.setColour (juce::Colours::white.withAlpha (0.4f));
-        g.drawRoundedRectangle (getLocalBounds().reduced (5).toFloat(), 3.0f, 1.0f);
-    }
-
-    void mouseDown (const juce::MouseEvent&) override
-    {
-        if (! m_enabled || m_source == nullptr)
-            return;
-
-        auto selector = std::make_unique<juce::ColourSelector> (
-            juce::ColourSelector::showColourAtTop | juce::ColourSelector::showColourspace);
-
-        selector->setCurrentColour (m_source->colour);
-        selector->setSize (240, 280);
-        selector->addChangeListener (this);
-
-        juce::CallOutBox::launchAsynchronously (
-            std::move (selector), getScreenBounds(), nullptr);
-    }
-
-    void changeListenerCallback (juce::ChangeBroadcaster* broadcaster) override
-    {
-        if (auto* selector = dynamic_cast<juce::ColourSelector*> (broadcaster);
-            selector != nullptr && m_source != nullptr)
+        void setSource (TriggerSource* source)
         {
-            m_source->colour = selector->getCurrentColour();
+            m_source = source;
             repaint();
         }
-    }
 
-private:
-    TriggerSource* m_source = nullptr;
-    bool m_enabled = false;
-};
+        void paint (juce::Graphics& g) override
+        {
+            if (m_source == nullptr)
+                return;
 
-/** Trigger-type dropdown. */
-class TypeCell : public juce::Component, public juce::ComboBox::Listener
-{
-public:
-    TypeCell (TriggeredSpectraNode* node, bool enabled) : m_node (node)
+            g.setColour (m_source->colour);
+            g.fillRoundedRectangle (getLocalBounds().reduced (5).toFloat(), 3.0f);
+
+            g.setColour (juce::Colours::white.withAlpha (0.4f));
+            g.drawRoundedRectangle (getLocalBounds().reduced (5).toFloat(), 3.0f, 1.0f);
+        }
+
+        void mouseDown (const juce::MouseEvent&) override
+        {
+            if (! m_enabled || m_source == nullptr)
+                return;
+
+            auto selector = std::make_unique<juce::ColourSelector> (
+                juce::ColourSelector::showColourAtTop | juce::ColourSelector::showColourspace);
+
+            selector->setCurrentColour (m_source->colour);
+            selector->setSize (240, 280);
+            selector->addChangeListener (this);
+
+            juce::CallOutBox::launchAsynchronously (
+                std::move (selector), getScreenBounds(), nullptr);
+        }
+
+        void changeListenerCallback (juce::ChangeBroadcaster* broadcaster) override
+        {
+            if (auto* selector = dynamic_cast<juce::ColourSelector*> (broadcaster);
+                selector != nullptr && m_source != nullptr)
+            {
+                m_source->colour = selector->getCurrentColour();
+                repaint();
+            }
+        }
+
+    private:
+        TriggerSource* m_source = nullptr;
+        bool m_enabled = false;
+    };
+
+    /** Trigger-type dropdown. */
+    class TypeCell : public juce::Component, public juce::ComboBox::Listener
     {
-        m_box.addItem ("TTL", static_cast<int> (TriggerType::TTL_TRIGGER));
-        m_box.addItem ("TTL + Msg", static_cast<int> (TriggerType::TTL_AND_MSG_TRIGGER));
-        m_box.addItem ("Msg", static_cast<int> (TriggerType::MSG_TRIGGER));
-        m_box.setEnabled (enabled);
-        m_box.addListener (this);
-        addAndMakeVisible (m_box);
-    }
+    public:
+        TypeCell (TriggeredCaptureNode* node, bool enabled) : m_node (node)
+        {
+            m_box.addItem ("TTL", static_cast<int> (TriggerType::TTL_TRIGGER));
+            m_box.addItem ("TTL + Msg", static_cast<int> (TriggerType::TTL_AND_MSG_TRIGGER));
+            m_box.addItem ("Msg", static_cast<int> (TriggerType::MSG_TRIGGER));
+            m_box.setEnabled (enabled);
+            m_box.addListener (this);
+            addAndMakeVisible (m_box);
+        }
 
-    void setSource (TriggerSource* source)
+        void setSource (TriggerSource* source)
+        {
+            m_source = source;
+
+            if (m_source != nullptr)
+                m_box.setSelectedId (static_cast<int> (m_source->type), juce::dontSendNotification);
+        }
+
+        void resized() override { m_box.setBounds (getLocalBounds().reduced (2)); }
+
+        void comboBoxChanged (juce::ComboBox*) override
+        {
+            if (m_source == nullptr || m_node == nullptr)
+                return;
+
+            m_node->getTriggerSources().setTriggerSourceType (
+                m_source, static_cast<TriggerType> (m_box.getSelectedId()));
+        }
+
+    private:
+        TriggeredCaptureNode* m_node = nullptr;
+        TriggerSource* m_source = nullptr;
+        juce::ComboBox m_box;
+    };
+
+    /** Row delete button. */
+    class DeleteCell : public juce::Component, public juce::Button::Listener
     {
-        m_source = source;
+    public:
+        DeleteCell (TriggerSourceConfigWindow& owner, TriggeredCaptureNode* node, bool enabled)
+            : m_owner (owner),
+              m_node (node),
+              m_button ("X")
+        {
+            m_button.setEnabled (enabled);
+            m_button.addListener (this);
+            addAndMakeVisible (m_button);
+        }
 
-        if (m_source != nullptr)
-            m_box.setSelectedId (static_cast<int> (m_source->type), juce::dontSendNotification);
-    }
+        void setSource (TriggerSource* source) { m_source = source; }
 
-    void resized() override { m_box.setBounds (getLocalBounds().reduced (2)); }
+        void resized() override { m_button.setBounds (getLocalBounds().reduced (5)); }
 
-    void comboBoxChanged (juce::ComboBox*) override
-    {
-        if (m_source == nullptr || m_node == nullptr)
-            return;
+        void buttonClicked (juce::Button*) override
+        {
+            if (m_source == nullptr || m_node == nullptr)
+                return;
 
-        m_node->getTriggerSources().setTriggerSourceType (
-            m_source, static_cast<TriggerType> (m_box.getSelectedId()));
-    }
+            m_node->getTriggerSources().removeTriggerSources ({ m_source });
+            m_owner.update();
+        }
 
-private:
-    TriggeredSpectraNode* m_node = nullptr;
-    TriggerSource* m_source = nullptr;
-    juce::ComboBox m_box;
-};
-
-/** Row delete button. */
-class DeleteCell : public juce::Component, public juce::Button::Listener
-{
-public:
-    DeleteCell (TriggerSourceConfigWindow& owner, TriggeredSpectraNode* node, bool enabled)
-        : m_owner (owner), m_node (node), m_button ("X")
-    {
-        m_button.setEnabled (enabled);
-        m_button.addListener (this);
-        addAndMakeVisible (m_button);
-    }
-
-    void setSource (TriggerSource* source) { m_source = source; }
-
-    void resized() override { m_button.setBounds (getLocalBounds().reduced (5)); }
-
-    void buttonClicked (juce::Button*) override
-    {
-        if (m_source == nullptr || m_node == nullptr)
-            return;
-
-        m_node->getTriggerSources().removeTriggerSources ({ m_source });
-        m_owner.update();
-    }
-
-private:
-    TriggerSourceConfigWindow& m_owner;
-    TriggeredSpectraNode* m_node = nullptr;
-    TriggerSource* m_source = nullptr;
-    juce::TextButton m_button;
-};
+    private:
+        TriggerSourceConfigWindow& m_owner;
+        TriggeredCaptureNode* m_node = nullptr;
+        TriggerSource* m_source = nullptr;
+        juce::TextButton m_button;
+    };
 
 } // namespace
 
 // --- Model -----------------------------------------------------------------
 
 TriggerSourceConfigWindow::Model::Model (TriggerSourceConfigWindow& owner,
-                                         TriggeredSpectraNode* node,
+                                         TriggeredCaptureNode* node,
                                          bool acquisitionIsActive)
-    : m_owner (owner), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+    : m_owner (owner),
+      m_node (node),
+      m_acquisitionIsActive (acquisitionIsActive)
 {
     refreshSources();
 }
 
 void TriggerSourceConfigWindow::Model::refreshSources()
 {
-    sources = (m_node != nullptr) ? m_node->getTriggerSources().getAll()
-                                  : juce::Array<TriggerSource*> {};
+    sources =
+        (m_node != nullptr) ? m_node->getTriggerSources().getAll() : juce::Array<TriggerSource*> {};
 }
 
 int TriggerSourceConfigWindow::Model::getNumRows() { return sources.size(); }
 
-void TriggerSourceConfigWindow::Model::paintRowBackground (
-    juce::Graphics& g, int row, int width, int height, bool /*selected*/)
+void TriggerSourceConfigWindow::Model::paintRowBackground (juce::Graphics& g,
+                                                           int row,
+                                                           int width,
+                                                           int height,
+                                                           bool /*selected*/)
 {
     if (row % 2 == 0)
         g.fillAll (juce::Colours::white.withAlpha (0.04f));
@@ -230,8 +238,12 @@ void TriggerSourceConfigWindow::Model::paintRowBackground (
     juce::ignoreUnused (width, height);
 }
 
-void TriggerSourceConfigWindow::Model::paintCell (
-    juce::Graphics& g, int row, int column, int width, int height, bool /*selected*/)
+void TriggerSourceConfigWindow::Model::paintCell (juce::Graphics& g,
+                                                  int row,
+                                                  int column,
+                                                  int width,
+                                                  int height,
+                                                  bool /*selected*/)
 {
     if (row < 0 || row >= sources.size())
         return;
@@ -253,8 +265,11 @@ void TriggerSourceConfigWindow::Model::paintCell (
     }
 }
 
-juce::Component* TriggerSourceConfigWindow::Model::refreshComponentForCell (
-    int row, int column, bool /*isRowSelected*/, juce::Component* existing)
+juce::Component*
+    TriggerSourceConfigWindow::Model::refreshComponentForCell (int row,
+                                                               int column,
+                                                               bool /*isRowSelected*/,
+                                                               juce::Component* existing)
 {
     if (row < 0 || row >= sources.size())
     {
@@ -279,11 +294,11 @@ juce::Component* TriggerSourceConfigWindow::Model::refreshComponentForCell (
             if (cell == nullptr)
             {
                 delete existing;
-                cell = new TextCell (
-                    [] (TriggerSource& s) { return s.name; },
-                    [this] (TriggerSource& s, const juce::String& text)
-                    { m_node->getTriggerSources().setTriggerSourceName (&s, text); },
-                    editable);
+                cell =
+                    new TextCell ([] (TriggerSource& s) { return s.name; },
+                                  [this] (TriggerSource& s, const juce::String& text)
+                                  { m_node->getTriggerSources().setTriggerSourceName (&s, text); },
+                                  editable);
             }
 
             cell->setSource (source);
@@ -356,11 +371,11 @@ juce::Component* TriggerSourceConfigWindow::Model::refreshComponentForCell (
             if (cell == nullptr)
             {
                 delete existing;
-                cell = new TextCell (
-                    [] (TriggerSource& s) { return juce::String (s.pendingTimeoutMs); },
-                    [] (TriggerSource& s, const juce::String& t)
-                    { s.pendingTimeoutMs = juce::jmax (0, t.getIntValue()); },
-                    patternsEditable);
+                cell = new TextCell ([] (TriggerSource& s)
+                                     { return juce::String (s.pendingTimeoutMs); },
+                                     [] (TriggerSource& s, const juce::String& t)
+                                     { s.pendingTimeoutMs = juce::jmax (0, t.getIntValue()); },
+                                     patternsEditable);
             }
 
             cell->setSource (source);
@@ -389,10 +404,12 @@ juce::Component* TriggerSourceConfigWindow::Model::refreshComponentForCell (
 
 // --- Window ----------------------------------------------------------------
 
-TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredSpectraNode* node,
+TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node,
                                                       bool acquisitionIsActive,
                                                       juce::Component* anchor)
-    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+    : PopupComponent (anchor),
+      m_node (node),
+      m_acquisitionIsActive (acquisitionIsActive)
 {
     jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor
 
@@ -409,9 +426,12 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredSpectraNode* node
     header.addColumn ("Type", typeColumn, 100, 80, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("Colour", colourColumn, 56, 40, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("Arm msg", armColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Cancel msg", cancelColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Commit msg", commitColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Timeout", timeoutColumn, 60, 50, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn (
+        "Cancel msg", cancelColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn (
+        "Commit msg", commitColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn (
+        "Timeout", timeoutColumn, 60, 50, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("", deleteColumn, 34, 30, -1, juce::TableHeaderComponent::notSortable);
 
     addAndMakeVisible (m_table.get());
@@ -419,7 +439,8 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredSpectraNode* node
     // --- Add row ---------------------------------------------------------
     m_newLineLabel = std::make_unique<juce::Label> ("line", "0");
     m_newLineLabel->setEditable (true);
-    m_newLineLabel->setColour (juce::Label::backgroundColourId, juce::Colours::white.withAlpha (0.1f));
+    m_newLineLabel->setColour (juce::Label::backgroundColourId,
+                               juce::Colours::white.withAlpha (0.1f));
     m_newLineLabel->setColour (juce::Label::textColourId, juce::Colours::white);
     m_newLineLabel->setJustificationType (juce::Justification::centred);
     addAndMakeVisible (m_newLineLabel.get());
@@ -513,12 +534,8 @@ void TriggerSourceConfigWindow::paint (juce::Graphics& g)
     // Label the add row so the line box is not a mystery number.
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.6f));
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("TTL line / type",
-                6,
-                getHeight() - addRowHeight - 2,
-                200,
-                12,
-                juce::Justification::left);
+    g.drawText (
+        "TTL line / type", 6, getHeight() - addRowHeight - 2, 200, 12, juce::Justification::left);
 }
 
 } // namespace TriggeredSpectra
