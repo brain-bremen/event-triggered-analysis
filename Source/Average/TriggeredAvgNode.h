@@ -23,110 +23,106 @@
 */
 #pragma once
 
-#include "TriggerSource.h"
-#include "Types.h"
+#include "DataCollector.h"
+
+#include "TriggerCore/TriggeredCaptureNode.h"
 
 #include <ProcessorHeaders.h>
-#include <atomic>
 #include <memory>
 
 namespace EventTriggered
 {
 
-using StreamId = std::uint16_t;
-class TriggeredAvgNode;
-class DataCollector;
-class MultiChannelRingBuffer;
-class TriggerSource;
-class DataStore;
-enum class TriggerType : std::int_fast8_t;
 class TriggeredAvgCanvas;
 
 namespace ParameterNames
 {
-    constexpr auto pre_ms = "pre_ms";
-    constexpr auto post_ms = "post_ms";
-    constexpr auto max_trials = "max_trials";
-    constexpr auto trigger_line = "trigger_line";
-    constexpr auto trigger_type = "trigger_type";
-    constexpr auto use_custom_x_limits = "use_custom_x_limits";
-    constexpr auto x_min = "x_min";
-    constexpr auto x_max = "x_max";
-    constexpr auto use_custom_y_limits = "use_custom_y_limits";
-    constexpr auto y_min = "y_min";
-    constexpr auto y_max = "y_max";
+    // Everything else — channels, pre_ms, post_ms, trigger_line, trigger_type —
+    // is registered by TriggeredCaptureNode and named in TriggerCore.
 
+    inline constexpr auto max_trials = "max_trials";
+
+    // Display-only. These must never reach isAnalysisParameter(): a rebuild
+    // stops the worker, resizes the ring buffer and discards every accumulated
+    // trial, which is not what nudging an axis should do.
+    inline constexpr auto use_custom_x_limits = "use_custom_x_limits";
+    inline constexpr auto x_min = "x_min";
+    inline constexpr auto x_max = "x_max";
+    inline constexpr auto use_custom_y_limits = "use_custom_y_limits";
+    inline constexpr auto y_min = "y_min";
+    inline constexpr auto y_max = "y_max";
 } // namespace ParameterNames
 
-class TriggeredAvgNode : public GenericProcessor, public juce::AsyncUpdater
+/** Time-domain average of continuous data around each trigger, split by
+ *  condition.
+ *
+ *  The third plugin built on TriggeredCaptureNode, and the one that shows the
+ *  base class is not secretly spectral: it wants the same ring buffer, the same
+ *  trigger sources and the same arm/cancel/commit workflow, and none of the
+ *  frequency machinery.
+ */
+class TriggeredAvgNode : public TriggeredCaptureNode
 {
 public:
     TriggeredAvgNode();
     ~TriggeredAvgNode() override;
-    TriggeredAvgNode (TriggeredAvgNode&& other) noexcept = delete;
-    TriggeredAvgNode& operator= (TriggeredAvgNode&& other) noexcept = delete;
 
-    // overrides
     AudioProcessorEditor* createEditor() override;
-    void parameterValueChanged (Parameter* param) override;
-    void process (AudioBuffer<float>& buffer) override;
-    bool startAcquisition() override;
 
-    // parameters
-    int getMaxTrials() const { return (int) getParameter (ParameterNames::max_trials)->getValue(); }
-    float getPreWindowSizeMs() const;
-    float getPostWindowSizeMs() const;
+    void parameterValueChanged (Parameter* parameter) override;
 
-    int getNumberOfPreSamples() const;
-    int getNumberOfPostSamplesIncludingTrigger() const;
-    int getNumberOfSamples() const;
+    void clearAllData() override;
 
-    // trigger sources
-    TriggerSources& getTriggerSources() { return m_triggerSources; }
-
-    EventTriggered::DataStore* getDataStore() { return m_dataStore.get(); }
+    DataStore* getDataStore() { return &m_dataStore; }
 
     void setCanvas (TriggeredAvgCanvas* canvas) { m_canvas = canvas; }
 
-    int getNextConditionIndex() const { return m_triggerSources.getNextConditionIndex(); }
+    /** Samples in one trial window. Convenience for the display, which thinks in
+        samples rather than in TrialGeometry. */
+    int getNumberOfPreSamples() const { return getTrialGeometry().preSamples; }
+    int getNumberOfPostSamplesIncludingTrigger() const { return getTrialGeometry().postSamples; }
+    int getNumberOfSamples() const { return getTrialGeometry().totalDisplayedSamples(); }
 
-    /** Saves trigger source parameters */
-    void saveCustomParametersToXml (XmlElement* xml) override;
+    float getPreWindowSizeMs() const { return getPreWindowMs(); }
+    float getPostWindowSizeMs() const { return getPostWindowMs(); }
 
-    /** Saves trigger source parameters */
-    void loadCustomParametersFromXml (XmlElement* xml) override;
+    int getMaxTrials() const;
 
-    // TODO: should we use this?
-    StreamId m_dataStreamIndex = 0;
+protected:
+    void registerAdditionalParameters() override;
+
+    /** Reallocates the accumulators for the current geometry and channel count,
+        and drops per-source storage for sources that have gone away. */
+    void analysisConfigurationChanged() override;
+
+    bool isAnalysisParameter (const juce::String& parameterName) const override;
+
+    /** Erases per-source storage while the sources are still alive.
+     *
+     *  The base class stops the worker and flushes the queue; this adds the half
+     *  the base cannot know about. Without it, DataStore keeps entries keyed by
+     *  freed TriggerSource pointers for the rest of the session, and a source
+     *  later allocated at the same address silently inherits the dead one's
+     *  average. */
+    void triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources) override;
+
+    void refreshDisplay() override;
+
+    // --- CaptureWorker::Client ---------------------------------------------
+    //
+    // All four run on the worker thread. This is the whole point of the port:
+    // committing used to happen on the audio thread, under the same lock the
+    // message thread holds while repainting.
+
+    bool processCapturedTrial (const CaptureRequest& request,
+                               const juce::AudioBuffer<float>& trial) override;
+    bool commitCapture (TriggerSource* source) override;
+    void discardCapture (TriggerSource* source) override;
+    void discardExpiredCaptures (std::int64_t nowMs) override;
 
 private:
-    void handleBroadcastMessage (const String& message, const int64 sysTimeMs) override;
-    String handleConfigMessage (const String& message) override;
-
-    /** Helper method for parsing dynamic objects */
-    bool getIntField (DynamicObject::Ptr payload,
-                      String name,
-                      int& value,
-                      int lowerBound,
-                      int upperBound);
-
-    void handleTTLEvent (TTLEventPtr event) override;
-    void handleAsyncUpdate() override;
-
-    void initializeThreads();
-    void shutdownThreads();
-
-    std::unique_ptr<DataStore> m_dataStore;
-    std::unique_ptr<MultiChannelRingBuffer> m_ringBuffer;
-    std::unique_ptr<DataCollector> m_dataCollector;
-    TriggeredAvgCanvas* m_canvas;
-
-    TriggerSources m_triggerSources;
-
-    // Buffer parameters
-    int m_ringBufferSize;
-    std::atomic<bool> m_threadsInitialized;
-    SampleNumber m_lastSampleNumber = 0;
+    DataStore m_dataStore;
+    TriggeredAvgCanvas* m_canvas = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgNode)
 };

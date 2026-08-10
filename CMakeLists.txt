@@ -157,6 +157,14 @@ function(oe_add_plugin PLUGIN_NAME PLUGIN_CORE)
     VERSION ${PLUGIN_VERSION}
     SOVERSION ${PLUGIN_VERSION_MAJOR})
 
+  # Collect every plugin at the top of the build tree rather than under
+  # Build/Source/<Plugin>/. A multi-config generator appends the configuration
+  # itself, so this yields Build/Release/X.dll on Windows and Build/X.so on
+  # Linux — which is what the CI artifact paths expect.
+  set_target_properties(${PLUGIN_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
   if(MSVC)
     target_link_libraries(${PLUGIN_NAME} PRIVATE ${GUI_BIN_DIR}/open-ephys.lib)
     install(TARGETS ${PLUGIN_NAME}
@@ -188,6 +196,7 @@ add_subdirectory(Source/TriggerCore)
 add_subdirectory(Source/Spectral)
 add_subdirectory(Source/Power)
 add_subdirectory(Source/Coherence)
+add_subdirectory(Source/Average)
 
 # --- clang-format ----------------------------------------------------------
 if(CLANG_FORMAT_EXE)

@@ -22,360 +22,145 @@
 
 */
 #include "DataCollector.h"
-#include "MultiChannelRingBuffer.h"
-#include "TriggerSource.h"
-#include "TriggeredAvgNode.h"
+
 #include <ProcessorHeaders.h>
 
 using namespace EventTriggered;
 
-// DataStore implementation
+// --- DataStore -------------------------------------------------------------
+//
+// Everything here runs on the capture worker or the message thread, never on the
+// audio thread. That was not true before this plugin was ported onto
+// TriggeredCaptureNode: commits and timeout sweeps used to be driven straight
+// from handleBroadcastMessage(), which the GUI dispatches from checkForEvents()
+// inside process(). Taking m_mutex there put the audio callback behind the same
+// lock the message thread holds while repainting.
+
 void DataStore::ResetAndResizeBuffersForTriggerSource (TriggerSource* source,
                                                        int nChannels,
                                                        int nSamples)
 {
-    std::scoped_lock<std::recursive_mutex> lock (m_mutex);
+    auto lock = GetLock();
+
     if (! source)
     {
         for (auto& [key, value] : m_averageBuffers)
-        {
             value.setSize (nChannels, nSamples);
-        }
+
+        return;
     }
-    else
-    {
-        m_averageBuffers[source].setSize (nChannels, nSamples);
-        m_singleTrialBuffers[source].setSize (
-            SingleTrialBufferSize { .numChannels = nChannels, .numSamples = nSamples });
-    }
+
+    m_averageBuffers[source].setSize (nChannels, nSamples);
+    m_singleTrialBuffers[source].setSize (
+        SingleTrialBufferSize { .numChannels = nChannels, .numSamples = nSamples });
 }
 
-void EventTriggered::DataStore::ResizeAllAverageBuffers (int nChannels, int nSamples, bool clear)
+void DataStore::ResizeAllAverageBuffers (int nChannels, int nSamples, bool clear)
 {
     auto lock = GetLock();
+
     for (auto& [source, buffer] : m_averageBuffers)
-    {
         buffer.setSize (nChannels, nSamples, clear);
-    }
 }
 
 void DataStore::setMaxTrialsToStore (int n)
 {
     auto lock = GetLock();
+
     for (auto& [source, trialBuffer] : m_singleTrialBuffers)
-    {
         trialBuffer.setMaxTrials (n);
-    }
 }
 
 void DataStore::ResetAllBuffers()
 {
     auto lock = GetLock();
+
     for (auto& [source, avgBuffer] : m_averageBuffers)
         avgBuffer.resetTrials();
+
     for (auto& [source, trialBuffer] : m_singleTrialBuffers)
         trialBuffer.clear();
+
     m_pendingCaptures.clear();
 }
+
+void DataStore::RemoveTriggerSource (TriggerSource* source)
+{
+    auto lock = GetLock();
+
+    m_averageBuffers.erase (source);
+    m_singleTrialBuffers.erase (source);
+    m_pendingCaptures.discard (source);
+}
+
+bool DataStore::addTrialForTriggerSource (TriggerSource* source,
+                                          const juce::AudioBuffer<float>& buffer)
+{
+    auto lock = GetLock();
+
+    auto* avgBuffer = getRefToAverageBufferForTriggerSource (source);
+    auto* trialBuffer = getRefToTrialBufferForTriggerSource (source);
+
+    // A trial whose shape does not match the accumulator is dropped rather than
+    // forced in. It means the geometry changed between the capture being queued
+    // and the worker reaching it, and half a trial is worse than none.
+    if (avgBuffer == nullptr || trialBuffer == nullptr
+        || buffer.getNumSamples() != avgBuffer->getNumSamples()
+        || buffer.getNumChannels() != avgBuffer->getNumChannels())
+        return false;
+
+    avgBuffer->addDataToAverageFromBuffer (buffer);
+    trialBuffer->addTrial (buffer);
+    return true;
+}
+
+// --- Pending captures ------------------------------------------------------
 
 void DataStore::storePendingCapture (TriggerSource* source,
                                      const juce::AudioBuffer<float>& buffer,
                                      int timeoutMs)
 {
     auto lock = GetLock();
-    PendingCapture pc;
-    pc.buffer = buffer; // copy
-    pc.captureTimeMs = juce::Time::currentTimeMillis();
-    pc.timeoutMs = timeoutMs;
-    m_pendingCaptures[source] = std::move (pc);
+
+    // Copies the window. Parking one replaces whatever the source was already
+    // holding, which is how an uncommitted trial is evicted by the next one.
+    m_pendingCaptures.store (source, buffer, timeoutMs, juce::Time::currentTimeMillis());
 }
 
 bool DataStore::commitPendingCapture (TriggerSource* source)
 {
     auto lock = GetLock();
 
-    auto it = m_pendingCaptures.find (source);
-    if (it == m_pendingCaptures.end())
+    auto pending = m_pendingCaptures.take (source);
+
+    if (! pending.has_value())
         return false;
 
-    auto& buf = it->second.buffer;
-
-    auto* avgBuffer = getRefToAverageBufferForTriggerSource (source);
-    auto* trialBuffer = getRefToTrialBufferForTriggerSource (source);
-
-    if (! avgBuffer || ! trialBuffer
-        || buf.getNumSamples() != avgBuffer->getNumSamples()
-        || buf.getNumChannels() != avgBuffer->getNumChannels())
-    {
-        m_pendingCaptures.erase (it);
-        return false;
-    }
-
-    avgBuffer->addDataToAverageFromBuffer (buf);
-    trialBuffer->addTrial (buf);
-    m_pendingCaptures.erase (it);
-    return true;
+    return addTrialForTriggerSource (source, *pending);
 }
 
 void DataStore::discardPendingCapture (TriggerSource* source)
 {
     auto lock = GetLock();
-    m_pendingCaptures.erase (source);
+    m_pendingCaptures.discard (source);
 }
 
 bool DataStore::hasPendingCapture (TriggerSource* source) const
 {
     auto lock = GetLock();
-    return m_pendingCaptures.count (source) > 0;
+    return m_pendingCaptures.has (source);
 }
 
-void DataStore::discardExpiredPendingCaptures()
+void DataStore::discardExpiredPendingCaptures (std::int64_t nowMs)
 {
     auto lock = GetLock();
-    const juce::int64 now = juce::Time::currentTimeMillis();
-    for (auto it = m_pendingCaptures.begin(); it != m_pendingCaptures.end();)
-    {
-        const auto& pc = it->second;
-        if (pc.timeoutMs > 0 && (now - pc.captureTimeMs) >= pc.timeoutMs)
-        {
-            LOGD ("[TriggeredAvg] Pending capture expired for source");
-            it = m_pendingCaptures.erase (it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
+
+    if (const int discarded = m_pendingCaptures.discardExpired (nowMs); discarded > 0)
+        LOGD ("[Triggered Avg] ", discarded, " pending capture(s) expired");
 }
 
-DataCollector::DataCollector (TriggeredAvgNode* viewer_,
-                              MultiChannelRingBuffer* buffer_,
-                              DataStore* datastore_)
-    : Thread ("TriggeredAvg: Data Collector"),
-      m_processor (viewer_),
-      ringBuffer (buffer_),
-      m_datastore (datastore_),
-      newTriggerEvent (false)
-{
-    //setPriority(Thread::Priority::high);
-}
+// --- MultiChannelAverageBuffer ---------------------------------------------
 
-DataCollector::~DataCollector() { stopThread (1000); }
-
-void DataCollector::registerCaptureRequest (const CaptureRequest& request)
-{
-    const ScopedLock lock (triggerQueueLock);
-    captureRequestQueue.emplace_back (request);
-    newTriggerEvent.signal();
-}
-
-void DataCollector::run()
-{
-    constexpr double retryIntervalMs = 100.0;
-    constexpr int maximumNumberOfRetries = 500;
-    while (! threadShouldExit())
-    {
-        if (bool wasTriggered = newTriggerEvent.wait (100))
-        {
-            bool averageBuffersWereUpdated = false;
-
-            while (! threadShouldExit())
-            {
-                // Get next request from queue (lock held briefly)
-                CaptureRequest currentRequest;
-                bool hasRequest = false;
-
-                {
-                    const ScopedLock lock (triggerQueueLock);
-                    if (! captureRequestQueue.empty())
-                    {
-                        currentRequest = captureRequestQueue.front();
-                        captureRequestQueue.pop_front();
-                        hasRequest = true;
-                    }
-                }
-
-                if (! hasRequest)
-                    break;
-
-                // Process request without holding the lock
-                int iRetry = 0;
-                RingBufferReadResult result = RingBufferReadResult::UnknownError;
-                SampleNumber lastKnownSampleNumber = ringBuffer->getCurrentSampleNumber();
-
-                do
-                {
-                    bool captureCommitted = false;
-                    result = processCaptureRequest (currentRequest, captureCommitted);
-                    assert (result != RingBufferReadResult::UnknownError);
-
-                    switch (result)
-                    {
-                        case RingBufferReadResult::Success:
-                            if (captureCommitted)
-                                averageBuffersWereUpdated = true;
-                            LOGD ("[TriggeredAvg] Capture Request succesfully processed ")
-                            break;
-                        case RingBufferReadResult::DataInRingBufferTooOld:
-                            LOGD ("[TriggeredAvg] Catpure Request dicarded, data too old. ")
-                            break;
-
-                        case RingBufferReadResult::NotEnoughNewData:
-                            if (iRetry < maximumNumberOfRetries)
-                            {
-                                // Check if time has jumped backwards (e.g., FileReader looping)
-                                SampleNumber currentSampleNumber =
-                                    ringBuffer->getCurrentSampleNumber();
-
-                                LOGD ("[TriggeredAvg] Capture Request retry ",
-                                      iRetry,
-                                      " - not enough data available yet (triggerSample: ",
-                                      currentRequest.triggerSample,
-                                      ", currentSample: ",
-                                      currentSampleNumber,
-                                      ", lastKnownSample: ",
-                                      lastKnownSampleNumber,
-                                      "), waiting ",
-                                      retryIntervalMs,
-                                      " ms.")
-
-                                if (currentSampleNumber < lastKnownSampleNumber)
-                                {
-                                    LOGD (
-                                        "[TriggeredAvg] Time jump detected! Aborting capture request.");
-                                    result = RingBufferReadResult::Aborted;
-                                    break;
-                                }
-
-                                wait (retryIntervalMs);
-                                iRetry++;
-                                lastKnownSampleNumber = currentSampleNumber;
-                            }
-                            else
-                            {
-                                LOGD ("TriggeredAvg: Capture request discarded after ",
-                                      maximumNumberOfRetries,
-                                      " retries - not enough data available");
-                                result = RingBufferReadResult::Aborted;
-                            }
-                            break;
-
-                        case RingBufferReadResult::InvalidParameters:
-                        case RingBufferReadResult::UnknownError:
-                            assert (false);
-                            break;
-
-                        case RingBufferReadResult::Aborted:
-                            // Valid result - happens when time jumps backwards or max retries exceeded
-                            break;
-                    }
-                } while (result == RingBufferReadResult::NotEnoughNewData
-                         && iRetry < maximumNumberOfRetries && ! threadShouldExit());
-
-                assert (RingBufferReadResult::Success == result
-                        || RingBufferReadResult::DataInRingBufferTooOld == result
-                        || RingBufferReadResult::Aborted == result);
-            }
-
-            if (averageBuffersWereUpdated)
-            {
-                // notify the processor that the data has been updated
-                if (m_processor != nullptr)
-                    m_processor->triggerAsyncUpdate();
-            }
-        }
-    }
-}
-
-// process a single capture request on the ring buffer, running on the data collector thread
-RingBufferReadResult DataCollector::processCaptureRequest (const CaptureRequest& request,
-                                                           bool& averageWasUpdated)
-{
-    auto result = ringBuffer->readAroundSample (
-        request.triggerSample, request.preSamples, request.postSamples, m_collectBuffer);
-    assert (result != RingBufferReadResult::UnknownError);
-    if (result != RingBufferReadResult::Success)
-    {
-        return result;
-    }
-
-    // First, get buffer pointer and check size with minimal lock time
-    MultiChannelAverageBuffer* avgBuffer = nullptr;
-    SingleTrialBufferJuce* trialBuffer = nullptr;
-    bool needsResize = false;
-
-    {
-        auto lock = m_datastore->GetLock();
-        avgBuffer = m_datastore->getRefToAverageBufferForTriggerSource (request.triggerSource);
-        trialBuffer = m_datastore->getRefToTrialBufferForTriggerSource (request.triggerSource);
-
-        if (! avgBuffer)
-        {
-            m_datastore->ResetAndResizeBuffersForTriggerSource (request.triggerSource,
-                                                                m_collectBuffer.getNumChannels(),
-                                                                m_collectBuffer.getNumSamples());
-            avgBuffer = m_datastore->getRefToAverageBufferForTriggerSource (request.triggerSource);
-        }
-
-        jassert (avgBuffer);
-
-        if (! trialBuffer)
-        {
-            m_datastore->ResetAndResizeBuffersForTriggerSource (request.triggerSource,
-                                                                m_collectBuffer.getNumChannels(),
-                                                                m_collectBuffer.getNumSamples());
-            trialBuffer = m_datastore->getRefToTrialBufferForTriggerSource (request.triggerSource);
-        }
-
-        jassert (trialBuffer);
-
-        if (m_collectBuffer.getNumChannels() != avgBuffer->getNumChannels()
-            || m_collectBuffer.getNumSamples() != avgBuffer->getNumSamples())
-        {
-            needsResize = true;
-        }
-
-    } // Lock released here
-
-    // Resize outside the critical section if needed
-    if (needsResize)
-    {
-        auto lock = m_datastore->GetLock();
-        m_datastore->ResetAndResizeBuffersForTriggerSource (request.triggerSource,
-                                                            m_collectBuffer.getNumChannels(),
-                                                            m_collectBuffer.getNumSamples());
-    }
-
-    // If a commit pattern is set, hold the capture pending instead of committing immediately.
-    // The message thread will call commitPendingCapture / discardPendingCapture.
-    if (request.triggerSource->commitPattern.isNotEmpty())
-    {
-        m_datastore->storePendingCapture (request.triggerSource,
-                                         m_collectBuffer,
-                                         request.triggerSource->pendingTimeoutMs);
-        averageWasUpdated = false;
-        LOGD ("[TriggeredAvg] Capture stored as pending for '", request.triggerSource->name, "'");
-        return result;
-    }
-
-    // Commit immediately
-    {
-        auto lock = m_datastore->GetLock();
-        avgBuffer = m_datastore->getRefToAverageBufferForTriggerSource (request.triggerSource);
-        trialBuffer = m_datastore->getRefToTrialBufferForTriggerSource (request.triggerSource);
-
-        jassert (avgBuffer);
-        jassert (trialBuffer);
-        jassert (m_collectBuffer.getNumSamples() == avgBuffer->getNumSamples());
-        jassert (m_collectBuffer.getNumChannels() == avgBuffer->getNumChannels());
-
-        avgBuffer->addDataToAverageFromBuffer (m_collectBuffer);
-        trialBuffer->addTrial (m_collectBuffer);
-        averageWasUpdated = true;
-    }
-
-    return result;
-}
 MultiChannelAverageBuffer::MultiChannelAverageBuffer (int numChannels, int numSamples)
     : m_numChannels (numChannels),
       m_numSamples (numSamples)

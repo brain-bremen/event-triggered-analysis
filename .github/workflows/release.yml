@@ -63,8 +63,6 @@ jobs:
           cd plugin
           cmake --build Build --config Release -j4
 
-      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
-      # the build. Add it here in the same commit that makes it compile.
       - name: Upload Windows DLL
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +70,7 @@ jobs:
           path: |
             plugin/Build/Release/TriggeredPower.dll
             plugin/Build/Release/TriggeredCoherence.dll
+            plugin/Build/Release/TriggeredAverage.dll
           if-no-files-found: error
 
   build-linux:
@@ -139,8 +138,6 @@ jobs:
           cd plugin
           cmake --build Build --config Release -j$(nproc)
 
-      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
-      # the build. Add it here in the same commit that makes it compile.
       - name: Upload Linux SO
         uses: actions/upload-artifact@v4
         with:
@@ -148,6 +145,7 @@ jobs:
           path: |
             plugin/Build/TriggeredPower.so
             plugin/Build/TriggeredCoherence.so
+            plugin/Build/TriggeredAverage.so
           if-no-files-found: error
 
   create-release:

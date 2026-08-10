@@ -21,72 +21,38 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-
 #include "TriggeredAvgNode.h"
-#include "DataCollector.h"
-#include "MultiChannelRingBuffer.h"
-#include "TriggerSource.h"
+
+#include "TriggerCore/ParameterNames.h"
+
 #include "Ui/TriggeredAvgCanvas.h"
 #include "Ui/TriggeredAvgEditor.h"
 
-using namespace EventTriggered;
-
-TriggeredAvgNode::TriggeredAvgNode()
-    : GenericProcessor ("Triggered Avg"),
-      m_dataStore (std::make_unique<DataStore>()),
-      // TODO: check if 10 seconds buffer is sufficient (lock-free?) and how to handle more than one stream
-      m_canvas (nullptr),
-      m_triggerSources (this), // 10 seconds buffer
-      m_ringBufferSize (
-          static_cast<int> (GenericProcessor::getSampleRate (m_dataStreamIndex) * 10.0f)),
-      m_threadsInitialized (false)
+namespace EventTriggered
 {
-    addFloatParameter (Parameter::PROCESSOR_SCOPE,
-                       ParameterNames::pre_ms,
-                       "Pre Trig",
-                       "Size of the pre-trigger window in ms",
-                       "ms",
-                       250.0f,
-                       0.0f,
-                       5000.0f,
-                       10.0f,
-                       true);
 
-    addFloatParameter (Parameter::PROCESSOR_SCOPE,
-                       ParameterNames::post_ms,
-                       "Post Trig",
-                       "Size of the post-trigger window in ms",
-                       "ms",
-                       750.0f,
-                       10.0f,
-                       5000.0f,
-                       10.0f,
-                       true);
+TriggeredAvgNode::TriggeredAvgNode() : TriggeredCaptureNode ("Triggered Avg") {}
 
+TriggeredAvgNode::~TriggeredAvgNode() = default;
+
+AudioProcessorEditor* TriggeredAvgNode::createEditor()
+{
+    editor = std::make_unique<TriggeredAvgEditor> (this);
+    return editor.get();
+}
+
+// --- Parameters ------------------------------------------------------------
+
+void TriggeredAvgNode::registerAdditionalParameters()
+{
     addIntParameter (Parameter::PROCESSOR_SCOPE,
                      ParameterNames::max_trials,
                      "Max Trials",
-                     "Maximum number of single trials to store per condition",
+                     "Individual trials retained per condition",
                      10,
                      1,
                      50,
                      true);
-
-    addIntParameter (Parameter::PROCESSOR_SCOPE,
-                     ParameterNames::trigger_line,
-                     "Trigger Line",
-                     "The input TTL line of the current trigger source",
-                     0,
-                     -1,
-                     255);
-
-    addIntParameter (Parameter::PROCESSOR_SCOPE,
-                     ParameterNames::trigger_type,
-                     "Trigger Type",
-                     "The type of the current trigger source",
-                     1,
-                     1,
-                     3);
 
     addBooleanParameter (Parameter::PROCESSOR_SCOPE,
                          ParameterNames::use_custom_x_limits,
@@ -106,7 +72,7 @@ TriggeredAvgNode::TriggeredAvgNode()
 
     addFloatParameter (Parameter::PROCESSOR_SCOPE,
                        ParameterNames::x_max,
-                       "x Max",
+                       "X Max",
                        "Maximum x-axis limit",
                        "",
                        100.0f,
@@ -139,319 +105,150 @@ TriggeredAvgNode::TriggeredAvgNode()
                        -10000.0f,
                        10000.0f,
                        1.0f);
-
-    // Create a default trigger source for any line
-    m_triggerSources.addTriggerSource (-1, TriggerType::TTL_TRIGGER);
 }
 
-TriggeredAvgNode::~TriggeredAvgNode() { shutdownThreads(); }
-
-AudioProcessorEditor* TriggeredAvgNode::createEditor()
+int TriggeredAvgNode::getMaxTrials() const
 {
-    editor = std::make_unique<TriggeredAvgEditor> (this);
-    return editor.get();
+    auto* parameter = getParameter (ParameterNames::max_trials);
+    return parameter != nullptr ? static_cast<int> (parameter->getValue()) : 0;
 }
 
-void TriggeredAvgNode::parameterValueChanged (Parameter* param)
+bool TriggeredAvgNode::isAnalysisParameter (const juce::String& parameterName) const
 {
-    using namespace ParameterNames;
-    // Update trial buffers when max trials changes
-    if (param->getName().equalsIgnoreCase (max_trials))
-    {
-        const int maxTrials = (int) param->getValue();
-        const int totalSamples = getNumberOfSamples();
-        m_dataStore->ResizeAllAverageBuffers (getTotalNumInputChannels(), totalSamples, maxTrials);
+    // max_trials resizes the per-source trial buffers, so it does invalidate the
+    // configuration. The six axis-limit parameters deliberately do not appear
+    // here: they only change how the accumulated data is drawn, and treating
+    // them as analysis parameters would discard every trial on an axis nudge.
+    if (parameterName.equalsIgnoreCase (ParameterNames::max_trials))
+        return true;
 
-        if (m_canvas)
-        {
-            triggerAsyncUpdate();
-        }
-    }
-    else if (param->getName().equalsIgnoreCase (trigger_line))
-    {
-        if (auto source = m_triggerSources.getLastAddedTriggerSource())
-        {
-            source->line = (int) param->getValue();
-        }
-    }
-    else if (param->getName().equalsIgnoreCase (trigger_type))
-    {
-        if (auto source = m_triggerSources.getLastAddedTriggerSource())
-        {
-            source->type = (TriggerType) (int) param->getValue();
-
-            if (source->type == TriggerType::TTL_TRIGGER)
-                source->canTrigger = true;
-            else
-                source->canTrigger = false;
-        }
-    }
-    else if (param->getName().equalsIgnoreCase (ParameterNames::pre_ms))
-    {
-        const int totalSamples = getNumberOfSamples();
-        m_dataStore->ResizeAllAverageBuffers (getTotalNumInputChannels(), totalSamples, false);
-
-        if (m_canvas)
-        {
-            m_canvas->setWindowSizeMs (getPreWindowSizeMs(), getPostWindowSizeMs());
-            triggerAsyncUpdate();
-        }
-    }
-    else if (param->getName().equalsIgnoreCase (ParameterNames::post_ms))
-    {
-        const int totalSamples = getNumberOfSamples();
-        m_dataStore->ResizeAllAverageBuffers (getTotalNumInputChannels(), totalSamples, false);
-
-        if (m_canvas)
-        {
-            m_canvas->setWindowSizeMs (getPreWindowSizeMs(), getPostWindowSizeMs());
-            triggerAsyncUpdate();
-        }
-    }
-    else if (param->getName().equalsIgnoreCase (use_custom_x_limits))
-    {
-        if (m_canvas)
-            triggerAsyncUpdate();
-    }
-    else if (param->getName().equalsIgnoreCase (x_min) || param->getName().equalsIgnoreCase (x_max))
-    {
-        if (m_canvas)
-            triggerAsyncUpdate();
-    }
-    else if (param->getName().equalsIgnoreCase (use_custom_y_limits))
-    {
-        if (m_canvas)
-            triggerAsyncUpdate();
-    }
-    else if (param->getName().equalsIgnoreCase (y_min) || param->getName().equalsIgnoreCase (y_max))
-    {
-        if (m_canvas)
-            triggerAsyncUpdate();
-    }
+    return TriggeredCaptureNode::isAnalysisParameter (parameterName);
 }
 
-void TriggeredAvgNode::process (AudioBuffer<float>& buffer)
+void TriggeredAvgNode::parameterValueChanged (Parameter* parameter)
 {
-    // For now: first stream only
-    // TODO: Add handling of multiple streams (ring buffer per stream?)
-    StreamId streamId = getDataStreams()[m_dataStreamIndex]->getStreamId();
-
-    SampleNumber firstSampleNumber = getFirstSampleNumberForBlock (streamId);
-    m_lastSampleNumber = firstSampleNumber;
-    if (! m_ringBuffer)
+    if (parameter == nullptr)
         return;
 
-    auto nSamplesInBlock = getNumSamplesInBlock (streamId);
-    m_ringBuffer->addData (buffer, firstSampleNumber, nSamplesInBlock);
-    checkForEvents (false);
-}
+    // Analysis parameters, the trigger-table backing store and the rebuild all
+    // belong to the base.
+    TriggeredCaptureNode::parameterValueChanged (parameter);
 
-bool TriggeredAvgNode::startAcquisition()
-{
-    initializeThreads();
-    return m_threadsInitialized;
-}
+    const juce::String name = parameter->getName();
 
-float TriggeredAvgNode::getPreWindowSizeMs() const
-{
-    return getParameter (ParameterNames::pre_ms)->getValue();
-}
-int TriggeredAvgNode::getNumberOfPreSamples() const
-{
-    const float sampleRate = getDataStreams()[m_dataStreamIndex]->getSampleRate();
-    const int preSamples = static_cast<int> (sampleRate * (getPreWindowSizeMs() / 1000.0f));
-    return preSamples;
-}
-int TriggeredAvgNode::getNumberOfPostSamplesIncludingTrigger() const
-{
-    const float sampleRate = getDataStreams()[m_dataStreamIndex]->getSampleRate();
-    const int postSamples = static_cast<int> (sampleRate * (getPostWindowSizeMs() / 1000.0f));
-    return postSamples;
-}
-int TriggeredAvgNode::getNumberOfSamples() const
-{
-    if (getNumDataStreams() == 0)
-        return 0;
-    const float sampleRate = getDataStreams()[m_dataStreamIndex]->getSampleRate();
-    const int preSamples = static_cast<int> (sampleRate * (getPreWindowSizeMs() / 1000.0f));
-    const int postSamples = static_cast<int> (sampleRate * (getPostWindowSizeMs() / 1000.0f));
-    const int totalSamples = preSamples + postSamples;
-    return totalSamples;
-}
-
-float TriggeredAvgNode::getPostWindowSizeMs() const
-{
-    return getParameter (ParameterNames::post_ms)->getValue();
-}
-
-void TriggeredAvgNode::saveCustomParametersToXml (XmlElement* xml)
-{
-    for (auto source : m_triggerSources.getAll())
+    if (name.equalsIgnoreCase (ParameterNames::pre_ms)
+        || name.equalsIgnoreCase (ParameterNames::post_ms))
     {
-        XmlElement* sourceXml = xml->createNewChildElement ("TRIGGERSOURCE");
-        sourceXml->setAttribute ("name", source->name);
-        sourceXml->setAttribute ("line", source->line);
-        sourceXml->setAttribute ("type", static_cast<int> (source->type));
-        sourceXml->setAttribute ("colour", source->colour.toString());
-        sourceXml->setAttribute ("armPattern", source->armPattern);
-        sourceXml->setAttribute ("cancelPattern", source->cancelPattern);
-        sourceXml->setAttribute ("commitPattern", source->commitPattern);
-        sourceXml->setAttribute ("pendingTimeoutMs", source->pendingTimeoutMs);
+        if (m_canvas != nullptr)
+            m_canvas->setWindowSizeMs (getPreWindowMs(), getPostWindowMs());
     }
+
+    // Everything display-only lands here: repaint, do not rebuild.
+    if (! isAnalysisParameter (name))
+        triggerAsyncUpdate();
 }
 
-void TriggeredAvgNode::loadCustomParametersFromXml (XmlElement* xml)
+// --- Configuration ---------------------------------------------------------
+
+void TriggeredAvgNode::analysisConfigurationChanged()
 {
-    m_triggerSources.clear();
-    //m_nextConditionIndex = 1;
+    const auto lock = m_dataStore.GetLock();
 
-    for (auto sourceXml : xml->getChildIterator())
-    {
-        if (sourceXml->hasTagName ("TRIGGERSOURCE"))
-        {
-            String savedName = sourceXml->getStringAttribute ("name");
-            int savedLine = sourceXml->getIntAttribute ("line", 0);
-            int savedType =
-                sourceXml->getIntAttribute ("type", static_cast<int> (TriggerType::TTL_TRIGGER));
-            String savedColour = sourceXml->getStringAttribute ("colour", "");
+    const int numChannels = getSelectedChannels().size();
+    const int numSamples = getTrialGeometry().totalDisplayedSamples();
 
-            TriggerSource* source =
-                m_triggerSources.addTriggerSource (savedLine, static_cast<TriggerType> (savedType));
+    m_dataStore.setMaxTrialsToStore (getMaxTrials());
+    m_dataStore.ResizeAllAverageBuffers (numChannels, numSamples, true);
 
-            if (savedName.isNotEmpty())
-                source->name = savedName;
+    for (auto* source : getTriggerSources().items())
+        m_dataStore.ResetAndResizeBuffersForTriggerSource (source, numChannels, numSamples);
 
-            if (savedColour.length() > 0)
-                source->colour = Colour::fromString (savedColour);
-
-            source->armPattern = sourceXml->getStringAttribute ("armPattern", "");
-            source->cancelPattern = sourceXml->getStringAttribute ("cancelPattern", "");
-            source->commitPattern = sourceXml->getStringAttribute ("commitPattern", "");
-            source->pendingTimeoutMs = sourceXml->getIntAttribute ("pendingTimeoutMs", 2000);
-        }
-    }
+    if (m_canvas != nullptr)
+        m_canvas->setWindowSizeMs (getPreWindowMs(), getPostWindowMs());
 }
 
-void TriggeredAvgNode::handleBroadcastMessage (const String& message, const int64 sysTimeMs)
+void TriggeredAvgNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources)
 {
-    if (! (m_dataCollector && m_threadsInitialized.load()))
-        return;
+    // Order matters. The base stops the worker and flushes the queue first, so
+    // that nothing is mid-capture against one of these pointers; only then is it
+    // safe to drop the storage keyed by them.
+    TriggeredCaptureNode::triggerSourcesAboutToBeRemoved (sources);
 
-    // Lazy timeout cleanup
-    m_dataStore->discardExpiredPendingCaptures();
+    const auto lock = m_dataStore.GetLock();
 
-    for (auto source : m_triggerSources.getAll())
-    {
-        // Cancel: discard any pending capture and disarm TTL_AND_MSG conditions
-        if (source->cancelPattern.isNotEmpty()
-            && message.containsIgnoreCase (source->cancelPattern))
-        {
-            m_dataStore->discardPendingCapture (source);
-            if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
-                source->canTrigger = false;
-            LOGD ("[TriggeredAvg] Condition '", source->name, "' cancelled");
-        }
-
-        // Commit: move pending capture into the average
-        if (source->commitPattern.isNotEmpty()
-            && message.containsIgnoreCase (source->commitPattern))
-        {
-            bool committed = m_dataStore->commitPendingCapture (source);
-            if (committed)
-            {
-                LOGD ("[TriggeredAvg] Pending capture committed for '", source->name, "'");
-                triggerAsyncUpdate();
-            }
-        }
-
-        // Arm
-        if (source->armPattern.isNotEmpty()
-            && message.containsIgnoreCase (source->armPattern))
-        {
-            if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
-            {
-                source->canTrigger = true;
-                LOGD ("[TriggeredAvg] Condition '", source->name, "' armed");
-            }
-            else if (source->type == TriggerType::MSG_TRIGGER)
-            {
-                // TODO: implement message-only triggering (use sysTimeMs to
-                // estimate trigger sample and register a CaptureRequest)
-                LOGD ("[TriggeredAvg] MSG_TRIGGER not yet implemented, ignoring message");
-            }
-        }
-    }
+    for (auto* source : sources)
+        m_dataStore.RemoveTriggerSource (source);
 }
 
-String TriggeredAvgNode::handleConfigMessage (const String& message) { return ""; }
-
-bool TriggeredAvgNode::getIntField (DynamicObject::Ptr payload,
-                                    String name,
-                                    int& value,
-                                    int lowerBound,
-                                    int upperBound)
+void TriggeredAvgNode::clearAllData()
 {
-    if (payload->hasProperty (name))
-    {
-        value = payload->getProperty (name);
-        if (value >= lowerBound && value <= upperBound)
-            return true;
-    }
-    return false;
+    const auto lock = m_dataStore.GetLock();
+    m_dataStore.ResetAllBuffers();
+
+    triggerAsyncUpdate();
 }
 
-void TriggeredAvgNode::handleTTLEvent (TTLEventPtr event)
+void TriggeredAvgNode::refreshDisplay()
 {
-    if (m_dataCollector && m_threadsInitialized.load())
-    {
-        for (auto source : m_triggerSources.getAll())
-        {
-            if (event->getLine() == source->line && event->getState() && source->canTrigger)
-            {
-                const float sampleRate = getDataStreams()[m_dataStreamIndex]->getSampleRate();
-                int preSamples = static_cast<int> (sampleRate * (getPreWindowSizeMs() / 1000.0f));
-                int postSamples = static_cast<int> (sampleRate * (getPostWindowSizeMs() / 1000.0f));
-
-                auto triggerSample = event->getSampleNumber();
-                m_dataCollector->registerCaptureRequest (
-                    CaptureRequest { .triggerSource = source,
-                                     .triggerSample = event->getSampleNumber(),
-                                     .preSamples = preSamples,
-                                     .postSamples = postSamples });
-
-                if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
-                    source->canTrigger = false;
-            }
-        }
-    }
-}
-
-void TriggeredAvgNode::handleAsyncUpdate()
-{
-    if (m_canvas)
+    if (m_canvas != nullptr)
         m_canvas->refresh();
 }
 
-void TriggeredAvgNode::initializeThreads()
-{
-    if (m_threadsInitialized.load())
-        shutdownThreads();
+// --- Worker callbacks ------------------------------------------------------
+//
+// Worker thread. Taking the data lock here is fine and is the entire reason the
+// port was worth doing: this used to happen on the audio thread.
 
-    m_ringBuffer = std::make_unique<MultiChannelRingBuffer> (getNumInputs(), m_ringBufferSize);
-    m_dataCollector = std::make_unique<DataCollector> (this, m_ringBuffer.get(), m_dataStore.get());
-    if (getNumInputs() > 0 && m_ringBufferSize > 0)
+bool TriggeredAvgNode::processCapturedTrial (const CaptureRequest& request,
+                                             const juce::AudioBuffer<float>& trial)
+{
+    if (request.triggerSource == nullptr)
+        return false;
+
+    const auto lock = m_dataStore.GetLock();
+
+    // A source with a commit pattern does not accumulate on the edge. The trial
+    // is parked until a commit message folds it in, a cancel discards it, or the
+    // timeout expires — which is what lets a trial be rejected after the fact.
+    if (requiresCommit (request.triggerSource))
     {
-        m_dataCollector->startThread (Thread::Priority::high);
-        m_threadsInitialized.store (true);
+        m_dataStore.storePendingCapture (
+            request.triggerSource, trial, request.triggerSource->pendingTimeoutMs);
+        return false;
     }
+
+    m_dataStore.addTrialForTriggerSource (request.triggerSource, trial);
+
+    request.triggerSource->counters.trialsCaptured.fetch_add (1, std::memory_order_relaxed);
+    return true;
 }
 
-void TriggeredAvgNode::shutdownThreads()
+bool TriggeredAvgNode::commitCapture (TriggerSource* source)
 {
-    if (m_threadsInitialized.load())
+    const auto lock = m_dataStore.GetLock();
+
+    if (! m_dataStore.commitPendingCapture (source))
+        return false;
+
+    if (source != nullptr)
     {
-        m_dataCollector.reset();
-        m_ringBuffer.reset();
-        m_threadsInitialized.store (false);
+        source->counters.trialsCaptured.fetch_add (1, std::memory_order_relaxed);
+        source->counters.pendingCommitted.fetch_add (1, std::memory_order_relaxed);
     }
+
+    return true;
 }
+
+void TriggeredAvgNode::discardCapture (TriggerSource* source)
+{
+    const auto lock = m_dataStore.GetLock();
+    m_dataStore.discardPendingCapture (source);
+}
+
+void TriggeredAvgNode::discardExpiredCaptures (std::int64_t nowMs)
+{
+    const auto lock = m_dataStore.GetLock();
+    m_dataStore.discardExpiredPendingCaptures (nowMs);
+}
+
+} // namespace EventTriggered

@@ -1,43 +1,29 @@
-set(TRIGGERED_AVG_SOURCES_RELATIVE
-    DataCollector.cpp
-    MultiChannelRingBuffer.cpp
-    OpenEphysLib.cpp
-    SingleTrialBuffer.cpp
-    TriggeredAvgActions.cpp
-    TriggeredAvgNode.cpp
-    TriggerSource.cpp
-    Ui/GridDisplay.cpp
-    Ui/PopupConfigurationWindow.cpp
-    Ui/SinglePlotPanel.cpp
-    Ui/TimeAxis.cpp
-    Ui/TriggeredAvgCanvas.cpp
-    Ui/TriggeredAvgEditor.cpp
+# TriggeredAverage: time-domain average of continuous data around each trigger.
+#
+# Links trigger_core and *not* spectra_core. That is the whole reason the core
+# was split: this plugin needs trial windows and nothing frequency-domain, so it
+# must not inherit FFTW.
+
+oe_add_plugin(TriggeredAverage trigger_core
+    ${CMAKE_CURRENT_SOURCE_DIR}/OpenEphysLib.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgNode.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgNode.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgActions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredAvgActions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataCollector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DataCollector.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/SingleTrialBuffer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SingleTrialBuffer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/DisplayMode.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/PerformanceTimer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/GridDisplay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/GridDisplay.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/SinglePlotPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/SinglePlotPanel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TimeAxis.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TimeAxis.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgCanvas.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgCanvas.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgEditor.h
 )
-
-set(TRIGGERED_AVG_HEADERS_RELATIVE
-    DataCollector.h
-    MultiChannelRingBuffer.h
-    SingleTrialBuffer.h
-    TriggeredAvgActions.h
-    TriggeredAvgNode.h
-    TriggerSource.h
-    Ui/DisplayMode.h
-    Ui/GridDisplay.h
-    Ui/SinglePlotPanel.h
-    Ui/TimeAxis.h
-    Ui/TriggeredAvgCanvas.h
-    Ui/TriggeredAvgEditor.h
-)
-
-# Convert to full paths
-foreach(src ${TRIGGERED_AVG_SOURCES_RELATIVE})
-    list(APPEND TRIGGERED_AVG_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/${src})
-endforeach()
-
-foreach(hdr ${TRIGGERED_AVG_HEADERS_RELATIVE})
-    list(APPEND TRIGGERED_AVG_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/${hdr})
-endforeach()
-
-# Set variables in parent scope
-set(TRIGGERED_AVG_SOURCES ${TRIGGERED_AVG_SOURCES} PARENT_SCOPE)
-set(TRIGGERED_AVG_HEADERS ${TRIGGERED_AVG_HEADERS} PARENT_SCOPE)

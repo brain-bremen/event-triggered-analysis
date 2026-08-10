@@ -22,7 +22,7 @@
 
 */
 #include "TriggeredAvgActions.h"
-#include "TriggerSource.h"
+#include "TriggerCore/TriggerSource.h"
 #include "TriggeredAvgNode.h"
 #include "Ui/TriggeredAvgEditor.h"
 
@@ -290,11 +290,11 @@ bool ChangeTriggerType::perform()
     auto source = processorNode->getTriggerSources().getByIndex (triggerIndex);
     if (source != nullptr)
     {
-        processorNode->getTriggerSources().setTriggerSourceTriggerType (source, newType);
+        processorNode->getTriggerSources().setTriggerSourceType (source, newType);
         processorNode->registerUndoableAction (processorNode->getNodeId(), this);
         CoreServices::sendStatusMessage ("Changed trigger condition type from "
-                                         + String { TriggerTypeToString (oldType) } + " to "
-                                         + String { TriggerTypeToString (newType) });
+                                         + String { toString (oldType) } + " to "
+                                         + String { toString (newType) });
     }
 
     return true;
@@ -305,10 +305,10 @@ bool ChangeTriggerType::undo()
     auto source = processorNode->getTriggerSources().getByIndex (triggerIndex);
     if (source != nullptr)
     {
-        processorNode->getTriggerSources().setTriggerSourceTriggerType (source, oldType);
+        processorNode->getTriggerSources().setTriggerSourceType (source, oldType);
         CoreServices::sendStatusMessage ("Changed trigger condition line from "
-                                         + String { TriggerTypeToString (newType) } + " to "
-                                         + String { TriggerTypeToString (oldType) });
+                                         + String { toString (newType) } + " to "
+                                         + String { toString (oldType) });
     }
 
     return true;
@@ -346,14 +346,14 @@ bool SetTriggerSourcePattern::perform()
         switch (field)
         {
             case Field::ARM:
-                processorNode->getTriggerSources().setTriggerSourceArmPattern (source, newPattern);
+                processorNode->getTriggerSources().setArmPattern (source, newPattern);
                 break;
             case Field::CANCEL:
-                processorNode->getTriggerSources().setTriggerSourceCancelPattern (source,
+                processorNode->getTriggerSources().setCancelPattern (source,
                                                                                   newPattern);
                 break;
             case Field::COMMIT:
-                processorNode->getTriggerSources().setTriggerSourceCommitPattern (source,
+                processorNode->getTriggerSources().setCommitPattern (source,
                                                                                   newPattern);
                 break;
         }
@@ -370,14 +370,14 @@ bool SetTriggerSourcePattern::undo()
         switch (field)
         {
             case Field::ARM:
-                processorNode->getTriggerSources().setTriggerSourceArmPattern (source, oldPattern);
+                processorNode->getTriggerSources().setArmPattern (source, oldPattern);
                 break;
             case Field::CANCEL:
-                processorNode->getTriggerSources().setTriggerSourceCancelPattern (source,
+                processorNode->getTriggerSources().setCancelPattern (source,
                                                                                   oldPattern);
                 break;
             case Field::COMMIT:
-                processorNode->getTriggerSources().setTriggerSourceCommitPattern (source,
+                processorNode->getTriggerSources().setCommitPattern (source,
                                                                                   oldPattern);
                 break;
         }

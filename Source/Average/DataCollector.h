@@ -22,8 +22,10 @@
 
 */
 #pragma once
-#include "MultiChannelRingBuffer.h"
 #include "SingleTrialBuffer.h"
+
+#include "TriggerCore/TriggerMessaging.h"
+#include "TriggerCore/TriggerSource.h"
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
@@ -31,17 +33,6 @@
 namespace EventTriggered
 {
 class MultiChannelAverageBuffer;
-class TriggeredAvgNode;
-class TriggerSource;
-class MultiChannelRingBuffer;
-
-struct CaptureRequest
-{
-    TriggerSource* triggerSource;
-    SampleNumber triggerSample;
-    int preSamples;
-    int postSamples;
-};
 
 /** JUCE-aware wrapper around SingleTrialBuffer that provides AudioBuffer convenience methods */
 class SingleTrialBufferJuce : public SingleTrialBuffer
@@ -140,62 +131,48 @@ public:
     void ResetAllBuffers();
     void setMaxTrialsToStore (int n);
 
+    /** Drops every buffer belonging to `source`.
+     *
+     *  Called from triggerSourcesAboutToBeRemoved(), i.e. while the source is
+     *  still alive. Without it these maps keep entries keyed by a freed pointer
+     *  for the rest of the session, and a source later allocated at the same
+     *  address inherits the dead one's average. */
+    void RemoveTriggerSource (TriggerSource* source);
+
+    /** Folds one trial into the average and the single-trial store. Returns
+        false if the buffer does not match the configured geometry. */
+    bool addTrialForTriggerSource (TriggerSource* source, const juce::AudioBuffer<float>& buffer);
+
     // Pending-commit support -------------------------------------------------
+    //
+    // Backed by TriggerCore's PendingCaptureStore, which is shared with the
+    // spectral plugins and tested on its own. The payload here is the raw window
+    // rather than a transformed result: unlike a spectrum there is nothing to
+    // hoist ahead of the commit, so parking the buffer is already the cheap
+    // choice.
+
     void storePendingCapture (TriggerSource* source,
                               const juce::AudioBuffer<float>& buffer,
                               int timeoutMs);
-    // Moves the pending buffer into the average/trial buffers. Returns true if
-    // a pending capture existed and was successfully committed.
+
+    /** Moves the pending buffer into the average and trial buffers. True if one
+        was waiting and was accepted. */
     bool commitPendingCapture (TriggerSource* source);
     void discardPendingCapture (TriggerSource* source);
     bool hasPendingCapture (TriggerSource* source) const;
-    // Discards all pending captures whose timeout has elapsed. Call
-    // periodically on the message thread (e.g. from handleBroadcastMessage).
-    void discardExpiredPendingCaptures();
+
+    /** Discards every pending capture whose timeout elapsed by `nowMs`.
+     *
+     *  `nowMs` is passed in rather than read here, because it is stamped where
+     *  the broadcast message arrived. Reading the clock at this point would
+     *  measure the timeout from whenever the worker got round to the item. */
+    void discardExpiredPendingCaptures (std::int64_t nowMs);
 
 private:
-    struct PendingCapture
-    {
-        juce::AudioBuffer<float> buffer;
-        juce::int64 captureTimeMs;
-        int timeoutMs; // 0 = never expires
-    };
-
     mutable std::recursive_mutex m_mutex;
     std::unordered_map<TriggerSource*, MultiChannelAverageBuffer> m_averageBuffers;
     std::unordered_map<TriggerSource*, SingleTrialBufferJuce> m_singleTrialBuffers;
-    std::unordered_map<TriggerSource*, PendingCapture> m_pendingCaptures;
-};
-
-class DataCollector : public Thread
-{
-public:
-    DataCollector (TriggeredAvgNode*, MultiChannelRingBuffer*, DataStore*);
-    ~DataCollector() override;
-    void run() override;
-    void registerTriggerSource (const TriggerSource*);
-    void registerCaptureRequest (const CaptureRequest&);
-
-private:
-    // dependencies
-    TriggeredAvgNode* m_processor;
-    MultiChannelRingBuffer* ringBuffer;
-    DataStore* m_datastore;
-
-    // data
-    std::deque<CaptureRequest> captureRequestQueue;
-    AudioBuffer<float> m_collectBuffer;
-
-    // synchronization
-    CriticalSection triggerQueueLock;
-    WaitableEvent newTriggerEvent;
-
-    // averageWasUpdated is set to true only when the capture is immediately
-    // committed to the average (not when it is stored as pending).
-    RingBufferReadResult processCaptureRequest (const CaptureRequest&, bool& averageWasUpdated);
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DataCollector)
-    JUCE_DECLARE_NON_MOVEABLE (DataCollector)
+    PendingCaptureStore<juce::AudioBuffer<float>> m_pendingCaptures;
 };
 
 class MultiChannelAverageBuffer

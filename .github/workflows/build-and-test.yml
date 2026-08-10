@@ -82,8 +82,6 @@ jobs:
           path: plugin/Build/test-results/
           if-no-files-found: ignore
 
-      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
-      # the build. Add it here in the same commit that makes it compile.
       - name: Upload plugin artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -92,6 +90,7 @@ jobs:
           path: |
             plugin/Build/${{ matrix.build-type }}/TriggeredPower.dll
             plugin/Build/${{ matrix.build-type }}/TriggeredCoherence.dll
+            plugin/Build/${{ matrix.build-type }}/TriggeredAverage.dll
           if-no-files-found: error
 
   build-linux:
@@ -177,8 +176,6 @@ jobs:
           path: plugin/Build/test-results/
           if-no-files-found: ignore
 
-      # TriggeredAverage is missing on purpose: it is in the tree but not yet in
-      # the build. Add it here in the same commit that makes it compile.
       - name: Upload plugin artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -187,4 +184,5 @@ jobs:
           path: |
             plugin/Build/TriggeredPower.so
             plugin/Build/TriggeredCoherence.so
+            plugin/Build/TriggeredAverage.so
           if-no-files-found: error

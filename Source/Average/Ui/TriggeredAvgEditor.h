@@ -34,10 +34,8 @@ class TriggeredAvgNode;
 class TriggerSource;
 enum class TriggerType : std::int_fast8_t;
 
-namespace Popup
-{
-    class PopupConfigurationWindow;
-}
+class TriggerSourceConfigWindow;
+class TriggerMonitorWindow;
 
 class TriggeredAvgEditor : public VisualizerEditor, public Button::Listener
 {
@@ -60,21 +58,21 @@ public:
     /** Called when configure button is clicked */
     void buttonClicked (Button* button) override;
 
-    /** Adds triggers with a given type */
-    void addTriggerSources (Popup::PopupConfigurationWindow* window,
-                            Array<int> lines,
-                            TriggerType type) const;
+    /** Adds triggers with a given type, through the undo stack. */
+    void addTriggerSources (Array<int> lines, TriggerType type) const;
 
-    /** Removes triggers based on an array of pointers to trigger objects*/
-    void removeTriggerSources (Popup::PopupConfigurationWindow* window,
-                               Array<TriggerSource*> triggerSourcesToRemove) const;
+    /** Removes triggers, through the undo stack. */
+    void removeTriggerSources (Array<TriggerSource*> triggerSourcesToRemove) const;
 
 private:
     std::unique_ptr<UtilityButton> configureButton;
 
-    TriggeredAvgCanvas* canvas;
+    /** Opens the shared trigger monitor: live per-source counters, the last
+        broadcast message, and the console-log toggle. This plugin had no
+        equivalent before the merge. */
+    std::unique_ptr<UtilityButton> monitorButton;
 
-    Popup::PopupConfigurationWindow* currentConfigWindow;
+    TriggeredAvgCanvas* canvas;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgEditor);
 };

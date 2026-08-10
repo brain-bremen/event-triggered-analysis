@@ -22,9 +22,9 @@
 
 */
 #include "SinglePlotPanel.h"
-#include "DataCollector.h"
+#include "../DataCollector.h"
 #include "PerformanceTimer.h"
-#include "TriggerSource.h"
+#include "TriggerCore/TriggerSource.h"
 #include "TriggeredAvgCanvas.h"
 
 using namespace EventTriggered;

@@ -24,24 +24,32 @@
 
 #include "TriggeredAvgEditor.h"
 #include "../DataCollector.h"
-#include "PopupConfigurationWindow.h"
-#include "TriggeredAvgActions.h"
+#include "TriggerCore/ParameterNames.h"
+#include "TriggerCore/Ui/TriggerMonitorWindow.h"
+#include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
+#include "../TriggeredAvgActions.h"
 #include "TriggeredAvgCanvas.h"
-#include "TriggeredAvgNode.h"
+#include "../TriggeredAvgNode.h"
 using namespace EventTriggered;
 
 TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     : VisualizerEditor (parentNode, "TRIG AVG", 210),
-      canvas (nullptr),
-      currentConfigWindow (nullptr)
-
+      canvas (nullptr)
 {
-    // TRIGGERS button on top
+    // TRIGGERS opens the shared configuration table; MONITOR the shared live
+    // counters. Side by side, because they are the two halves of setting a
+    // trigger up and finding out why it did not fire.
     configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     configureButton->setFont (FontOptions (14.0f));
     configureButton->addListener (this);
-    configureButton->setBounds (20, 30, 170, 25);
+    configureButton->setBounds (20, 30, 100, 25);
     addAndMakeVisible (configureButton.get());
+
+    monitorButton = std::make_unique<UtilityButton> ("MONITOR");
+    monitorButton->setFont (FontOptions (14.0f));
+    monitorButton->addListener (this);
+    monitorButton->setBounds (125, 30, 65, 25);
+    addAndMakeVisible (monitorButton.get());
 
     // Pre MS and Post MS editors side by side
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 20, 55);
@@ -139,24 +147,27 @@ void TriggeredAvgEditor::buttonClicked (Button* button)
 {
     if (button == configureButton.get())
     {
-        TriggeredAvgNode* proc = (TriggeredAvgNode*) getProcessor();
-
-        Array<TriggerSource*> triggerLines = proc->getTriggerSources().getAll();
-        LOGD (triggerLines.size(), " trigger sources found.");
-
-        currentConfigWindow =
-            new Popup::PopupConfigurationWindow (this, triggerLines, acquisitionIsActive);
+        auto* proc = static_cast<TriggeredAvgNode*> (getProcessor());
 
         CoreServices::getPopupManager()->showPopup (
-            std::unique_ptr<PopupComponent> (currentConfigWindow), button);
+            std::make_unique<TriggerSourceConfigWindow> (proc, acquisitionIsActive, button),
+            button);
+
+        return;
+    }
+
+    if (button == monitorButton.get())
+    {
+        auto* proc = static_cast<TriggeredAvgNode*> (getProcessor());
+
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<TriggerMonitorWindow> (proc, button), button);
 
         return;
     }
 }
 
-void TriggeredAvgEditor::addTriggerSources (Popup::PopupConfigurationWindow* window,
-                                            Array<int> lines,
-                                            TriggerType type) const
+void TriggeredAvgEditor::addTriggerSources (Array<int> lines, TriggerType type) const
 {
     TriggeredAvgNode* proc = (TriggeredAvgNode*) getProcessor();
 
@@ -164,13 +175,9 @@ void TriggeredAvgEditor::addTriggerSources (Popup::PopupConfigurationWindow* win
 
     CoreServices::getUndoManager()->beginNewTransaction ("Disabled during acquisition");
     CoreServices::getUndoManager()->perform ((UndoableAction*) action);
-
-    if (window != nullptr)
-        window->update (proc->getTriggerSources().getAll());
 }
 
 void TriggeredAvgEditor::removeTriggerSources (
-    Popup::PopupConfigurationWindow* window,
     juce::Array<TriggerSource*, juce::DummyCriticalSection, 0> triggerSourcesToRemove) const
 {
     TriggeredAvgNode* proc = (TriggeredAvgNode*) getProcessor();
@@ -179,7 +186,4 @@ void TriggeredAvgEditor::removeTriggerSources (
 
     CoreServices::getUndoManager()->beginNewTransaction ("Disabled during acquisition");
     CoreServices::getUndoManager()->perform ((UndoableAction*) action);
-
-    if (window != nullptr)
-        window->update (proc->getTriggerSources().getAll());
 }

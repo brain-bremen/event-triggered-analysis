@@ -22,10 +22,10 @@
 
 */
 #include "GridDisplay.h"
-#include "DataCollector.h"
+#include "../DataCollector.h"
 #include "SinglePlotPanel.h"
-#include "TriggerSource.h"
-#include "TriggeredAvgNode.h"
+#include "TriggerCore/TriggerSource.h"
+#include "../TriggeredAvgNode.h"
 
 EventTriggered::GridDisplay::GridDisplay() = default;
 
