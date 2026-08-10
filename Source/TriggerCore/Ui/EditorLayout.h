@@ -42,11 +42,20 @@ constexpr int top = 28;
 constexpr int bottomMargin = 6;
 
 /** Derived rather than fixed, so an editor that asks for more width gets it.
-    TriggeredCoherence does: it has a fourth button, and four buttons squeezed
-    into 220 px are too narrow to read. */
+ *  TriggeredCoherence does: it has a fourth button, and four buttons squeezed
+ *  into 220 px are too narrow to read.
+ *
+ *  Measured from `desiredWidth` and *not* from getWidth(). The two differ the
+ *  moment the stream-selector drawer is opened: GenericEditor::resized() places
+ *  the selector at x = desiredWidth, and getTotalWidth() — which is what the
+ *  editor's bounds are set to — then grows by the selector's width. Laying out
+ *  against getWidth() therefore stretched every control across the newly opened
+ *  drawer and overlapped the stream list. desiredWidth is the editor's own
+ *  content area and does not move.
+ */
 inline int contentWidth (const GenericEditor& editor)
 {
-    return juce::jmax (180, editor.getWidth() - 2 * left);
+    return juce::jmax (180, editor.desiredWidth - 2 * left);
 }
 
 inline int contentBottom (const GenericEditor& editor)
