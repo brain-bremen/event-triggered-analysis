@@ -149,17 +149,19 @@ bool MorletTransform::prepare (const Config& config)
     m_convolutionInput.resize (convolutionSize);
     m_convolutionOutput.resize (convolutionSize);
 
-    // Measure would destroy nothing important here (the buffers are scratch), but
-    // it does run real transforms, so this is the expensive part of prepare().
+    // Estimate rather than Measure: both plans are rebuilt on every
+    // reconfiguration, and Measure runs real transforms to time them, which made
+    // this the expensive part of prepare() for no return at these reuse counts.
+    // See PlanRigor for the measurement.
     m_forwardPlan = Fftw::RealToComplexPlan (
-        m_fftLength, 1, m_realScratch.data(), m_spectrumScratch.data(), Fftw::PlanRigor::Measure);
+        m_fftLength, 1, m_realScratch.data(), m_spectrumScratch.data(), Fftw::PlanRigor::Estimate);
 
     m_backwardPlan = Fftw::ComplexPlan (m_fftLength,
                                         numFrequencies,
                                         m_convolutionInput.data(),
                                         m_convolutionOutput.data(),
                                         Fftw::Direction::Backward,
-                                        Fftw::PlanRigor::Measure);
+                                        Fftw::PlanRigor::Estimate);
 
     if (! m_forwardPlan.isValid() || ! m_backwardPlan.isValid())
         return false;

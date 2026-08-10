@@ -117,8 +117,10 @@ bool TaperedPeriodogram::prepare (const Config& config, int maxChannels)
     m_taperedInput.resize (static_cast<std::size_t> (batchSize) * m_fftLength);
     m_spectra.resize (static_cast<std::size_t> (batchSize) * m_numSpectrumBins);
 
+    // Estimate rather than Measure: this plan is rebuilt on every reconfiguration
+    // and would need ~19,000 transforms to repay the measuring. See PlanRigor.
     m_plan = Fftw::RealToComplexPlan (
-        m_fftLength, batchSize, m_taperedInput.data(), m_spectra.data(), Fftw::PlanRigor::Measure);
+        m_fftLength, batchSize, m_taperedInput.data(), m_spectra.data(), Fftw::PlanRigor::Estimate);
 
     if (! m_plan.isValid())
         return false;

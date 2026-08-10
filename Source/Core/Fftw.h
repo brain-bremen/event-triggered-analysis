@@ -44,9 +44,17 @@ namespace TriggeredSpectra::Fftw
  */
 enum class PlanRigor
 {
-    /** Cheap, no measurement. Use for interactive resizes. */
+    /** Cheap, no measurement. Use for interactive resizes.
+     *
+     *  This is what the transforms here ask for. Measured on a 4500-point r2c
+     *  batch of 5: planning costs 2 ms against 172 ms for Measure, while each
+     *  transform runs 0.038 ms instead of 0.029 ms. Measure only repays its
+     *  planning cost after ~19,000 transforms of the same plan, and every plan is
+     *  discarded the next time the analysis configuration changes — so it was
+     *  paying 170 ms per reconfiguration to save 9 microseconds per trial. */
     Estimate,
-    /** Default. Times several algorithms; worth it because plans are reused. */
+    /** Times several algorithms. Only worth it for a plan reused tens of
+        thousands of times, which these are not; see Estimate. */
     Measure,
     /** Exhaustive. Only sensible together with persisted wisdom. */
     Patient
