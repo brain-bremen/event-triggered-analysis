@@ -147,45 +147,6 @@ namespace
         bool m_enabled = false;
     };
 
-    /** Trigger-type dropdown. */
-    class TypeCell : public juce::Component, public juce::ComboBox::Listener
-    {
-    public:
-        TypeCell (TriggeredCaptureNode* node, bool enabled) : m_node (node)
-        {
-            m_box.addItem ("TTL", static_cast<int> (TriggerType::TTL_TRIGGER));
-            m_box.addItem ("TTL + Msg", static_cast<int> (TriggerType::TTL_AND_MSG_TRIGGER));
-            m_box.addItem ("Msg", static_cast<int> (TriggerType::MSG_TRIGGER));
-            m_box.setEnabled (enabled);
-            m_box.addListener (this);
-            addAndMakeVisible (m_box);
-        }
-
-        void setSource (TriggerSource* source)
-        {
-            m_source = source;
-
-            if (m_source != nullptr)
-                m_box.setSelectedId (static_cast<int> (m_source->type), juce::dontSendNotification);
-        }
-
-        void resized() override { m_box.setBounds (getLocalBounds().reduced (2)); }
-
-        void comboBoxChanged (juce::ComboBox*) override
-        {
-            if (m_source == nullptr || m_node == nullptr)
-                return;
-
-            performUndoable (new ChangeTriggerType (
-                m_node, m_source, static_cast<TriggerType> (m_box.getSelectedId())));
-        }
-
-    private:
-        TriggeredCaptureNode* m_node = nullptr;
-        TriggerSource* m_source = nullptr;
-        juce::ComboBox m_box;
-    };
-
     /** Row delete button. */
     class DeleteCell : public juce::Component, public juce::Button::Listener
     {
@@ -321,20 +282,6 @@ juce::Component*
             return cell;
         }
 
-        case typeColumn:
-        {
-            auto* cell = dynamic_cast<TypeCell*> (existing);
-
-            if (cell == nullptr)
-            {
-                delete existing;
-                cell = new TypeCell (m_node, editable);
-            }
-
-            cell->setSource (source);
-            return cell;
-        }
-
         case colourColumn:
         {
             auto* cell = dynamic_cast<ColourCell*> (existing);
@@ -453,7 +400,6 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     auto& header = m_table->getHeader();
     header.addColumn ("Name", nameColumn, 130, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("TTL", lineColumn, 44, 40, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Type", typeColumn, 100, 80, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("Colour", colourColumn, 56, 40, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("Arm msg", armColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn (
@@ -474,14 +420,6 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     m_newLineLabel->setColour (juce::Label::textColourId, juce::Colours::white);
     m_newLineLabel->setJustificationType (juce::Justification::centred);
     addAndMakeVisible (m_newLineLabel.get());
-
-    m_newTypeBox = std::make_unique<juce::ComboBox> ("new type");
-    m_newTypeBox->addItem ("TTL", static_cast<int> (TriggerType::TTL_TRIGGER));
-    m_newTypeBox->addItem ("TTL + Msg", static_cast<int> (TriggerType::TTL_AND_MSG_TRIGGER));
-    m_newTypeBox->addItem ("Msg", static_cast<int> (TriggerType::MSG_TRIGGER));
-    m_newTypeBox->setSelectedId (static_cast<int> (TriggerType::TTL_TRIGGER),
-                                 juce::dontSendNotification);
-    addAndMakeVisible (m_newTypeBox.get());
 
     m_addButton = std::make_unique<UtilityButton> ("+ ADD CONDITION");
     m_addButton->addListener (this);
@@ -514,7 +452,9 @@ void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
         return;
 
     const int line = juce::jlimit (-1, 255, m_newLineLabel->getText().getIntValue());
-    const auto type = static_cast<TriggerType> (m_newTypeBox->getSelectedId());
+    // Only TTL sources can be created: message-only triggering is not implemented
+    // (see TriggerType::MSG_TRIGGER), so a chooser would offer one working entry.
+    constexpr auto type = TriggerType::TTL_TRIGGER;
 
     performUndoable (new AddTriggerConditions (m_node, { line }, type));
 
@@ -537,10 +477,6 @@ void TriggerSourceConfigWindow::resized()
         m_newLineLabel->setBounds (addRow.removeFromLeft (44));
     }
 
-    addRow.removeFromLeft (6);
-
-    if (m_newTypeBox != nullptr)
-        m_newTypeBox->setBounds (addRow.removeFromLeft (110));
 
     addRow.removeFromLeft (10);
 

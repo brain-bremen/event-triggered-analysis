@@ -51,7 +51,7 @@ Sources are configured under **TRIGGERS**, and each can carry three broadcast-me
 
 | Pattern | Effect |
 |---|---|
-| Arm | Allows the next TTL edge to fire (`TTL and Message` sources fire once per arming) |
+| Arm | Gates the source: it fires on the next TTL edge only, once per arming |
 | Cancel | Disarms, and throws away a capture still waiting to be committed |
 | Commit | Folds a waiting capture into the accumulators |
 
@@ -84,8 +84,17 @@ that trial's own capture and nothing is ever kept. Cancel patterns are for messa
 precede the trigger or report an outcome directly (`TRIAL_ERROR`); relying on eviction plus the
 timeout is otherwise simpler and correct.
 
-Arm is only meaningful for `TTL and Message` sources. On a plain `TTL` source it is a no-op —
-the monitor shows `live` rather than `armed`/`disarmed` when that is the case.
+**Setting an arm pattern is what makes a source gated.** There is no trigger-type to choose:
+a source with no arm pattern fires on every rising edge and the monitor shows it as `live`; give
+it one and it fires only after an arming message, once per arming, shown as `armed`/`disarmed`.
+This mirrors the commit pattern, where setting one is what makes captures provisional. Two ways
+to say the same thing could disagree — a source marked "TTL + Message" with an empty arm pattern
+could never fire at all — so there is now one.
+
+Triggering on a message *alone*, with no TTL line, is deliberately not implemented. Broadcast
+messages arrive over HTTP and are unreliable in their timing, so a message-only trigger cannot
+carry a trustworthy trigger sample. The extension point is kept (`TriggerType::MSG_TRIGGER`) for
+anyone who does not need alignment precision.
 
 The **MONITOR** popup shows what is actually happening: TTL edges and broadcast messages received,
 per-source counts for each stage (edges → queued → trials, and arm / cancel / commit → kept), the

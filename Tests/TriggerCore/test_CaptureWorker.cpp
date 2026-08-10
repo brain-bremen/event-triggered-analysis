@@ -540,7 +540,7 @@ TEST (CaptureWorker, DoesNotCountACaptureThatFailed)
 TEST (CaptureWorker, CountsACommittedPendingCapture)
 {
     WorkerFixture fixture;
-    TriggerSource source ("cond 1", 3, TriggerType::TTL_AND_MSG_TRIGGER);
+    TriggerSource source ("cond 1", 3, TriggerType::TTL_TRIGGER);
 
     // RecordingClient::commitCapture always reports that it committed something.
     fixture.queue.push ({ .kind = WorkItemKind::Commit, .triggerSource = &source });

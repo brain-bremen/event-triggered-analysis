@@ -331,7 +331,7 @@ TEST_F (DataCollectorPendingTests, DiscardPendingAfterCapture)
 class TriggerSourcePatternTests : public ::testing::Test
 {
 protected:
-    MockTriggerSource src { 3, TriggerType::TTL_AND_MSG_TRIGGER };
+    MockTriggerSource src { 3, TriggerType::TTL_TRIGGER };
 };
 
 TEST_F (TriggerSourcePatternTests, PatternsDefaultEmpty)

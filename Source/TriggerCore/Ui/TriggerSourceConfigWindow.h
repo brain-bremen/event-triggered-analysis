@@ -115,7 +115,6 @@ private:
     {
         nameColumn = 1,
         lineColumn,
-        typeColumn,
         colourColumn,
         armColumn,
         cancelColumn,
@@ -130,7 +129,6 @@ private:
     std::unique_ptr<Model> m_model;
     std::unique_ptr<juce::TableListBox> m_table;
     std::unique_ptr<UtilityButton> m_addButton;
-    std::unique_ptr<juce::ComboBox> m_newTypeBox;
     std::unique_ptr<juce::Label> m_newLineLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggerSourceConfigWindow)

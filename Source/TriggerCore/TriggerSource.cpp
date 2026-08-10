@@ -30,8 +30,9 @@ namespace EventTriggered
 TriggerSource::TriggerSource (const juce::String& name_, int line_, TriggerType type_)
     : name (name_), line (line_), type (type_)
 {
-    // Message-gated sources start disarmed; a plain TTL source is always live.
-    canTrigger = (type == TriggerType::TTL_TRIGGER);
+    // Live until an arm pattern makes it gated. A new source has no patterns yet,
+    // so it starts live; setArmPattern() disarms it when one is entered.
+    canTrigger = true;
     colour = getColourForLine (line);
 }
 
@@ -232,8 +233,17 @@ void TriggerSources::setTriggerSourceType (TriggerSource* source, TriggerType ty
 
 void TriggerSources::setArmPattern (TriggerSource* source, const juce::String& pattern)
 {
-    if (source != nullptr)
-        source->armPattern = pattern;
+    if (source == nullptr)
+        return;
+
+    source->armPattern = pattern;
+
+    // The arm pattern is what makes a source gated, so setting one has to leave
+    // it disarmed and clearing one has to leave it live. Without this a source
+    // whose pattern was removed would stay stuck at whatever canTrigger happened
+    // to be when the last message arrived — most likely false, i.e. a source that
+    // silently never fires again.
+    source->canTrigger.store (pattern.isEmpty(), std::memory_order_relaxed);
 }
 
 void TriggerSources::setCancelPattern (TriggerSource* source, const juce::String& pattern)

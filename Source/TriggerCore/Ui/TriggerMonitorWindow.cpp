@@ -52,21 +52,18 @@ namespace
 
     juce::String describeState (const TriggerSource& source)
     {
-        switch (source.type)
-        {
-            case TriggerType::TTL_TRIGGER:
-                return "live";
+        // Not reachable from the config table, which only creates TTL sources,
+        // but a chain saved by a build that had it would still load. Say so
+        // rather than let it read as a source that simply never fired.
+        if (source.type == TriggerType::MSG_TRIGGER)
+            return "not impl.";
 
-            case TriggerType::TTL_AND_MSG_TRIGGER:
-                return source.canTrigger.load (std::memory_order_relaxed) ? "armed" : "disarmed";
+        // A source with no arm pattern has nothing to arm it and is always live;
+        // "armed"/"disarmed" would be meaningless rather than merely constant.
+        if (! isMessageGated (source))
+            return "live";
 
-            case TriggerType::MSG_TRIGGER:
-                // Selectable in the config table but not implemented, so say so here
-                // rather than let it read as a source that simply never fired.
-                return "not impl.";
-        }
-
-        return "?";
+        return source.canTrigger.load (std::memory_order_relaxed) ? "armed" : "disarmed";
     }
 } // namespace
 

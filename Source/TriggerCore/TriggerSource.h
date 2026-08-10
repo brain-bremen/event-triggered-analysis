@@ -34,14 +34,33 @@
 namespace EventTriggered
 {
 
+/** What physically fires a source.
+ *
+ *  There used to be a third value, TTL_AND_MSG_TRIGGER, for a TTL source gated by
+ *  an arm message. It was redundant: whether a source is gated is already implied
+ *  by whether it has an arm pattern, exactly as whether a capture is provisional
+ *  is implied by whether it has a commit pattern. Two places to say one thing is
+ *  one place too many, and the pair could disagree — a TTL_AND_MSG source with an
+ *  empty arm pattern could never fire at all. See isMessageGated().
+ */
 enum class TriggerType : std::int_fast8_t
 {
-    /** Fires on every rising edge of the configured TTL line. */
+    /** Fires on a rising edge of the configured TTL line, subject to arming. */
     TTL_TRIGGER = 1,
-    /** Fires on a broadcast message matching armPattern. */
-    MSG_TRIGGER = 2,
-    /** Fires on a TTL edge, but only while armed by a message. */
-    TTL_AND_MSG_TRIGGER = 3
+
+    /** Fires on a broadcast message alone, with no TTL line.
+     *
+     *  **Not implemented**, and not offered in the UI. Kept as a declared
+     *  extension point rather than deleted, because the shape of everything
+     *  around it — the enum, the saved attribute, the monitor's state column —
+     *  is what makes adding it later a small change rather than a reintroduction
+     *  of the concept.
+     *
+     *  Deliberately not a priority: broadcast messages arrive over HTTP and are
+     *  unreliable in their timing, so a message-only trigger cannot carry a
+     *  trustworthy trigger sample. It is only useful to someone who does not care
+     *  about alignment precision. */
+    MSG_TRIGGER = 2
 };
 
 constexpr const char* toString (TriggerType type)
@@ -52,8 +71,6 @@ constexpr const char* toString (TriggerType type)
             return "TTL Trigger";
         case TriggerType::MSG_TRIGGER:
             return "Message Trigger";
-        case TriggerType::TTL_AND_MSG_TRIGGER:
-            return "TTL and Message Trigger";
         default:
             return "Unknown Trigger Type";
     }
@@ -139,14 +156,18 @@ public:
     int line = -1;
     TriggerType type = TriggerType::TTL_TRIGGER;
 
-    /** False while a TTL_AND_MSG source waits to be armed.
+    /** False while a gated source waits to be armed.
+     *
+     *  A source is gated exactly when it has an arm pattern, so this is true for
+     *  an ungated source and stays true. TriggerSources::setArmPattern() keeps it
+     *  consistent when the pattern is set or cleared.
      *
      *  Atomic because arming is applied on the audio thread — a message and the
      *  TTL edge it gates can arrive in the same block, so arming cannot be
      *  deferred to the worker without losing that edge — while the configuration
      *  table resets it from the message thread. Relaxed ordering is enough: it
      *  guards nothing but itself. */
-    std::atomic<bool> canTrigger { false };
+    std::atomic<bool> canTrigger { true };
 
     juce::Colour colour;
 

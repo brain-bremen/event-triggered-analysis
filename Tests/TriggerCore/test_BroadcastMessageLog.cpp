@@ -111,7 +111,7 @@ TEST (BroadcastMessageLogFormat, SaysWhenNothingMatched)
 TEST (BroadcastMessageLogFormat, NamesTheSourceAndItsActions)
 {
     TriggerSources sources;
-    auto* source = sources.addTriggerSource (0, TriggerType::TTL_AND_MSG_TRIGGER);
+    auto* source = sources.addTriggerSource (0, TriggerType::TTL_TRIGGER);
     ASSERT_NE (source, nullptr);
     source->name = "Correct";
 
@@ -129,7 +129,7 @@ TEST (BroadcastMessageLogFormat, NamesTheSourceAndItsActions)
 TEST (BroadcastMessageLogFormat, ShowsBothActionsWhenPatternsOverlap)
 {
     TriggerSources sources;
-    auto* source = sources.addTriggerSource (0, TriggerType::TTL_AND_MSG_TRIGGER);
+    auto* source = sources.addTriggerSource (0, TriggerType::TTL_TRIGGER);
     ASSERT_NE (source, nullptr);
     source->name = "Condition 1";
 

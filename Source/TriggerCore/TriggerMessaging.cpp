@@ -62,7 +62,7 @@ TriggerStateChange applyTriggerMessage (TriggerSource& source,
 
         // Disarming, however, only applies to message-gated sources. Clearing the
         // flag on a plain TTL source would disable it for the rest of the session.
-        if (isMessageGated (source.type))
+        if (isMessageGated (source))
             source.canTrigger = false;
     }
     else if (actions.commit)
@@ -70,7 +70,7 @@ TriggerStateChange applyTriggerMessage (TriggerSource& source,
         change.commitPending = true;
     }
 
-    if (actions.arm && isMessageGated (source.type))
+    if (actions.arm && isMessageGated (source))
         source.canTrigger = true;
 
     return change;

@@ -40,7 +40,7 @@ namespace EventTriggered
  */
 struct TriggerMessageActions
 {
-    /** Allow the next TTL edge to fire (TTL_AND_MSG), or fire now (MSG_TRIGGER). */
+    /** Allow the next TTL edge to fire on a gated source. */
     bool arm = false;
     /** Disarm, and throw away any capture still waiting to be committed. */
     bool cancel = false;
@@ -65,13 +65,17 @@ TriggerMessageActions matchTriggerMessage (const TriggerSource& source,
 
 /** True if the source's armed state is controlled by messages at all.
  *
- *  A plain TTL_TRIGGER source is always live: there is no arming concept, so
- *  nothing may clear its canTrigger flag. Getting this wrong is quietly fatal —
+ *  Derived from the arm pattern rather than from a separate type, so the two can
+ *  never disagree. Setting an arm pattern is what makes a source gated, exactly
+ *  as setting a commit pattern is what makes its captures provisional.
+ *
+ *  A source with no arm pattern is always live: there is nothing to arm it, so
+ *  nothing may clear its canTrigger flag. Getting this wrong is quietly fatal â€”
  *  a cancel message would disable the source permanently, because no arm message
- *  is expected for that type and nothing else would ever set the flag again. */
-constexpr bool isMessageGated (TriggerType type)
+ *  would ever come to set the flag again. */
+inline bool isMessageGated (const TriggerSource& source)
 {
-    return type == TriggerType::TTL_AND_MSG_TRIGGER || type == TriggerType::MSG_TRIGGER;
+    return source.armPattern.isNotEmpty();
 }
 
 /** What the caller must do with a parked capture after a message. */

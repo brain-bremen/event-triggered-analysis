@@ -355,8 +355,9 @@ void TriggeredCaptureNode::handleTTLEvent (TTLEventPtr event)
         else
             source->counters.capturesDropped.fetch_add (1, std::memory_order_relaxed);
 
-        // A message-gated source fires once per arming.
-        if (source->type == TriggerType::TTL_AND_MSG_TRIGGER)
+        // A gated source fires once per arming. Read from the arm pattern rather
+        // than from a type, so the gate and the pattern cannot disagree.
+        if (isMessageGated (*source))
             source->canTrigger.store (false, std::memory_order_relaxed);
     }
 }
@@ -603,8 +604,17 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
             continue;
 
         const int line = sourceXml->getIntAttribute ("line", -1);
-        const auto type = static_cast<TriggerType> (
-            sourceXml->getIntAttribute ("type", static_cast<int> (TriggerType::TTL_TRIGGER)));
+
+        const int savedType =
+            sourceXml->getIntAttribute ("type", static_cast<int> (TriggerType::TTL_TRIGGER));
+
+        // Anything that is not a value this build knows becomes a plain TTL
+        // source. That covers the retired TTL_AND_MSG (3), whose behaviour is now
+        // carried by the arm pattern restored below, so such a source keeps
+        // working rather than loading as a garbage enum.
+        const auto type = (savedType == static_cast<int> (TriggerType::MSG_TRIGGER))
+                              ? TriggerType::MSG_TRIGGER
+                              : TriggerType::TTL_TRIGGER;
 
         auto* source = m_triggerSources.addTriggerSource (line, type);
 
@@ -614,10 +624,15 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
         source->name = sourceXml->getStringAttribute ("name", source->name);
         source->colour = juce::Colour::fromString (
             sourceXml->getStringAttribute ("colour", source->colour.toString()));
-        source->armPattern = sourceXml->getStringAttribute ("armPattern");
         source->cancelPattern = sourceXml->getStringAttribute ("cancelPattern");
         source->commitPattern = sourceXml->getStringAttribute ("commitPattern");
         source->pendingTimeoutMs = sourceXml->getIntAttribute ("pendingTimeoutMs", 2000);
+
+        // Through the setter, not the field: it is what leaves a gated source
+        // disarmed and an ungated one live. Assigning armPattern directly would
+        // restore a gated source with canTrigger still true, so its first TTL
+        // edge would fire without ever having been armed.
+        m_triggerSources.setArmPattern (source, sourceXml->getStringAttribute ("armPattern"));
     }
 
     m_isLoadingState = false;

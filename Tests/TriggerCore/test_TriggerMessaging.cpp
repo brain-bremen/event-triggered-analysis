@@ -23,11 +23,18 @@ TriggerSource makeSource (const juce::String& arm,
                           const juce::String& commit,
                           int timeoutMs = 2000)
 {
-    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
     source.armPattern = arm;
     source.cancelPattern = cancel;
     source.commitPattern = commit;
     source.pendingTimeoutMs = timeoutMs;
+
+    // What TriggerSources::setArmPattern() does, mirrored here because these
+    // tests build a bare TriggerSource rather than going through the container:
+    // an arm pattern is what makes a source gated, and a gated source starts
+    // disarmed.
+    source.canTrigger = arm.isEmpty();
+
     return source;
 }
 
@@ -97,11 +104,22 @@ TEST (TriggerMessaging, OverlappingPatternsReportBothActions)
 
 // --- Armed-state transitions -----------------------------------------------
 
-TEST (TriggerMessaging, OnlyMessageGatedTypesAreArmable)
+/** Gating is derived from the arm pattern, not from a separate type.
+ *
+ *  This is what replaced TriggerType::TTL_AND_MSG_TRIGGER: the pattern and the
+ *  type could disagree, and a gated source with an empty arm pattern could never
+ *  fire at all. */
+TEST (TriggerMessaging, AnArmPatternIsWhatMakesASourceGated)
 {
-    EXPECT_FALSE (isMessageGated (TriggerType::TTL_TRIGGER));
-    EXPECT_TRUE (isMessageGated (TriggerType::TTL_AND_MSG_TRIGGER));
-    EXPECT_TRUE (isMessageGated (TriggerType::MSG_TRIGGER));
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
+
+    EXPECT_FALSE (isMessageGated (source)) << "no arm pattern means always live";
+
+    source.armPattern = "GO";
+    EXPECT_TRUE (isMessageGated (source));
+
+    source.armPattern = "";
+    EXPECT_FALSE (isMessageGated (source)) << "clearing the pattern un-gates it";
 }
 
 /** Regression: a cancel message must not permanently disable a plain TTL source.
@@ -127,8 +145,9 @@ TEST (TriggerMessaging, CancelDoesNotDisarmAPlainTtlSource)
 
 TEST (TriggerMessaging, CancelDisarmsAMessageGatedSource)
 {
-    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
-    source.cancelPattern = "ABORT";
+    // An arm pattern is what makes it gated, so it needs one for cancel to have
+    // an armed state to clear.
+    auto source = makeSource ("GO", "ABORT", "");
     source.canTrigger = true;
 
     const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "ABORT"));
@@ -139,19 +158,19 @@ TEST (TriggerMessaging, CancelDisarmsAMessageGatedSource)
 
 TEST (TriggerMessaging, ArmOnlyAffectsMessageGatedSources)
 {
-    TriggerSource gated ("gated", 0, TriggerType::TTL_AND_MSG_TRIGGER);
-    gated.armPattern = "GO";
-    ASSERT_FALSE (gated.canTrigger);
+    auto gated = makeSource ("GO", "", "");
+    ASSERT_FALSE (gated.canTrigger) << "a source with an arm pattern starts disarmed";
 
     applyTriggerMessage (gated, matchTriggerMessage (gated, "GO"));
     EXPECT_TRUE (gated.canTrigger);
 
-    // A plain TTL source is already live; arming is a no-op rather than an error.
-    TriggerSource plain ("plain", 0, TriggerType::TTL_TRIGGER);
-    plain.armPattern = "GO";
+    // Without an arm pattern there is nothing to arm: the source is already live,
+    // and no message can take that away.
+    auto ungated = makeSource ("", "", "");
+    ASSERT_TRUE (ungated.canTrigger);
 
-    applyTriggerMessage (plain, matchTriggerMessage (plain, "GO"));
-    EXPECT_TRUE (plain.canTrigger);
+    applyTriggerMessage (ungated, matchTriggerMessage (ungated, "GO"));
+    EXPECT_TRUE (ungated.canTrigger);
 }
 
 /** Regression: arming must survive a cancel carried by the *same* message.
@@ -203,7 +222,7 @@ TEST (TriggerMessaging, TrialEndCommitsOnlyOnTheMatchingOutcome)
 
 TEST (TriggerMessaging, CancelWinsOverCommit)
 {
-    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
     source.cancelPattern = "trial";
     source.commitPattern = "trial";
 
@@ -215,7 +234,7 @@ TEST (TriggerMessaging, CancelWinsOverCommit)
 
 TEST (TriggerMessaging, CommitAloneReportsCommit)
 {
-    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
     source.commitPattern = "KEEP";
 
     const auto change = applyTriggerMessage (source, matchTriggerMessage (source, "KEEP"));
@@ -226,7 +245,7 @@ TEST (TriggerMessaging, CommitAloneReportsCommit)
 
 TEST (TriggerMessaging, UnrelatedMessageChangesNothing)
 {
-    TriggerSource source ("Condition 1", 0, TriggerType::TTL_AND_MSG_TRIGGER);
+    TriggerSource source ("Condition 1", 0, TriggerType::TTL_TRIGGER);
     source.armPattern = "GO";
     source.cancelPattern = "ABORT";
     source.commitPattern = "KEEP";
@@ -377,7 +396,7 @@ TEST (TriggerMessaging, ArmCaptureCommitCycle)
     auto source = makeSource ("ARM", "CANCEL", "COMMIT");
     PendingCaptureStore<std::string> store;
 
-    // A TTL_AND_MSG source starts disarmed.
+    // A source with an arm pattern starts disarmed.
     EXPECT_FALSE (source.canTrigger);
 
     // Arm it.
