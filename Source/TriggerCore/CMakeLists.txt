@@ -40,7 +40,7 @@ set(TRIGGER_CORE_HEADERS
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})
 
-spectra_apply_common_settings(trigger_core)
+oe_apply_common_settings(trigger_core)
 
 # Both this directory (for "TriggerSource.h") and its parent (for
 # "TriggerCore/TriggerSource.h" from a plugin).

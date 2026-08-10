@@ -1,4 +1,4 @@
-spectra_add_plugin(TriggeredCoherence
+oe_add_plugin(TriggeredCoherence spectra_core
     ${CMAKE_CURRENT_SOURCE_DIR}/OpenEphysLib.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredCoherenceNode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredCoherenceNode.h

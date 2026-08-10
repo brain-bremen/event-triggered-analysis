@@ -87,7 +87,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Settings shared by every target in this repo (core, plugins, tests).
 # ---------------------------------------------------------------------------
-function(spectra_apply_common_settings target)
+function(oe_apply_common_settings target)
   target_compile_features(${target} PUBLIC cxx_std_23)
 
   target_compile_definitions(${target} PUBLIC
@@ -120,8 +120,12 @@ endfunction()
 
 # ---------------------------------------------------------------------------
 # Turn a source list into an installable Open Ephys plugin.
+#
+# PLUGIN_CORE is the static core to link: spectra_core for the frequency-domain
+# plugins, trigger_core for one that only needs trial windows. Passing it rather
+# than hardcoding it is what keeps FFTW out of the averaging plugin.
 # ---------------------------------------------------------------------------
-function(spectra_add_plugin PLUGIN_NAME)
+function(oe_add_plugin PLUGIN_NAME PLUGIN_CORE)
   set(PLUGIN_SOURCES ${ARGN})
 
   if(WIN32)
@@ -140,8 +144,8 @@ function(spectra_add_plugin PLUGIN_NAME)
     add_library(${PLUGIN_NAME} SHARED ${PLUGIN_SOURCES})
   endif()
 
-  spectra_apply_common_settings(${PLUGIN_NAME})
-  target_link_libraries(${PLUGIN_NAME} PRIVATE spectra_core)
+  oe_apply_common_settings(${PLUGIN_NAME})
+  target_link_libraries(${PLUGIN_NAME} PRIVATE ${PLUGIN_CORE})
 
   set_target_properties(${PLUGIN_NAME} PROPERTIES
     VERSION ${PLUGIN_VERSION}

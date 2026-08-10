@@ -96,7 +96,7 @@ set(SPECTRA_CORE_HEADERS
 
 add_library(spectra_core STATIC ${SPECTRA_CORE_SOURCES} ${SPECTRA_CORE_HEADERS})
 
-spectra_apply_common_settings(spectra_core)
+oe_apply_common_settings(spectra_core)
 
 target_include_directories(spectra_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

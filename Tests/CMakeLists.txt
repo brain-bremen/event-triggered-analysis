@@ -54,7 +54,7 @@ function(oe_add_test_binary TEST_NAME core needs_fftw)
 
     add_executable(${TEST_NAME} ${TEST_SOURCES})
 
-    spectra_apply_common_settings(${TEST_NAME})
+    oe_apply_common_settings(${TEST_NAME})
 
     target_link_libraries(${TEST_NAME}
         PRIVATE
