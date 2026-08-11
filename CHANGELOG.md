@@ -1,9 +1,105 @@
 # Changelog
 
-All notable changes to the TriggeredAvg plugin will be documented in this file.
+All notable changes to the plugins in this repository will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+> Entries up to and including 0.2.1 describe **TriggeredAvg**, which was developed
+> in its own repository and merged into this one at 0.3.0. Its history and this
+> changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
+
+## [0.3.0] - 2026-08-11
+
+TriggeredAvg merged into the Triggered Spectra repository, which becomes
+**Event-Triggered Analysis** and now builds three plugins over two shared cores.
+The averaging plugin was the structural template for the spectral core and had
+since been overtaken by it; rather than copy the improvements back, the shared
+layer was split out and all three plugins now sit on it.
+
+**This release does not preserve compatibility with saved TriggeredAvg signal
+chains.** Parameter defaults, the trigger-type model and the channel selection all
+changed; see *Removed* and *Changed*.
+
+### Added
+
+- **`trigger_core`**: the ring buffer, work queue, capture worker, trigger sources,
+  broadcast-message matching, the trigger configuration window and the trigger
+  monitor. Contains no FFTW and no DSP, so a plugin that only needs trial windows
+  does not inherit a numerical dependency
+- **`TriggeredCaptureNode`**: shared `GenericProcessor` base owning everything
+  about *getting* a trial window. `TriggeredPower`, `TriggeredCoherence` and
+  `TriggeredAverage` all derive from it
+- Triggered Average gains a **MONITOR** window: live per-source counters through
+  each stage (edges → queued → captured → committed), TTL and message totals, the
+  text of the last broadcast message, a console-echo toggle and a one-line
+  diagnosis of the commonest failures
+- Triggered Average gains a **channel selector**. Everything downstream is linear
+  in the number of selected channels, so this is the main performance lever
+- Triggered Power and Triggered Coherence gain **undo/redo** for trigger-source
+  edits, which they never had
+- Pending captures are backed by a shared, separately tested
+  `PendingCaptureStore<Payload>`
+- `average_tests` binary. 272 tests now run across three binaries, up from 209
+
+### Changed
+
+- Repository renamed to **event-triggered-analysis**; namespace is now
+  `EventTriggered` throughout
+- **Arming is derived from the arm pattern** rather than declared by a trigger
+  type. Setting an arm pattern is what makes a source gated, mirroring the commit
+  pattern, which already decided whether a capture was provisional
+- Triggered Average's window defaults widen: `pre_ms` 250 → 500 ms, `post_ms`
+  750 → 1000 ms, both ranges 5 s → 10 s
+- FFTW is discovered and installed by the spectral layer alone, so the repository
+  configures without it for a `trigger_core`-only build
+- `SpectralWorker` renamed to `CaptureWorker`: it never did any spectral work
+- Every plugin binary now installs from `Build/<config>/`
+
+### Removed
+
+- **`TriggerType::TTL_AND_MSG_TRIGGER`**. Whether a source was gated was stated
+  twice — as a type and as whether it had an arm pattern — and the two could
+  disagree; a `TTL_AND_MSG` source with an empty arm pattern could never fire at
+  all. Saved sources of this type load as plain TTL, with their gating carried by
+  the arm pattern they already had
+- The trigger-type column and its dropdown, which now had nothing to choose
+- Triggered Average's own ring buffer, trigger sources, capture queue,
+  `DataCollector` thread and configuration window, all replaced by the shared ones
+
+### Fixed
+
+- **Broadcast messages no longer take a lock on the audio thread.**
+  `handleBroadcastMessage` is dispatched from `checkForEvents()` inside
+  `process()`, and Triggered Average took its `DataStore` mutex there — the same
+  one the message thread holds while repainting — and copied an `AudioBuffer`.
+  Commit, discard and expiry now run on the capture worker
+- **Removing a trigger source no longer leaves its buffers behind.** Nothing
+  erased the `DataStore` entries keyed by the freed pointer, so a later source
+  allocated at the same address inherited the dead one's average
+- **`ctest` no longer reports success without running anything.** The test binary
+  landed in a per-config directory its runtime libraries never reached, so test
+  discovery found nothing and `ctest` exited 0 printing "No tests were found!!!"
+- Triggered Average's editor: the channel selector had no control at all, the
+  Max Trials row was drawn below the visible area, and every inline control
+  stretched across the stream-selector drawer when it was opened. The last two
+  also affected the spectral plugins
+- With auto-scale on, the average and the individual trials were normalised to
+  different ranges and drawn on the same axes, so the average appeared to swing
+  wider than the traces it was computed from
+- Ring-buffer reads now report `Overrun` when the writer laps the reader mid-copy,
+  instead of silently returning a mixture of old and new samples
+
+### Known gaps
+
+- `MSG_TRIGGER` — triggering on a broadcast message with no TTL line — remains
+  unimplemented and is not offered in the UI. Messages arrive over HTTP with
+  unreliable timing, so such a trigger cannot carry a trustworthy trigger sample.
+  The extension point is kept for anyone who does not need alignment precision
+- Spike-triggered averaging is not implemented. See `PLAN-unified-core.md`
+- The display layer has no automated coverage; every UI fix above was found by
+  manual testing
+- A single data stream is analysed per node
 
 ## [0.2.1] - 2026-08-04
 

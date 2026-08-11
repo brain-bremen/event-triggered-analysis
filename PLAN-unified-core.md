@@ -290,10 +290,10 @@ term of art — event-triggered average, spike-triggered average — so the name
 covers all three plugins today and the spike work later.
 `joschaschmiedt/triggered-lfp-viewer` gets archived with a pointer in its README.
 
-**Neither is done in this branch.** Both are one-way GitHub operations that need
-org permissions. What *is* in scope here: the README, the CMake
-`PROJECT_SHORT_NAME`, the CI workflow names and the `TriggeredSpectra` namespace
-all still say "spectra" and are renamed as part of Phase 4.
+**Done.** The README, the CMake `PROJECT_SHORT_NAME`, the CI workflow names and the
+`TriggeredSpectra` namespace were all renamed in Phase 4, and the GitHub repo is now
+`brain-bremen/event-triggered-analysis`. Archiving
+`joschaschmiedt/triggered-lfp-viewer` is the one step still outstanding.
 
 ---
 
