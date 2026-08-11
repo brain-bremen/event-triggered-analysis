@@ -23,7 +23,7 @@ BEGIN
             VALUE "InternalName", "@PLUGIN_NAME@"
             VALUE "LegalCopyright", "Copyright (C) 2026"
             VALUE "OriginalFilename", "@PLUGIN_NAME@.dll"
-            VALUE "ProductName", "Triggered Spectra"
+            VALUE "ProductName", "@PLUGIN_NAME@"
             VALUE "ProductVersion", "@PLUGIN_VERSION@"
             VALUE "Comments", "Built for Open Ephys GUI v@OE_GUI_VERSION@ (API @OE_GUI_API_VERSION@)"
         END
