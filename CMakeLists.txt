@@ -13,8 +13,19 @@ cmake_minimum_required(VERSION 3.23.0)
 
 set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
 
+# One version for all three plugins, deliberately. They share two cores, so a
+# fix in trigger_core changes every one of them and separate numbers would be a
+# fiction most of the time. It also keeps one changelog and one tag per release.
+#
+# The cost is real and accepted: a release driven by a coherence-only fix still
+# bumps Triggered Average, whose behaviour did not change. The changelog says
+# which plugin each entry belongs to.
+#
+# This is the single source: PluginVersion.h is generated from it, every plugin
+# reports it through getLibInfo(), and the Windows resource stamps it. Nothing
+# should hardcode a version string.
 set(PLUGIN_VERSION_MAJOR 0)
-set(PLUGIN_VERSION_MINOR 1)
+set(PLUGIN_VERSION_MINOR 3)
 set(PLUGIN_VERSION_PATCH 0)
 set(PLUGIN_VERSION "${PLUGIN_VERSION_MAJOR}.${PLUGIN_VERSION_MINOR}.${PLUGIN_VERSION_PATCH}")
 
