@@ -52,17 +52,23 @@ struct Group
     std::vector<const char*> names;
 };
 
-/** On the editor itself: the four most-edited, worth the space they cost. */
+/** On the editor itself: the three most-edited, worth the space they cost.
+    Mode moved behind ANALYSIS (see analysisGroups below) to give the editor's
+    inline rows room to breathe. */
 inline const std::vector<const char*> editorInline {
     ParameterNames::channels,
     ParameterNames::pre_ms,
     ParameterNames::post_ms,
-    ParameterNames::mode,
 };
 
 /** Behind the editor's ANALYSIS button. Everything here reshapes the
     accumulators, so changing any of it discards what has accumulated. */
 inline const std::vector<Group> analysisGroups {
+    // First and unguarded: this is what every other section's greying depends
+    // on, so it must always be reachable regardless of which estimator is
+    // currently selected.
+    { "Estimator", "", { ParameterNames::mode } },
+
     { "Frequency axis",
       "",
       { ParameterNames::freq_min,

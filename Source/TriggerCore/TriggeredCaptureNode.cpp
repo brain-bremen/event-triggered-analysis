@@ -26,6 +26,7 @@
 
 #include "ParameterNames.h"
 #include "TriggerMessaging.h"
+#include "Ui/TriggerCountDisplay.h"
 
 #include <VisualizerEditorHeaders.h>
 #include <algorithm>
@@ -473,6 +474,9 @@ void TriggeredCaptureNode::handleAsyncUpdate()
     drainBroadcastMessageLog();
 
     refreshDisplay();
+
+    if (auto* display = dynamic_cast<TriggerCountDisplay*> (getEditor()))
+        display->setTriggerCount (m_triggerSources.size());
 }
 
 // --- Broadcast message log -------------------------------------------------

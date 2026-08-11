@@ -149,6 +149,9 @@ void TriggeredCoherenceNode::pairsChanged()
     // no history to invent.
     rebuildConfiguration();
     triggerAsyncUpdate();
+
+    if (auto* editor = dynamic_cast<TriggeredCoherenceEditor*> (getEditor()))
+        editor->setPairCount (static_cast<int> (m_pairs.size()));
 }
 
 void TriggeredCoherenceNode::setPairName (int index, const juce::String& name)

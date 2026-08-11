@@ -38,6 +38,8 @@ set(TRIGGER_CORE_HEADERS
     Ui/ParameterControl.h
     Ui/TriggerSourceConfigWindow.h
     Ui/TriggerMonitorWindow.h
+    Ui/TriggerCountDisplay.h
+    Ui/EditorLayout.h
 )
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})

@@ -22,6 +22,8 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/TriggerCountDisplay.h"
+
 #include <EditorHeaders.h>
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
@@ -32,7 +34,9 @@ namespace EventTriggered
 class TriggeredPowerNode;
 class TriggeredPowerCanvas;
 
-class TriggeredPowerEditor : public VisualizerEditor, public juce::Button::Listener
+class TriggeredPowerEditor : public VisualizerEditor,
+                             public juce::Button::Listener,
+                             public TriggerCountDisplay
 {
 public:
     explicit TriggeredPowerEditor (GenericProcessor* parentNode);
@@ -42,9 +46,11 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
-    /** Lays the inline controls out from the editor's measured height. Fixed
-        coordinates put the mode selector below the visible area. */
+    /** Lays the inline controls out from the editor's measured height. */
     void resized() override;
+
+    /** Shows the trigger count as a badge on the TRIGGERS button. */
+    void setTriggerCount (int count) override;
 
 private:
     /** Opens the trigger-source table. Without at least one source nothing is
@@ -58,6 +64,10 @@ private:
     /** Opens the live trigger counters, for when a source is configured but no
         trials appear. */
     std::unique_ptr<UtilityButton> m_monitorButton;
+
+    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<juce::Label> m_preLabel;
+    std::unique_ptr<juce::Label> m_postLabel;
 
     TriggeredPowerCanvas* m_canvas = nullptr;
 
