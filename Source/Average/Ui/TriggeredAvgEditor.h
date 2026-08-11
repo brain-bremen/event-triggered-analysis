@@ -81,7 +81,9 @@ private:
         spectral siblings: TRIGGERS / MONITOR / ANALYSIS. */
     std::unique_ptr<UtilityButton> analysisButton;
 
-    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    /** Captions for Channels and the Pre/Post value boxes; see
+        EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<Label> channelsLabel;
     std::unique_ptr<Label> preLabel;
     std::unique_ptr<Label> postLabel;
 

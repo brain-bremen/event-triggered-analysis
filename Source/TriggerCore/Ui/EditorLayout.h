@@ -88,49 +88,76 @@ inline std::unique_ptr<juce::Label> makeCaptionLabel (const juce::String& text)
 }
 
 /** Lays out what every triggered plugin's editor has: a row of buttons, the
- *  channel selector, and the pre/post window pair.
+ *  channel selector, and the pre/post window pair. Built on juce::Grid rather
+ *  than hand-accumulated x/y bounds.
  *
- *  Row two is anchored on row one's *actual* button bounds, not a separately
- *  computed grid: TRIGGERS's count badge makes it wider than MONITOR and
- *  ANALYSIS, and an independent formula for row two drifted out of sync with
- *  that the moment it did — Channels' value box and CH PAIRS stopped lining up
- *  with MONITOR and ANALYSIS above them. Reading the buttons' own bounds back
- *  means row two cannot disagree with row one about where they are.
+ *  Two grids, not one, because rows 1-2 and row 3 are genuinely different
+ *  shapes:
  *
- *  Channels spans from the left edge to MONITOR's right edge, so its value box
- *  ("None") lines up under MONITOR rather than trailing off wherever its own
- *  preferred width ends, and CH PAIRS (when present) takes ANALYSIS's own x and
- *  width, so it lines up under ANALYSIS.
+ *  - Rows 1-2 share a single column template (TRIGGERS/MONITOR/ANALYSIS
+ *    widths). Channels and CH PAIRS are placed on the *same column lines* as
+ *    row one's buttons, so Channels' value box lines up under MONITOR and
+ *    CH PAIRS lines up under ANALYSIS by construction — there is no separate
+ *    formula for row two that can drift out of sync with row one, which is
+ *    what happened in the hand-rolled version the first time TRIGGERS grew to
+ *    fit its count badge.
+ *  - Row 3 (Pre/Post) is a fixed-width caption+value pair that has nothing to
+ *    do with row one's column lines, so it gets its own grid too — but its
+ *    value boxes are aligned to specific boundaries above rather than centred
+ *    independently: Pre's left edge under Channels' value box, Post's left
+ *    edge under ANALYSIS's left edge (the same boundary Pairs' caption starts
+ *    at in row two), both computed from the same triggersWidth/otherWidth/
+ *    channelsCaptionWidth row one and two use.
  *
- *  Pre and Post are the exception: captions sized to their own text (see
- *  makeCaptionLabel()) rather than the built-in ParameterEditor label, which
- *  reserves half its control's width for a 3-4 character word like "Pre" —
- *  mostly left blank, right-justified against the value box. Two controls
- *  stretched that way compounded into a wide dead patch between the Pre slider
- *  and the Post label. A tight caption plus a value box sized to its content,
- *  packed side by side and centred as a pair, does not have that problem.
+ *  Both grids assume exactly three buttons (TRIGGERS, MONITOR, ANALYSIS), true
+ *  of every plugin that calls this — TriggeredAverage, TriggeredPower and
+ *  TriggeredCoherence all pass exactly that triple.
  *
- *  The three rows are centred as a block in whatever height the signal-chain
+ *  Placement is by named `grid-template-areas` string, not by numeric
+ *  row/column line (`GridItem::withArea(1, 2)` and friends): this GUI's
+ *  prebuilt open-ephys.lib does not export GridItem::Property's constructors
+ *  (its nested-class dllexport does not reach them under MSVC), so any call
+ *  that has to construct one — which every numeric-line overload does — fails
+ *  to link. `GridItem::withArea(String)` takes the area name directly and
+ *  avoids Property entirely.
+ *
+ *  Captions for Pre/Post (see makeCaptionLabel()) exist for the same reason as
+ *  before: the built-in ParameterEditor label reserves half its control's
+ *  width for a 3-4 character word like "Pre", mostly left blank and
+ *  right-justified against the value box, and two controls stretched that way
+ *  compounded into a wide dead patch between the Pre slider and the Post
+ *  label.
+ *
+ *  The whole block is centred vertically in whatever height the signal-chain
  *  viewport hands the editor, rather than pinned under the title bar — with
  *  Mode and (for TriggeredAverage) Max Trials moved behind ANALYSIS, there is
  *  usually slack left over below row three, and top-anchoring left the whole
  *  block looking stranded near the title instead of settled in the panel.
  *
- *  @param buttons        in display order; null entries are skipped, so a plugin
- *                        with fewer buttons gets wider ones rather than a gap.
+ *  @param buttons        exactly {TRIGGERS, MONITOR, ANALYSIS}, in that order.
+ *  @param channelsLabel  caption for Channels, from makeCaptionLabel().
  *  @param preLabel       caption for Pre, from makeCaptionLabel(). Null skips it,
  *                        leaving just the value box.
  *  @param postLabel      caption for Post, same as preLabel.
- *  @param secondRowExtra  an extra control placed on the channel-selector row,
- *                        in column 2 — TriggeredCoherence's CH PAIRS button.
- *                        Null for plugins that don't have one.
+ *  @param secondRowExtra  a value control placed under ANALYSIS, on the channel
+ *                        row — TriggeredCoherence's CH PAIRS button, showing
+ *                        just the count. Null for plugins that don't have one.
+ *  @param secondRowExtraLabel  caption for secondRowExtra ("Pairs"), same
+ *                        pattern as channelsLabel. Ignored if secondRowExtra
+ *                        is null.
  */
 inline void layoutCommonContents (GenericEditor& editor,
                                   std::initializer_list<juce::Component*> buttons,
+                                  juce::Label* channelsLabel,
                                   juce::Label* preLabel,
                                   juce::Label* postLabel,
-                                  juce::Component* secondRowExtra = nullptr)
+                                  juce::Component* secondRowExtra = nullptr,
+                                  juce::Label* secondRowExtraLabel = nullptr)
 {
+    using Grid = juce::Grid;
+    using Track = Grid::TrackInfo;
+    using Px = Grid::Px;
+
     const int width = contentWidth (editor);
 
     // Three rows of `rowHeight`, back to back with one rowGap between each.
@@ -144,7 +171,7 @@ inline void layoutCommonContents (GenericEditor& editor,
         juce::jlimit (16, buttonHeight, (available - (rowCount - 1) * rowGap) / rowCount);
     const int contentHeight = rowCount * rowHeight + (rowCount - 1) * rowGap;
 
-    int y = top + juce::jmax (0, (available - contentHeight) / 2);
+    const int y = top + juce::jmax (0, (available - contentHeight) / 2);
 
     juce::Array<juce::Component*> present;
 
@@ -152,11 +179,9 @@ inline void layoutCommonContents (GenericEditor& editor,
         if (button != nullptr)
             present.add (button);
 
-    // Row two reads its alignment back from these rather than from a parallel
-    // formula (see the comment above).
-    int monitorRight = left + width;
-    int analysisX = left;
-    int analysisWidth = width;
+    // --- Row 1: TRIGGERS / MONITOR / ANALYSIS -----------------------------------
+    int triggersWidth = width;
+    int otherWidth = width;
 
     if (! present.isEmpty())
     {
@@ -164,79 +189,154 @@ inline void layoutCommonContents (GenericEditor& editor,
 
         // TRIGGERS (first button) carries a count badge — "TRIGGERS (12)" —
         // which needs more room than a bare label. Taken from the rest of the
-        // row rather than added to it, so the row still lines up with
-        // everything below it.
+        // row rather than added to it, computed once here and reused below for
+        // row two, so the two rows size themselves from the same numbers
+        // instead of row two measuring row one's bounds back afterward.
         constexpr int triggersExtraWidth = 24;
         const int extra = count > 1 ? triggersExtraWidth : 0;
-        const int otherWidth = (width - (count - 1) * gap - extra) / count;
-        const int triggersWidth = otherWidth + extra;
+        otherWidth = (width - (count - 1) * gap - extra) / count;
+        triggersWidth = otherWidth + extra;
 
-        int x = left;
+        Grid grid;
+        grid.templateRows = { Track (Px (rowHeight)) };
+        grid.columnGap = Px (gap);
 
         for (int i = 0; i < count; ++i)
-        {
-            const int buttonWidth = (i == 0) ? triggersWidth : otherWidth;
-            present[i]->setBounds (x, y, buttonWidth, rowHeight);
-            x += buttonWidth + gap;
-        }
+            grid.templateColumns.add (Track (Px (i == 0 ? triggersWidth : otherWidth)));
 
-        // MONITOR is button 1 and ANALYSIS is button 2 on every plugin that
-        // calls this — TriggeredAverage, TriggeredPower, TriggeredCoherence
-        // all pass exactly {TRIGGERS, MONITOR, ANALYSIS}.
+        grid.templateAreas = { "trig mon ana" };
+
+        if (count > 0)
+            grid.items.add (juce::GridItem (present[0]).withArea ("trig"));
         if (count > 1)
-            monitorRight = present[1]->getRight();
-
+            grid.items.add (juce::GridItem (present[1]).withArea ("mon"));
         if (count > 2)
-        {
-            analysisX = present[2]->getX();
-            analysisWidth = present[2]->getWidth();
-        }
+            grid.items.add (juce::GridItem (present[2]).withArea ("ana"));
+
+        grid.performLayout ({ left, y, width, rowHeight });
     }
 
-    y += rowHeight + rowGap;
+    // --- Row 2: Channels [caption, value], Pairs [caption, value] --------------
+    //
+    // Four columns, not Channels spanning two of row one's and CH PAIRS taking
+    // the third whole: "Channels"/"Pairs" only need the width their own text
+    // takes, same reasoning as the Pre/Post captions below, and splitting each
+    // into its own caption + value column says so instead of leaving most of a
+    // stretched half blank. Column 1-2 together span row one's TRIGGERS+MONITOR
+    // width and column 3-4 together span ANALYSIS's width, so the row still
+    // lines up with row one without needing row one's bounds read back.
+    //
+    // channelsCaptionWidth/channelsValueWidth are also what row three (below)
+    // aligns Pre/Post's value boxes to, so they are declared at this scope
+    // rather than nested inside the block that lays row two out.
+    constexpr int channelsCaptionWidth = 60;
+    const int channelsSpan = triggersWidth + gap + otherWidth;
+    const int channelsValueWidth = channelsSpan - gap - channelsCaptionWidth;
 
-    // Spans from the left edge to MONITOR's right edge: nameOnLeft splits that
-    // span down the middle, so the label lands near the left edge and the
-    // value box ends under MONITOR.
-    if (auto* channels = editor.getParameterEditor (ParameterNames::channels))
     {
-        channels->setLayout (ParameterEditor::Layout::nameOnLeft);
-        channels->setBounds (left, y, monitorRight - left, rowHeight);
+        constexpr int pairsCaptionWidth = 40;
+
+        Grid channelsGrid;
+        channelsGrid.templateRows = { Track (Px (rowHeight)) };
+        channelsGrid.columnGap = Px (gap);
 
         if (secondRowExtra != nullptr)
-            secondRowExtra->setBounds (analysisX, y, analysisWidth, rowHeight);
+        {
+            const int pairsValueWidth = otherWidth - gap - pairsCaptionWidth;
 
-        y += rowHeight + rowGap;
+            channelsGrid.templateColumns = { Track (Px (channelsCaptionWidth)),
+                                             Track (Px (channelsValueWidth)),
+                                             Track (Px (pairsCaptionWidth)),
+                                             Track (Px (pairsValueWidth)) };
+            channelsGrid.templateAreas = { "chanCap chanVal pairsCap pairsVal" };
+        }
+        else
+        {
+            channelsGrid.templateColumns = { Track (Px (channelsCaptionWidth)),
+                                             Track (Px (channelsValueWidth)) };
+            channelsGrid.templateAreas = { "chanCap chanVal" };
+        }
+
+        if (channelsLabel != nullptr)
+            channelsGrid.items.add (juce::GridItem (channelsLabel).withArea ("chanCap"));
+
+        if (auto* channels = editor.getParameterEditor (ParameterNames::channels))
+        {
+            channels->setLayout (ParameterEditor::Layout::nameHidden);
+            channelsGrid.items.add (juce::GridItem (channels).withArea ("chanVal"));
+        }
+
+        if (secondRowExtra != nullptr)
+        {
+            if (secondRowExtraLabel != nullptr)
+                channelsGrid.items.add (
+                    juce::GridItem (secondRowExtraLabel).withArea ("pairsCap"));
+
+            channelsGrid.items.add (juce::GridItem (secondRowExtra).withArea ("pairsVal"));
+        }
+
+        channelsGrid.performLayout ({ left, y + rowHeight + rowGap, width, rowHeight });
     }
 
-    // Caption + value box, sized to content and packed tight (captionGap), then
-    // the Pre group and Post group packed tight against each other (gap) and
-    // centred as a pair within `width` (see the comment above).
+    // --- Row 3: Pre / Post ------------------------------------------------------
+    //
+    // Pre's value box left edge lines up with Channels' value box left edge,
+    // and Post's value box left edge lines up with ANALYSIS's left edge — the
+    // same boundary row two's Pairs caption starts at, so Post and Pairs line
+    // up too. Not centred: "centred in the row" and "aligned to specific boxes
+    // in the row above" are two different placements, and this is the one that
+    // was asked for. leadingGap and middleGap are the spacer columns that put
+    // the two value boxes exactly there; their own widths are whatever is left
+    // once the caption before each value box is accounted for.
     constexpr int captionWidth = 28;
     constexpr int captionGap = 3;
     constexpr int valueWidth = 80;
-    constexpr int groupWidth = captionWidth + captionGap + valueWidth;
 
-    const int pairX = left + juce::jmax (0, (width - (groupWidth * 2 + gap)) / 2);
-    const int postGroupX = pairX + groupWidth + gap;
+    // +gap: channelsGrid's own columnGap inserts one automatic gap between its
+    // caption and value columns, which a bare channelsCaptionWidth doesn't
+    // account for — chanVal actually starts a gap further right than that.
+    const int channelsValueX = channelsCaptionWidth + gap;
+    const int analysisX = channelsSpan + gap;
+
+    const int leadingGap = juce::jmax (0, channelsValueX - captionGap - captionWidth);
+    const int middleGap = juce::jmax (
+        0, (analysisX - captionGap - captionWidth) - (channelsValueX + valueWidth));
+
+    auto* pre = editor.getParameterEditor (ParameterNames::pre_ms);
+    auto* post = editor.getParameterEditor (ParameterNames::post_ms);
+
+    if (pre != nullptr)
+        pre->setLayout (ParameterEditor::Layout::nameHidden);
+    if (post != nullptr)
+        post->setLayout (ParameterEditor::Layout::nameHidden);
+
+    Grid prePostGrid;
+    prePostGrid.templateRows = { Track (Px (rowHeight)) };
+    prePostGrid.columnGap = Px (0);
+    prePostGrid.templateColumns = {
+        Track (Px (leadingGap)),
+        Track (Px (captionWidth)), // Pre caption
+        Track (Px (captionGap)),
+        Track (Px (valueWidth)), // Pre value — left edge under Channels' value box
+        Track (Px (middleGap)),
+        Track (Px (captionWidth)), // Post caption
+        Track (Px (captionGap)),
+        Track (Px (valueWidth)), // Post value — left edge under ANALYSIS's left edge
+    };
+    // "." is the CSS grid-template-areas token for an empty cell.
+    prePostGrid.templateAreas = { ". preCap . preVal . postCap . postVal" };
 
     if (preLabel != nullptr)
-        preLabel->setBounds (pairX, y, captionWidth, rowHeight);
-
-    if (auto* pre = editor.getParameterEditor (ParameterNames::pre_ms))
-    {
-        pre->setLayout (ParameterEditor::Layout::nameHidden);
-        pre->setBounds (pairX + captionWidth + captionGap, y, valueWidth, rowHeight);
-    }
-
+        prePostGrid.items.add (juce::GridItem (preLabel).withArea ("preCap"));
+    if (pre != nullptr)
+        prePostGrid.items.add (juce::GridItem (pre).withArea ("preVal"));
     if (postLabel != nullptr)
-        postLabel->setBounds (postGroupX, y, captionWidth, rowHeight);
+        prePostGrid.items.add (juce::GridItem (postLabel).withArea ("postCap"));
+    if (post != nullptr)
+        prePostGrid.items.add (juce::GridItem (post).withArea ("postVal"));
 
-    if (auto* post = editor.getParameterEditor (ParameterNames::post_ms))
-    {
-        post->setLayout (ParameterEditor::Layout::nameHidden);
-        post->setBounds (postGroupX + captionWidth + captionGap, y, valueWidth, rowHeight);
-    }
+    const int row3Y = y + 2 * (rowHeight + rowGap);
+    prePostGrid.performLayout ({ left, row3Y, width, rowHeight });
 }
 
 } // namespace EventTriggered::EditorLayout
