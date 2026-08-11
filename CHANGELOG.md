@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
+## [Unreleased]
+
+### Fixed
+
+- **TriggeredCoherence now honours commit patterns** (#8). It implements the same
+  three pending-capture hooks the other two plugins do, so a trigger source with a
+  commit pattern parks its trial until a commit message folds it in, a cancel
+  discards it, or the timeout expires. Trigger sources are shared configuration,
+  and until now the same source accumulated immediately in Coherence while
+  Triggered Power waited — two answers from one configuration, with nothing in the
+  UI to say so. A parked trial is also kept out of the shift predictor: its null
+  pairs consecutive *kept* trials, and a trial that is later discarded must not
+  become the partner of the one after it
+
 ## [0.3.0] - 2026-08-11
 
 TriggeredAvg merged into the Triggered Spectra repository, which becomes

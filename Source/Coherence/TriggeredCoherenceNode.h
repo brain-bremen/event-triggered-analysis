@@ -26,8 +26,10 @@
 #include "Spectral/PairRules.h"
 #include "Spectral/SpectralEngine.h"
 #include "Spectral/TriggeredSpectraNode.h"
+#include "TriggerCore/TriggerMessaging.h"
 
 #include <JuceHeader.h>
+#include <cstdint>
 #include <map>
 #include <vector>
 
@@ -190,7 +192,23 @@ protected:
 
     void refreshDisplay() override;
 
+    // Called on the worker thread, in queue order with the captures themselves.
+    bool commitCapture (TriggerSource* source) override;
+    void discardCapture (TriggerSource* source) override;
+    void discardExpiredCaptures (std::int64_t nowMs) override;
+
 private:
+    /** Folds one already-transformed trial into every resolved pair, and hands it
+     *  to the shift predictor as the next trial's partner.
+     *
+     *  Takes its argument by non-const reference because that handover is a swap:
+     *  a set of coefficients is one array per channel and copying it per trial is
+     *  the one allocation this path can avoid. `coefficients` is left holding
+     *  whatever the predictor was keeping, so callers must treat it as consumed.
+     *
+     *  Caller holds m_dataLock. Returns true if anything was accumulated. */
+    bool accumulateTrial (TriggerSource* source, TfCoefficients& coefficients);
+
     /** Recomputes selectedA/selectedB from the current channel selection. */
     void resolvePairs();
 
@@ -244,6 +262,10 @@ private:
      *  question nobody asked. Empty when the predictor is off.
      */
     std::map<TriggerSource*, TfCoefficients> m_previousTrial;
+
+    /** Captures waiting for a commit message, holding the transformed trial so
+        that committing is just an accumulate call. */
+    PendingCaptureStore<TfCoefficients> m_pendingCaptures;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceNode)
 };
