@@ -280,27 +280,17 @@ bool TriggeredAvgNode::processCapturedTrial (const CaptureRequest& request,
         return false;
     }
 
-    if (! m_dataStore.addTrialForTriggerSource (request.triggerSource, m_narrowedTrial))
-        return false;
-
-    request.triggerSource->counters.trialsCaptured.fetch_add (1, std::memory_order_relaxed);
-    return true;
+    // The counters belong to CaptureWorker, which bumps trialsCaptured for every
+    // window it extracts and pendingCommitted for every commit that finds one
+    // parked — for all three plugins alike. Counting again here would make this
+    // plugin's monitor read double what the others do from the same events.
+    return m_dataStore.addTrialForTriggerSource (request.triggerSource, m_narrowedTrial);
 }
 
 bool TriggeredAvgNode::commitCapture (TriggerSource* source)
 {
     const auto lock = m_dataStore.GetLock();
-
-    if (! m_dataStore.commitPendingCapture (source))
-        return false;
-
-    if (source != nullptr)
-    {
-        source->counters.trialsCaptured.fetch_add (1, std::memory_order_relaxed);
-        source->counters.pendingCommitted.fetch_add (1, std::memory_order_relaxed);
-    }
-
-    return true;
+    return m_dataStore.commitPendingCapture (source);
 }
 
 void TriggeredAvgNode::discardCapture (TriggerSource* source)

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
-## [0.3.0] - 2026-08-11
+## [0.3.0]
 
 TriggeredAvg merged into the Triggered Spectra repository, which becomes
 **Event-Triggered Analysis** and now builds three plugins over two shared cores.
@@ -89,6 +89,12 @@ changed; see *Removed* and *Changed*.
   wider than the traces it was computed from
 - Ring-buffer reads now report `Overrun` when the writer laps the reader mid-copy,
   instead of silently returning a mixture of old and new samples
+- **Triggered Average's monitor no longer double-counts** (#21). `CaptureWorker`
+  bumps `trialsCaptured` for every window it extracts and `pendingCommitted` for
+  every commit that finds one parked, for all three plugins; `TriggeredAvgNode`
+  counted both again on top, so CAPTURED and COMMITTED read twice the real numbers
+  there while Triggered Power and Triggered Coherence read correctly. The
+  accumulated average itself was never affected
 
 ### Known gaps
 
