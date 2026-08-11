@@ -62,6 +62,9 @@ TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     // number of selected channels.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
+    channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
+    addAndMakeVisible (channelsLabel.get());
+
     // Coordinates here only decide creation order; resized() places everything.
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
@@ -85,6 +88,7 @@ void TriggeredAvgEditor::resized()
     EditorLayout::layoutCommonContents (
         *this,
         { configureButton.get(), monitorButton.get(), analysisButton.get() },
+        channelsLabel.get(),
         preLabel.get(),
         postLabel.get());
 }

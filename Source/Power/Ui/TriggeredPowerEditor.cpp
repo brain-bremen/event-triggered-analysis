@@ -56,6 +56,9 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
     // order, which is the order they are stacked in.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
+    m_channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
+    addAndMakeVisible (m_channelsLabel.get());
+
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
@@ -78,6 +81,7 @@ void TriggeredPowerEditor::resized()
     EditorLayout::layoutCommonContents (
         *this,
         { m_configureButton.get(), m_monitorButton.get(), m_analysisButton.get() },
+        m_channelsLabel.get(),
         m_preLabel.get(),
         m_postLabel.get());
 }

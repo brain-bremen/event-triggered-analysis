@@ -51,13 +51,20 @@ TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode
     m_monitorButton->addListener (this);
     addAndMakeVisible (m_monitorButton.get());
 
-    m_pairsButton = std::make_unique<UtilityButton> ("CH PAIRS");
+    // Shows just the pair count ("None" / "1") — the "Pairs" wording lives in
+    // m_pairsLabel now, same split as Channels' own caption + value button.
+    m_pairsButton = std::make_unique<UtilityButton> ("None");
     m_pairsButton->addListener (this);
     addAndMakeVisible (m_pairsButton.get());
 
     // Positions come from resized(); the coordinates here only decide creation
     // order, which is the order they are stacked in.
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
+
+    m_channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
+    addAndMakeVisible (m_channelsLabel.get());
+    m_pairsLabel = EditorLayout::makeCaptionLabel ("Pairs");
+    addAndMakeVisible (m_pairsLabel.get());
 
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
@@ -82,9 +89,11 @@ void TriggeredCoherenceEditor::resized()
                                         { m_configureButton.get(),
                                           m_monitorButton.get(),
                                           m_analysisButton.get() },
+                                        m_channelsLabel.get(),
                                         m_preLabel.get(),
                                         m_postLabel.get(),
-                                        m_pairsButton.get());
+                                        m_pairsButton.get(),
+                                        m_pairsLabel.get());
 }
 
 void TriggeredCoherenceEditor::setTriggerCount (int count)
@@ -94,7 +103,7 @@ void TriggeredCoherenceEditor::setTriggerCount (int count)
 
 void TriggeredCoherenceEditor::setPairCount (int count)
 {
-    m_pairsButton->setLabel (count > 0 ? "CH PAIRS (" + String (count) + ")" : "CH PAIRS");
+    m_pairsButton->setLabel (count > 0 ? String (count) : "None");
 }
 
 void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)

@@ -65,7 +65,9 @@ private:
         trials appear. */
     std::unique_ptr<UtilityButton> m_monitorButton;
 
-    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    /** Captions for Channels and the Pre/Post value boxes; see
+        EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<juce::Label> m_channelsLabel;
     std::unique_ptr<juce::Label> m_preLabel;
     std::unique_ptr<juce::Label> m_postLabel;
 

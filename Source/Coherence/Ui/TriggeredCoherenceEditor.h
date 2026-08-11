@@ -52,9 +52,10 @@ public:
     /** Shows the trigger count as a badge on the TRIGGERS button. */
     void setTriggerCount (int count) override;
 
-    /** Shows the pair count as a badge on the CH PAIRS button. Called directly
-        from TriggeredCoherenceNode::pairsChanged() — pairs are specific to this
-        plugin, so unlike the trigger count there is no shared interface for it. */
+    /** Shows the pair count on the Pairs value button, next to its "Pairs"
+        caption. Called directly from TriggeredCoherenceNode::pairsChanged() —
+        pairs are specific to this plugin, so unlike the trigger count there is
+        no shared interface for it. */
     void setPairCount (int count);
 
 private:
@@ -75,7 +76,10 @@ private:
         the result. */
     std::unique_ptr<UtilityButton> m_pairsButton;
 
-    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    /** Captions for Channels, Pairs, and the Pre/Post value boxes; see
+        EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<juce::Label> m_channelsLabel;
+    std::unique_ptr<juce::Label> m_pairsLabel;
     std::unique_ptr<juce::Label> m_preLabel;
     std::unique_ptr<juce::Label> m_postLabel;
 
