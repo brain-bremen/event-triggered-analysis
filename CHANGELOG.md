@@ -98,6 +98,12 @@ changed; see *Removed* and *Changed*.
   UI to say so. A parked trial is also kept out of the shift predictor: its null
   pairs consecutive *kept* trials, and a trial that is later discarded must not
   become the partner of the one after it
+- **Triggered Average's monitor no longer double-counts** (#21). `CaptureWorker`
+  bumps `trialsCaptured` for every window it extracts and `pendingCommitted` for
+  every commit that finds one parked, for all three plugins; `TriggeredAvgNode`
+  counted both again on top, so CAPTURED and COMMITTED read twice the real numbers
+  there while Triggered Power and Triggered Coherence read correctly. The
+  accumulated average itself was never affected
 
 ### Known gaps
 
