@@ -24,6 +24,14 @@ Three plugins are built from this repository:
 > coherence is easy to over-read — see the caveat under *Design notes* — so check the trial count
 > and the shift predictor before believing a result.
 
+<div align="center">
+
+| Triggered Average | Triggered Coherence | Triggered Power |
+|:---:|:---:|:---:|
+| <img src="Resources/triggered-avg-editor.png" width="260"> | <img src="Resources/triggered-coh-editor.png" width="260"> | <img src="Resources/triggered-pow-editor.png" width="260"> |
+
+</div>
+
 They share two static cores, layered:
 
 - **`trigger_core`** — the ring buffer, trigger sources, work queue, capture worker and the whole
