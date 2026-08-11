@@ -39,9 +39,31 @@ jobs:
           path: |
             plugin-GUI/Build
             plugin-GUI/installed_libs
-          key: ${{ runner.os }}-gui-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
+          key: ${{ runner.os }}-gui-${{ github.repository }}-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
           restore-keys: |
-            ${{ runner.os }}-gui-
+            ${{ runner.os }}-gui-${{ github.repository }}-
+
+      # A cached CMake build tree is bound to the absolute path it was configured
+      # at, and the workspace path contains the repository name. Renaming the
+      # repository therefore invalidated every cached GUI build: the restore-keys
+      # fallback happily restored a tree configured under .../TriggeredSpectra/,
+      # and `cmake -B Build` refused it. Scoping the key to github.repository
+      # stops a cache surviving the next rename; this step is the backstop for
+      # any other way the path can change, turning a red job into a slow one.
+      - name: Discard a GUI build tree configured elsewhere
+        shell: bash
+        run: |
+          cache=plugin-GUI/Build/CMakeCache.txt
+          # CMake writes forward slashes into the cache even on Windows, where
+          # GITHUB_WORKSPACE has backslashes; normalise before comparing.
+          workspace=$(printf '%s' "$GITHUB_WORKSPACE" | tr '\\' '/')
+          expected="$workspace/plugin-GUI"
+
+          if [ -f "$cache" ] && ! grep -qF "CMAKE_HOME_DIRECTORY:INTERNAL=$expected" "$cache"; then
+            echo "Cached GUI build tree was configured for another path; discarding it."
+            grep -F CMAKE_HOME_DIRECTORY "$cache" || true
+            rm -rf plugin-GUI/Build
+          fi
 
       - name: Configure Open Ephys GUI
         run: |
@@ -114,9 +136,31 @@ jobs:
           path: |
             plugin-GUI/Build
             plugin-GUI/installed_libs
-          key: ${{ runner.os }}-gui-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
+          key: ${{ runner.os }}-gui-${{ github.repository }}-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
           restore-keys: |
-            ${{ runner.os }}-gui-
+            ${{ runner.os }}-gui-${{ github.repository }}-
+
+      # A cached CMake build tree is bound to the absolute path it was configured
+      # at, and the workspace path contains the repository name. Renaming the
+      # repository therefore invalidated every cached GUI build: the restore-keys
+      # fallback happily restored a tree configured under .../TriggeredSpectra/,
+      # and `cmake -B Build` refused it. Scoping the key to github.repository
+      # stops a cache surviving the next rename; this step is the backstop for
+      # any other way the path can change, turning a red job into a slow one.
+      - name: Discard a GUI build tree configured elsewhere
+        shell: bash
+        run: |
+          cache=plugin-GUI/Build/CMakeCache.txt
+          # CMake writes forward slashes into the cache even on Windows, where
+          # GITHUB_WORKSPACE has backslashes; normalise before comparing.
+          workspace=$(printf '%s' "$GITHUB_WORKSPACE" | tr '\\' '/')
+          expected="$workspace/plugin-GUI"
+
+          if [ -f "$cache" ] && ! grep -qF "CMAKE_HOME_DIRECTORY:INTERNAL=$expected" "$cache"; then
+            echo "Cached GUI build tree was configured for another path; discarding it."
+            grep -F CMAKE_HOME_DIRECTORY "$cache" || true
+            rm -rf plugin-GUI/Build
+          fi
 
       - name: Configure Open Ephys GUI
         run: |
