@@ -89,6 +89,15 @@ changed; see *Removed* and *Changed*.
   wider than the traces it was computed from
 - Ring-buffer reads now report `Overrun` when the writer laps the reader mid-copy,
   instead of silently returning a mixture of old and new samples
+- **TriggeredCoherence honours commit patterns** (#8). It implements the same
+  three pending-capture hooks the other two plugins do, so a trigger source with a
+  commit pattern parks its trial until a commit message folds it in, a cancel
+  discards it, or the timeout expires. Trigger sources are shared configuration,
+  and until now the same source accumulated immediately in Coherence while
+  Triggered Power waited — two answers from one configuration, with nothing in the
+  UI to say so. A parked trial is also kept out of the shift predictor: its null
+  pairs consecutive *kept* trials, and a trial that is later discarded must not
+  become the partner of the one after it
 - **Triggered Average's monitor no longer double-counts** (#21). `CaptureWorker`
   bumps `trialsCaptured` for every window it extracts and `pendingCommitted` for
   every commit that finds one parked, for all three plugins; `TriggeredAvgNode`
@@ -110,8 +119,6 @@ Tracked as issues rather than listed exhaustively here:
 - Spike-triggered averaging (#9), which would need per-stream analysis (#10)
 - The display layer has no automated coverage; every UI fix above was found by
   manual testing (#12)
-- Commit patterns are ignored by TriggeredCoherence, so one trigger source
-  behaves differently in the two spectral plugins (#8)
 
 ## [0.2.1] - 2026-08-04
 

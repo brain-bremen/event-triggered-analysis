@@ -258,8 +258,11 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
     // The held trial belongs to the shape that is being torn down. Keeping it
     // would pair the first trial of the new configuration against a stale one;
     // the shape check in addTrial would reject that, but silently, so drop it
-    // here where the reason is visible.
+    // here where the reason is visible. A parked capture goes for the same
+    // reason: committing it after a reconfiguration would fold a trial of the old
+    // shape into accumulators of the new one.
     m_previousTrial.clear();
+    m_pendingCaptures.clear();
 
     const auto& geometry = getTrialGeometry();
     const auto& channels = getSelectedChannels();
@@ -343,7 +346,9 @@ void TriggeredCoherenceNode::clearAllData()
 
         // Otherwise the first trial after a clear would be paired against one
         // from before it, which is exactly the data the user asked to discard.
+        // The same argument covers a capture still waiting for its commit.
         m_previousTrial.clear();
+        m_pendingCaptures.clear();
     }
 
     triggerAsyncUpdate();
@@ -372,6 +377,29 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 
     const juce::ScopedLock lock (m_dataLock);
 
+    // A source with a commit pattern does not accumulate on the TTL edge: the
+    // trial is parked until the experimenter says whether to keep it. Parking the
+    // transformed coefficients rather than the raw window means a commit costs an
+    // accumulate and nothing more.
+    if (requiresCommit (request.triggerSource))
+    {
+        m_pendingCaptures.store (request.triggerSource,
+                                 m_coefficients,
+                                 request.triggerSource->pendingTimeoutMs,
+                                 juce::Time::currentTimeMillis());
+
+        // Nothing has reached the accumulators, so no repaint is due — and the
+        // shift predictor is deliberately not handed this trial either. Its null
+        // pairs consecutive *kept* trials; a trial that is later discarded must
+        // not become the partner of the one after it.
+        return false;
+    }
+
+    return accumulateTrial (request.triggerSource, m_coefficients);
+}
+
+bool TriggeredCoherenceNode::accumulateTrial (TriggerSource* source, TfCoefficients& coefficients)
+{
     const bool shiftPredictor = isShiftPredictorEnabled();
 
     // The trial before this one, from this same source. Absent for the first
@@ -380,7 +408,7 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
 
     if (shiftPredictor)
     {
-        const auto held = m_previousTrial.find (request.triggerSource);
+        const auto held = m_previousTrial.find (source);
 
         if (held != m_previousTrial.end() && ! held->second.empty())
             previous = &held->second;
@@ -397,34 +425,63 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
         if (! pair.isResolved())
             continue;
 
-        const auto accumulator = m_accumulators.find ({ request.triggerSource, pairIndex });
+        const auto accumulator = m_accumulators.find ({ source, pairIndex });
 
         if (accumulator == m_accumulators.end())
             continue;
 
-        if (accumulator->second.observed.addTrial (m_coefficients, pair.selectedA, pair.selectedB))
+        if (accumulator->second.observed.addTrial (coefficients, pair.selectedA, pair.selectedB))
             anyAdded = true;
 
-        accumulator->second.ppc.addTrial (m_coefficients, pair.selectedA, pair.selectedB);
+        accumulator->second.ppc.addTrial (coefficients, pair.selectedA, pair.selectedB);
 
         // Channel A from this trial against channel B from the last one. The
         // shift is one-directional on purpose: swapping which side is delayed
         // would estimate the same null twice over rather than differently.
         if (previous != nullptr)
             accumulator->second.shifted.addTrial (
-                m_coefficients, pair.selectedA, *previous, pair.selectedB);
+                coefficients, pair.selectedA, *previous, pair.selectedB);
     }
 
     if (shiftPredictor)
     {
         // Hand this trial to the next one. Swapping rather than copying is free
-        // and safe: every transform begins with TfCoefficients::setSize(), which
-        // reassigns the whole block, so whatever m_coefficients is left holding
-        // is overwritten before it is read again.
-        std::swap (m_previousTrial[request.triggerSource], m_coefficients);
+        // and safe: on the direct path `coefficients` is m_coefficients, and every
+        // transform begins with TfCoefficients::setSize(), which reassigns the
+        // whole block; on the commit path it is a parked capture already taken out
+        // of the store and about to go out of scope.
+        std::swap (m_previousTrial[source], coefficients);
     }
 
     return anyAdded;
+}
+
+bool TriggeredCoherenceNode::commitCapture (TriggerSource* source)
+{
+    const juce::ScopedLock lock (m_dataLock);
+
+    auto pending = m_pendingCaptures.take (source);
+
+    if (! pending.has_value())
+        return false;
+
+    // A capture parked before a reconfiguration is cleared with the accumulators,
+    // so anything still here has the current shape.
+    return accumulateTrial (source, *pending);
+}
+
+void TriggeredCoherenceNode::discardCapture (TriggerSource* source)
+{
+    const juce::ScopedLock lock (m_dataLock);
+    m_pendingCaptures.discard (source);
+}
+
+void TriggeredCoherenceNode::discardExpiredCaptures (std::int64_t nowMs)
+{
+    // nowMs is stamped where the message arrived, not here: the worker may be a
+    // few trials behind, and a timeout should be measured from the message.
+    const juce::ScopedLock lock (m_dataLock);
+    m_pendingCaptures.discardExpired (nowMs);
 }
 
 // --- Display access --------------------------------------------------------

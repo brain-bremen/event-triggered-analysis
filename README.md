@@ -13,12 +13,8 @@ Three plugins are built from this repository:
 | **Triggered Average** | | Time-domain average and standard deviation, with individual trials |
 
 > **Triggered Coherence is work in progress and should not be relied on for results yet.**
-> It builds, loads and computes, but three things are known to be wrong or missing:
+> It builds, loads and computes, but two things are known to be wrong or missing:
 >
-> - **Commit patterns are ignored** ([#8](https://github.com/brain-bremen/event-triggered-analysis/issues/8)).
->   Trigger sources are shared configuration, so a source with a commit pattern parks its trials
->   in Triggered Power and accumulates them immediately here — the arm/cancel/commit workflow
->   silently does not apply, and nothing in the UI says so.
 > - **No pre-trigger baseline** ([#16](https://github.com/brain-bremen/event-triggered-analysis/issues/16)),
 >   so it cannot show change-from-baseline. Unlike whitening, this is meaningful for coherence.
 > - **Pair edits are not undoable** ([#14](https://github.com/brain-bremen/event-triggered-analysis/issues/14)),
