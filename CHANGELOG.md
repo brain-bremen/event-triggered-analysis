@@ -92,14 +92,14 @@ changed; see *Removed* and *Changed*.
 
 ### Known gaps
 
-- `MSG_TRIGGER` — triggering on a broadcast message with no TTL line — remains
-  unimplemented and is not offered in the UI. Messages arrive over HTTP with
-  unreliable timing, so such a trigger cannot carry a trustworthy trigger sample.
-  The extension point is kept for anyone who does not need alignment precision
-- Spike-triggered averaging is not implemented. See `PLAN-unified-core.md`
+Tracked as issues rather than listed exhaustively here:
+
+- Message-only triggering is declared but never fires (#11)
+- Spike-triggered averaging (#9), which would need per-stream analysis (#10)
 - The display layer has no automated coverage; every UI fix above was found by
-  manual testing
-- A single data stream is analysed per node
+  manual testing (#12)
+- Commit patterns are ignored by TriggeredCoherence, so one trigger source
+  behaves differently in the two spectral plugins (#8)
 
 ## [0.2.1] - 2026-08-04
 

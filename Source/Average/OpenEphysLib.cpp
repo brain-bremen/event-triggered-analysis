@@ -24,6 +24,7 @@
 
 #include "TriggeredAvgNode.h"
 #include <PluginInfo.h>
+#include <PluginVersion.h>
 
 #ifdef WIN32
 #include <Windows.h>
@@ -43,7 +44,12 @@ extern "C" EXPORT void getLibInfo (Plugin::LibraryInfo* info)
 	The GUI refueses to load plugins with mismatched API versions */
     info->apiVersion = PLUGIN_API_VER;
     info->name = "Triggered Avg";
-    info->libVersion = "0.1.0";
+
+    // Generated from PLUGIN_VERSION in the top-level CMakeLists, like the other
+    // two plugins. Hardcoding it meant the GUI reported 0.1.0 for a plugin that
+    // had shipped 0.2.1, and would have reported it for 0.3.0 too — the one
+    // place where "all three plugins share a version" was not actually true.
+    info->libVersion = PLUGIN_VERSION_STRING;
     info->numPlugins = NUM_PLUGINS;
 }
 
