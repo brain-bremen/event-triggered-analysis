@@ -104,6 +104,12 @@ changed; see *Removed* and *Changed*.
   counted both again on top, so CAPTURED and COMMITTED read twice the real numbers
   there while Triggered Power and Triggered Coherence read correctly. The
   accumulated average itself was never affected
+- **CI builds again after the repository rename.** The cached Open Ephys GUI build
+  tree carries the absolute path it was configured at, and the workspace path
+  contains the repository name, so every job restored a tree configured under
+  `.../TriggeredSpectra/` and failed at *Configure Open Ephys GUI*. The cache key
+  and its restore-key are now scoped to `github.repository`, and a guard step
+  discards a restored tree whose `CMakeCache.txt` points somewhere else
 
 ### Known gaps
 
