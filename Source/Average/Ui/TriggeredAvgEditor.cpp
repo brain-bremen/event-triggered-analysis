@@ -23,7 +23,7 @@
 */
 
 #include "TriggeredAvgEditor.h"
-#include "../DataCollector.h"
+#include "AvgAnalysisSettingsWindow.h"
 #include "TriggerCore/ParameterNames.h"
 #include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
@@ -33,12 +33,12 @@
 using namespace EventTriggered;
 
 TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG AVG", 210),
+    : VisualizerEditor (parentNode, "TRIG AVG", EditorLayout::totalWidth),
       canvas (nullptr)
 {
     // TRIGGERS opens the shared configuration table; MONITOR the shared live
-    // counters. Side by side, because they are the two halves of setting a
-    // trigger up and finding out why it did not fire.
+    // counters; ANALYSIS the one parameter (Max Trials) that changes what is
+    // computed. Same top row, same order, as the two spectral siblings.
     configureButton = std::make_unique<UtilityButton> ("TRIGGERS");
     configureButton->setFont (FontOptions (14.0f));
     configureButton->addListener (this);
@@ -48,6 +48,11 @@ TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     monitorButton->setFont (FontOptions (14.0f));
     monitorButton->addListener (this);
     addAndMakeVisible (monitorButton.get());
+
+    analysisButton = std::make_unique<UtilityButton> ("ANALYSIS");
+    analysisButton->setFont (FontOptions (14.0f));
+    analysisButton->addListener (this);
+    addAndMakeVisible (analysisButton.get());
 
     // Channel selection. Registered by TriggeredCaptureNode but, until this was
     // added, given no control anywhere — so the plugin came up with nothing
@@ -61,25 +66,32 @@ TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
-    for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-        if (auto* parameterEditor = getParameterEditor (name))
-            parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
+    preLabel = EditorLayout::makeCaptionLabel ("Pre");
+    addAndMakeVisible (preLabel.get());
+    postLabel = EditorLayout::makeCaptionLabel ("Post");
+    addAndMakeVisible (postLabel.get());
 
-    addBoundedValueParameterEditor (
-        Parameter::PROCESSOR_SCOPE, ParameterNames::max_trials, 15, 137);
+    // Layout is applied by EditorLayout::layoutCommonContents, shared by all
+    // three plugins.
 
-    if (auto* trialsEd = getParameterEditor (ParameterNames::max_trials))
-        trialsEd->setLayout (ParameterEditor::Layout::nameOnLeft);
+    // Max Trials has no inline editor: it lives behind ANALYSIS, read directly
+    // from the parameter by AvgAnalysisSettingsWindow.
 }
 
 void TriggeredAvgEditor::resized()
 {
     VisualizerEditor::resized();
 
-    const int y = EditorLayout::layoutCommonContents (
-        *this, { configureButton.get(), monitorButton.get() }, EditorLayout::buttonHeight);
+    EditorLayout::layoutCommonContents (
+        *this,
+        { configureButton.get(), monitorButton.get(), analysisButton.get() },
+        preLabel.get(),
+        postLabel.get());
+}
 
-    EditorLayout::layoutLastRow (*this, getParameterEditor (ParameterNames::max_trials), y);
+void TriggeredAvgEditor::setTriggerCount (int count)
+{
+    configureButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
 }
 
 Visualizer* TriggeredAvgEditor::createNewCanvas()
@@ -145,6 +157,17 @@ void TriggeredAvgEditor::buttonClicked (Button* button)
 
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<TriggerMonitorWindow> (proc, button), button);
+
+        return;
+    }
+
+    if (button == analysisButton.get())
+    {
+        auto* proc = static_cast<TriggeredAvgNode*> (getProcessor());
+
+        CoreServices::getPopupManager()->showPopup (
+            std::make_unique<AvgAnalysisSettingsWindow> (proc, acquisitionIsActive, button),
+            button);
 
         return;
     }

@@ -25,7 +25,7 @@
 #include "../TriggeredCoherenceNode.h"
 #include "Spectral/SpectralParameterNames.h"
 #include "Spectral/Ui/AnalysisSettingsWindow.h"
-#include "Spectral/Ui/EditorLayout.h"
+#include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "PairConfigWindow.h"
@@ -35,9 +35,7 @@ namespace EventTriggered
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
-    // Wider than TriggeredPower's 250: there is a fourth button, and four
-    // buttons in 220 px of content are too narrow to read.
-    : VisualizerEditor (parentNode, "TRIG COHER", 310)
+    : VisualizerEditor (parentNode, "TRIG COHER", EditorLayout::totalWidth)
 {
     // See TriggeredPowerEditor: the editor carries collection and computation,
     // the canvas carries display.
@@ -53,7 +51,7 @@ TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode
     m_monitorButton->addListener (this);
     addAndMakeVisible (m_monitorButton.get());
 
-    m_pairsButton = std::make_unique<UtilityButton> ("PAIRS");
+    m_pairsButton = std::make_unique<UtilityButton> ("CH PAIRS");
     m_pairsButton->addListener (this);
     addAndMakeVisible (m_pairsButton.get());
 
@@ -64,21 +62,39 @@ TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
-    for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-        if (auto* parameterEditor = getParameterEditor (name))
-            parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
+    m_preLabel = EditorLayout::makeCaptionLabel ("Pre");
+    addAndMakeVisible (m_preLabel.get());
+    m_postLabel = EditorLayout::makeCaptionLabel ("Post");
+    addAndMakeVisible (m_postLabel.get());
 
-    addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+    // Layout is applied by EditorLayout::layoutCommonContents, shared by all
+    // three plugins.
+
+    // Mode has no inline editor: it lives behind ANALYSIS, as the first
+    // section — everything else there is greyed or not depending on it.
 }
 
 void TriggeredCoherenceEditor::resized()
 {
     VisualizerEditor::resized();
-    layoutEditorContents (*this,
-                          m_configureButton.get(),
-                          m_analysisButton.get(),
-                          m_monitorButton.get(),
-                          m_pairsButton.get());
+
+    EditorLayout::layoutCommonContents (*this,
+                                        { m_configureButton.get(),
+                                          m_monitorButton.get(),
+                                          m_analysisButton.get() },
+                                        m_preLabel.get(),
+                                        m_postLabel.get(),
+                                        m_pairsButton.get());
+}
+
+void TriggeredCoherenceEditor::setTriggerCount (int count)
+{
+    m_configureButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
+}
+
+void TriggeredCoherenceEditor::setPairCount (int count)
+{
+    m_pairsButton->setLabel (count > 0 ? "CH PAIRS (" + String (count) + ")" : "CH PAIRS");
 }
 
 void TriggeredCoherenceEditor::buttonClicked (juce::Button* button)

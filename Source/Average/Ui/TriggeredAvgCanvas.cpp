@@ -41,12 +41,6 @@ OptionsBar::OptionsBar (TriggeredAvgCanvas* canvas_, GridDisplay* display_, Time
     clearButton->setClickingTogglesState (false);
     addAndMakeVisible (clearButton.get());
 
-    saveButton = std::make_unique<UtilityButton> ("SAVE");
-    saveButton->setFont (FontOptions (12.0f));
-    saveButton->addListener (this);
-    saveButton->setClickingTogglesState (false);
-    addAndMakeVisible (saveButton.get());
-
     // Row height controls
     rowHeightLabel = std::make_unique<Label> ("Row Height Label", "Row Height");
     rowHeightLabel->setFont (FontOptions (20.0f));
@@ -296,29 +290,6 @@ void OptionsBar::buttonClicked (Button* button)
     //    }
     //    updateTrialDisplaySettings();
     //}
-    //else if (button == saveButton.get())
-    //{
-    //    DynamicObject output = display->getInfo();
-
-    // TODO: implement this
-    //    FileChooser chooser ("Save triggered avg to file...", File(), "*.json");
-
-    //    if (chooser.browseForFileToSave (true))
-    //    {
-    //        File file = chooser.getResult();
-
-    //        if (file.exists())
-    //            file.deleteFile();
-
-    //        FileOutputStream f (file);
-
-    //        output.writeAsJSON (f,
-    //                            JSON::FormatOptions {}
-    //                                .withIndentLevel (5)
-    //                                .withSpacing (JSON::Spacing::multiLine)
-    //                                .withMaxDecimalPlaces (4));
-    //    }
-    //}
 }
 
 void OptionsBar::comboBoxChanged (ComboBox* comboBox)
@@ -413,8 +384,6 @@ void OptionsBar::resized()
     mainLayout.items.add (FlexItem().withFlex (1).withHeight (controlHeight));
 
     // Right section: Action buttons
-    addControl (*saveButton, 70);
-    addSpacer (spacing);
     addControl (*clearButton, 70);
 
     // Perform layout

@@ -55,7 +55,6 @@ private:
     TimeAxis* timescale;
 
     std::unique_ptr<UtilityButton> clearButton;
-    std::unique_ptr<UtilityButton> saveButton;
 
     std::unique_ptr<Label> plotTypeLabel;
     std::unique_ptr<ComboBox> plotTypeSelector;

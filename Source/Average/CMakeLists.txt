@@ -24,4 +24,6 @@ oe_add_plugin(TriggeredAverage trigger_core
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgCanvas.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgEditor.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AvgAnalysisSettingsWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AvgAnalysisSettingsWindow.h
 )

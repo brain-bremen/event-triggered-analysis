@@ -91,7 +91,6 @@ set(SPECTRA_CORE_HEADERS
     Ui/PanelGrid.h
     Ui/AnalysisSettingsWindow.h
     Ui/ParameterLayout.h
-    Ui/EditorLayout.h
 )
 
 add_library(spectra_core STATIC ${SPECTRA_CORE_SOURCES} ${SPECTRA_CORE_HEADERS})

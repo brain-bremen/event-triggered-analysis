@@ -23,6 +23,8 @@
 */
 
 #pragma once
+#include "TriggerCore/Ui/TriggerCountDisplay.h"
+
 #include <EditorHeaders.h>
 #include <VisualizerEditorHeaders.h>
 class Visualizer;
@@ -37,7 +39,9 @@ enum class TriggerType : std::int_fast8_t;
 class TriggerSourceConfigWindow;
 class TriggerMonitorWindow;
 
-class TriggeredAvgEditor : public VisualizerEditor, public Button::Listener
+class TriggeredAvgEditor : public VisualizerEditor,
+                           public Button::Listener,
+                           public TriggerCountDisplay
 {
 public:
     TriggeredAvgEditor (GenericProcessor* parentNode);
@@ -51,6 +55,9 @@ public:
 
     /** Lays the inline controls out from the editor's measured height. */
     void resized() override;
+
+    /** Shows the trigger count as a badge on the TRIGGERS button. */
+    void setTriggerCount (int count) override;
 
     /** Called when source colours are updated */
     void updateColours (TriggerSource*);
@@ -68,6 +75,15 @@ private:
         broadcast message, and the console-log toggle. This plugin had no
         equivalent before the merge. */
     std::unique_ptr<UtilityButton> monitorButton;
+
+    /** Opens Max Trials, the one parameter that changes what is computed. Kept
+        off the editor itself so TriggeredAverage's top row matches its two
+        spectral siblings: TRIGGERS / MONITOR / ANALYSIS. */
+    std::unique_ptr<UtilityButton> analysisButton;
+
+    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<Label> preLabel;
+    std::unique_ptr<Label> postLabel;
 
     TriggeredAvgCanvas* canvas;
 

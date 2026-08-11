@@ -22,6 +22,8 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/TriggerCountDisplay.h"
+
 #include <EditorHeaders.h>
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
@@ -32,7 +34,9 @@ namespace EventTriggered
 class TriggeredCoherenceNode;
 class TriggeredCoherenceCanvas;
 
-class TriggeredCoherenceEditor : public VisualizerEditor, public juce::Button::Listener
+class TriggeredCoherenceEditor : public VisualizerEditor,
+                                 public juce::Button::Listener,
+                                 public TriggerCountDisplay
 {
 public:
     explicit TriggeredCoherenceEditor (GenericProcessor* parentNode);
@@ -42,9 +46,16 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
-    /** Lays the inline controls out from the editor's measured height. Fixed
-        coordinates put the mode selector below the visible area. */
+    /** Lays the inline controls out from the editor's measured height. */
     void resized() override;
+
+    /** Shows the trigger count as a badge on the TRIGGERS button. */
+    void setTriggerCount (int count) override;
+
+    /** Shows the pair count as a badge on the CH PAIRS button. Called directly
+        from TriggeredCoherenceNode::pairsChanged() — pairs are specific to this
+        plugin, so unlike the trigger count there is no shared interface for it. */
+    void setPairCount (int count);
 
 private:
     /** Opens the trigger-source table. Without at least one source nothing is
@@ -63,6 +74,10 @@ private:
         empty list this plugin transforms every trial and then has nowhere to put
         the result. */
     std::unique_ptr<UtilityButton> m_pairsButton;
+
+    /** Captions for the Pre/Post value boxes; see EditorLayout::makeCaptionLabel. */
+    std::unique_ptr<juce::Label> m_preLabel;
+    std::unique_ptr<juce::Label> m_postLabel;
 
     TriggeredCoherenceCanvas* m_canvas = nullptr;
 

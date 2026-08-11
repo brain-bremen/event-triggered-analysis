@@ -25,7 +25,7 @@
 #include "../TriggeredPowerNode.h"
 #include "Spectral/SpectralParameterNames.h"
 #include "Spectral/Ui/AnalysisSettingsWindow.h"
-#include "Spectral/Ui/EditorLayout.h"
+#include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "TriggeredPowerCanvas.h"
@@ -34,7 +34,7 @@ namespace EventTriggered
 {
 
 TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG POWER", 250)
+    : VisualizerEditor (parentNode, "TRIG POWER", EditorLayout::totalWidth)
 {
     // The editor carries what governs collection and computation; everything that
     // only changes how the result is drawn lives on the canvas. Sixteen analysis
@@ -59,18 +59,32 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
 
-    for (const auto* name : { ParameterNames::pre_ms, ParameterNames::post_ms })
-        if (auto* parameterEditor = getParameterEditor (name))
-            parameterEditor->setLayout (ParameterEditor::Layout::nameOnTop);
+    m_preLabel = EditorLayout::makeCaptionLabel ("Pre");
+    addAndMakeVisible (m_preLabel.get());
+    m_postLabel = EditorLayout::makeCaptionLabel ("Post");
+    addAndMakeVisible (m_postLabel.get());
 
-    addComboBoxParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::mode, 15, 137);
+    // Layout is applied by EditorLayout::layoutCommonContents, shared by all
+    // three plugins.
+
+    // Mode has no inline editor: it lives behind ANALYSIS, as the first
+    // section — everything else there is greyed or not depending on it.
 }
 
 void TriggeredPowerEditor::resized()
 {
     VisualizerEditor::resized();
-    layoutEditorContents (
-        *this, m_configureButton.get(), m_analysisButton.get(), m_monitorButton.get());
+
+    EditorLayout::layoutCommonContents (
+        *this,
+        { m_configureButton.get(), m_monitorButton.get(), m_analysisButton.get() },
+        m_preLabel.get(),
+        m_postLabel.get());
+}
+
+void TriggeredPowerEditor::setTriggerCount (int count)
+{
+    m_configureButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
 }
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)
