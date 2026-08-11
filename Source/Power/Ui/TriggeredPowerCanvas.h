@@ -22,15 +22,15 @@
 */
 #pragma once
 
-#include "Core/TriggerSource.h"
-#include "Core/Types.h"
-#include "Core/Ui/PanelGrid.h"
-#include "Core/Ui/ParameterControl.h"
+#include "TriggerCore/TriggerSource.h"
+#include "Spectral/SpectralTypes.h"
+#include "Spectral/Ui/PanelGrid.h"
+#include "TriggerCore/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
 #include <VisualizerWindowHeaders.h>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredPowerNode;
@@ -171,4 +171,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerCanvas)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

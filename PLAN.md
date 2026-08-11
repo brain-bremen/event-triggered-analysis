@@ -2,6 +2,11 @@
 
 Status legend: **[done]** landed and verified · **[todo]** not started
 
+> Scope note: this document covers the two spectral plugins and their estimators.
+> The structural work of splitting the shared trigger layer out of `spectra_core`
+> and bringing the `TriggeredAvg` plugin into this repository on top of it lives in
+> [`PLAN-unified-core.md`](PLAN-unified-core.md).
+
 Phases 1–4 are complete. Phase 5 is outstanding. Places where implementation
 diverged from this plan are marked **[changed]**; each says why.
 
@@ -62,7 +67,7 @@ extra degrees of freedom.
 ## Repository layout **[done]**
 
 ```
-triggered-spectra/
+event-triggered-analysis/
   CMakeLists.txt                  top level: core lib + 2 plugin targets + tests
   libs/{windows,linux,macos}/     FFTW3, copied verbatim from OpenEphysFFTW
   Source/
@@ -994,8 +999,8 @@ whitening, pre-trigger baseline, trigger-messaging, queueing and worker paths ar
 covered; the rendering path is not.
 
 ```sh
-cmake --build Build --config Release --target TriggeredSpectra_tests
-ctest --test-dir Build -R "TriggeredSpectra_tests" -C Release
+cmake --build Build --config Release --target trigger_core_tests spectra_tests
+ctest --test-dir Build -C Release
 ```
 
 ### End-to-end in the GUI **[todo]**

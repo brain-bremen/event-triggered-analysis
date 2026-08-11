@@ -26,7 +26,7 @@
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredCoherenceNode;
@@ -69,4 +69,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceEditor)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

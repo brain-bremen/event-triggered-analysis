@@ -22,13 +22,14 @@
 */
 #include "TriggeredPowerNode.h"
 
+#include "Spectral/SpectralParameterNames.h"
 #include "Ui/TriggeredPowerCanvas.h"
 #include "Ui/TriggeredPowerEditor.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredPowerNode::TriggeredPowerNode() : TriggeredSpectraNode ("Triggered Power") {}
@@ -41,7 +42,7 @@ AudioProcessorEditor* TriggeredPowerNode::createEditor()
     return editor.get();
 }
 
-void TriggeredPowerNode::registerAdditionalParameters()
+void TriggeredPowerNode::registerPluginParameters()
 {
     addIntParameter (Parameter::PROCESSOR_SCOPE,
                      ParameterNames::max_trials,
@@ -316,7 +317,8 @@ void TriggeredPowerNode::analysisConfigurationChanged()
     for (auto* source : m_triggerSources.getAll())
     {
         auto& accumulator = m_accumulators[source];
-        accumulator.setSize (channels.size(), m_engine.numFrequencies(), m_engine.numAccumulatorBins());
+        accumulator.setSize (
+            channels.size(), m_engine.numFrequencies(), m_engine.numAccumulatorBins());
 
         if (m_engine.hasSeparateBaseline())
             m_baselineAccumulators[source].setSize (
@@ -414,11 +416,10 @@ bool TriggeredPowerNode::processCapturedTrial (const CaptureRequest& request,
         return false;
     }
 
-    return accumulateTrial (request.triggerSource,
-                            m_coefficients,
-                            (wantBaseline && ! m_baselineCoefficients.empty())
-                                ? &m_baselineCoefficients
-                                : nullptr);
+    return accumulateTrial (
+        request.triggerSource,
+        m_coefficients,
+        (wantBaseline && ! m_baselineCoefficients.empty()) ? &m_baselineCoefficients : nullptr);
 }
 
 bool TriggeredPowerNode::accumulateTrial (TriggerSource* source,
@@ -436,7 +437,8 @@ bool TriggeredPowerNode::accumulateTrial (TriggerSource* source,
     // Same trial, pre-trigger window. Transformed separately because a line
     // spectrum has no time axis to take a baseline from.
     if (baseline != nullptr)
-        if (const auto it = m_baselineAccumulators.find (source); it != m_baselineAccumulators.end())
+        if (const auto it = m_baselineAccumulators.find (source);
+            it != m_baselineAccumulators.end())
             it->second.addTrial (*baseline);
 
     // In Spectrum mode also keep the trial itself, so the display can overlay
@@ -618,7 +620,8 @@ bool TriggeredPowerNode::getPowerForDisplay (TriggerSource* source,
                 ? baselineStandardDeviation (baseline->second, channelIndex, frequencyIndex)
                 : 0.0;
 
-        applyBaselineValue (destination.subspan (0, mean.size()), baselineMean[0], baselineSd, mode);
+        applyBaselineValue (
+            destination.subspan (0, mean.size()), baselineMean[0], baselineSd, mode);
         return true;
     }
 
@@ -651,7 +654,8 @@ bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
         if (mean.size() != static_cast<std::size_t> (numBins))
             return false;
 
-        std::copy (mean.begin(), mean.end(), grid.begin() + static_cast<std::ptrdiff_t> (f) * numBins);
+        std::copy (
+            mean.begin(), mean.end(), grid.begin() + static_cast<std::ptrdiff_t> (f) * numBins);
     }
 
     const auto baselineMode = getBaselineMode();
@@ -666,7 +670,10 @@ bool TriggeredPowerNode::getPowerGridForDisplay (TriggerSource* source,
         // originally assumed.
         for (int f = 0; f < numFrequencies; ++f)
             applyBaselineToFrequency (
-                source, channelIndex, f, grid.subspan (static_cast<std::size_t> (f) * numBins, numBins));
+                source,
+                channelIndex,
+                f,
+                grid.subspan (static_cast<std::size_t> (f) * numBins, numBins));
 
         return true;
     }
@@ -772,4 +779,4 @@ void TriggeredPowerNode::refreshDisplay()
         m_canvas->refresh();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.23.0)
 
 # ---------------------------------------------------------------------------
-# Triggered Spectra: two Open Ephys plugins (TriggeredPower, TriggeredCoherence)
-# sharing one statically-linked numerical core (spectra_core).
+# Event-Triggered Analysis: three Open Ephys plugins (TriggeredPower,
+# TriggeredCoherence, TriggeredAverage) over two statically-linked cores.
+#
+#   trigger_core   ring buffer, trigger sources, work queue, capture worker,
+#                  broadcast-message path, trigger config + monitor windows.
+#                  No FFTW, no DSP.
+#   spectra_core   FFTW, DPSS, Morlet, accumulators, spectral display widgets.
+#                  Layered on trigger_core; used by the two spectral plugins.
 # ---------------------------------------------------------------------------
 
-set(PROJECT_SHORT_NAME TriggeredSpectra)
+set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
 
 set(PLUGIN_VERSION_MAJOR 0)
 set(PLUGIN_VERSION_MINOR 1)
@@ -68,43 +74,10 @@ if (NOT CMAKE_LIBRARY_ARCHITECTURE)
   endif()
 endif()
 
-# --- Vendored FFTW3 --------------------------------------------------------
-# Binaries copied from the OpenEphysFFTW common library. Double precision only;
-# there is no fftwf in this distribution.
-if(MSVC)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/windows)
-elseif(LINUX)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux)
-elseif(APPLE)
-  list(APPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libs/macos)
-endif()
-
-find_library(FFTW_LIBRARY NAMES libfftw3-3 fftw3 fftw3-3)
-find_path(FFTW_INCLUDE_DIRS fftw3.h)
-
-if (NOT FFTW_LIBRARY)
-  message(FATAL_ERROR "FFTW library not found (looked under ${CMAKE_CURRENT_SOURCE_DIR}/libs)")
-endif()
-if (NOT FFTW_INCLUDE_DIRS)
-  message(FATAL_ERROR "fftw3.h not found (looked under ${CMAKE_CURRENT_SOURCE_DIR}/libs)")
-endif()
-message(STATUS "FFTW library: ${FFTW_LIBRARY}")
-message(STATUS "FFTW headers: ${FFTW_INCLUDE_DIRS}")
-
-# Ship the FFTW runtime alongside the GUI. Both plugins load the *same*
-# libfftw3-3.dll, which is why Fftw.cpp guards the planner with a
-# process-wide lock (this build does not export fftw_make_planner_thread_safe).
-if (MSVC)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/windows/bin/${CMAKE_LIBRARY_ARCHITECTURE}/
-          DESTINATION ${GUI_BIN_DIR}/shared
-          CONFIGURATIONS ${CMAKE_CONFIGURATION_TYPES})
-elseif(LINUX)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux/bin/
-          DESTINATION ${GUI_BIN_DIR}/shared)
-elseif(APPLE)
-  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libs/macos/bin/
-          DESTINATION $ENV{HOME}/Library/Application\ Support/open-ephys/shared-api${OE_GUI_API_VERSION})
-endif()
+# FFTW is discovered and shipped by Source/Spectral, the only place that needs
+# it. Deliberately not here: a plugin that links trigger_core alone must be
+# buildable on a checkout with no FFTW at all, and a top-level find_library()
+# with a FATAL_ERROR would make that impossible.
 
 # --- Generated version header ---------------------------------------------
 configure_file(
@@ -120,7 +93,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Settings shared by every target in this repo (core, plugins, tests).
 # ---------------------------------------------------------------------------
-function(spectra_apply_common_settings target)
+function(oe_apply_common_settings target)
   target_compile_features(${target} PUBLIC cxx_std_23)
 
   target_compile_definitions(${target} PUBLIC
@@ -153,8 +126,12 @@ endfunction()
 
 # ---------------------------------------------------------------------------
 # Turn a source list into an installable Open Ephys plugin.
+#
+# PLUGIN_CORE is the static core to link: spectra_core for the frequency-domain
+# plugins, trigger_core for one that only needs trial windows. Passing it rather
+# than hardcoding it is what keeps FFTW out of the averaging plugin.
 # ---------------------------------------------------------------------------
-function(spectra_add_plugin PLUGIN_NAME)
+function(oe_add_plugin PLUGIN_NAME PLUGIN_CORE)
   set(PLUGIN_SOURCES ${ARGN})
 
   if(WIN32)
@@ -173,12 +150,20 @@ function(spectra_add_plugin PLUGIN_NAME)
     add_library(${PLUGIN_NAME} SHARED ${PLUGIN_SOURCES})
   endif()
 
-  spectra_apply_common_settings(${PLUGIN_NAME})
-  target_link_libraries(${PLUGIN_NAME} PRIVATE spectra_core)
+  oe_apply_common_settings(${PLUGIN_NAME})
+  target_link_libraries(${PLUGIN_NAME} PRIVATE ${PLUGIN_CORE})
 
   set_target_properties(${PLUGIN_NAME} PROPERTIES
     VERSION ${PLUGIN_VERSION}
     SOVERSION ${PLUGIN_VERSION_MAJOR})
+
+  # Collect every plugin at the top of the build tree rather than under
+  # Build/Source/<Plugin>/. A multi-config generator appends the configuration
+  # itself, so this yields Build/Release/X.dll on Windows and Build/X.so on
+  # Linux — which is what the CI artifact paths expect.
+  set_target_properties(${PLUGIN_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
   if(MSVC)
     target_link_libraries(${PLUGIN_NAME} PRIVATE ${GUI_BIN_DIR}/open-ephys.lib)
@@ -207,9 +192,11 @@ function(spectra_add_plugin PLUGIN_NAME)
 endfunction()
 
 # ---------------------------------------------------------------------------
-add_subdirectory(Source/Core)
+add_subdirectory(Source/TriggerCore)
+add_subdirectory(Source/Spectral)
 add_subdirectory(Source/Power)
 add_subdirectory(Source/Coherence)
+add_subdirectory(Source/Average)
 
 # --- clang-format ----------------------------------------------------------
 if(CLANG_FORMAT_EXE)
@@ -228,7 +215,7 @@ endif()
 
 # --- Tests -----------------------------------------------------------------
 # Pulls the GUI in as a subproject to get gui_testable_source + test_helpers.
-# Run only this repo's tests with:  ctest -R "TriggeredSpectra_tests" -C Release
+# Run this repo's tests with:  ctest -C Release
 if(BUILD_TESTS)
   enable_testing()
   set(BUILD_TESTS ON CACHE BOOL "Enable testing" FORCE)

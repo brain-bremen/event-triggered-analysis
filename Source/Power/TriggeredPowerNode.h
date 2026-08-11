@@ -22,21 +22,21 @@
 */
 #pragma once
 
-#include "Core/Accumulators.h"
-#include "Core/Baseline.h"
-#include "Core/SpectralEngine.h"
-#include "Core/TrialSpectrumBuffer.h"
-#include "Core/Whitening.h"
-#include "Core/TriggerMessaging.h"
-#include "Core/TriggeredSpectraNode.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/Baseline.h"
+#include "Spectral/SpectralEngine.h"
+#include "Spectral/TrialSpectrumBuffer.h"
+#include "TriggerCore/TriggerMessaging.h"
+#include "Spectral/TriggeredSpectraNode.h"
+#include "Spectral/Whitening.h"
 
 #include <JuceHeader.h>
 #include <cstdint>
-#include <memory>
 #include <map>
+#include <memory>
 #include <unordered_map>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredPowerCanvas;
@@ -123,7 +123,7 @@ public:
     const TrialSpectrumBuffer* getTrialBuffer (TriggerSource* source) const;
 
 protected:
-    void registerAdditionalParameters() override;
+    void registerPluginParameters() override;
     void analysisConfigurationChanged() override;
     bool isAnalysisParameter (const juce::String& parameterName) const override;
 
@@ -213,4 +213,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredPowerNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

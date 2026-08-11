@@ -23,13 +23,14 @@
 #include "TriggeredPowerEditor.h"
 
 #include "../TriggeredPowerNode.h"
+#include "Spectral/SpectralParameterNames.h"
+#include "Spectral/Ui/AnalysisSettingsWindow.h"
+#include "Spectral/Ui/EditorLayout.h"
+#include "TriggerCore/Ui/TriggerMonitorWindow.h"
+#include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "TriggeredPowerCanvas.h"
-#include "Core/Ui/AnalysisSettingsWindow.h"
-#include "Core/Ui/EditorLayout.h"
-#include "Core/Ui/TriggerMonitorWindow.h"
-#include "Core/Ui/TriggerSourceConfigWindow.h"
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
@@ -68,10 +69,8 @@ TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
 void TriggeredPowerEditor::resized()
 {
     VisualizerEditor::resized();
-    layoutEditorContents (*this,
-                          m_configureButton.get(),
-                          m_analysisButton.get(),
-                          m_monitorButton.get());
+    layoutEditorContents (
+        *this, m_configureButton.get(), m_analysisButton.get(), m_monitorButton.get());
 }
 
 void TriggeredPowerEditor::buttonClicked (juce::Button* button)
@@ -106,4 +105,4 @@ Visualizer* TriggeredPowerEditor::createNewCanvas()
     return m_canvas;
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

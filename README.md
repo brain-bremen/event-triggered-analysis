@@ -1,15 +1,28 @@
-# Triggered Spectra
+# Event-Triggered Analysis
 
-Event-triggered spectral analysis plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI).
+Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that analyse
+continuous data in windows locked to an event — a TTL edge, a broadcast message, and in
+time spikes.
 
-Two plugins are built from this repository, sharing one numerical core:
+Three plugins are built from this repository:
 
 | Plugin | What it shows |
 |---|---|
 | **Triggered Power** | Power spectra locked to TTL/message triggers, accumulated across trials and split by condition |
 | **Triggered Coherence** | Magnitude-squared coherence and coherency phase for configured channel pairs |
+| **Triggered Average** | Time-domain average and standard deviation, with individual trials |
 
-Both support two display modes:
+They share two static cores, layered:
+
+- **`trigger_core`** — the ring buffer, trigger sources, work queue, capture worker and the whole
+  broadcast-message path, plus the trigger configuration and monitor windows. No FFTW, no DSP:
+  everything about *getting* a trial window, and nothing about what is computed from it.
+- **`spectra_core`** — FFTW, DPSS tapers, Morlet wavelets, the accumulators and the spectral
+  display widgets. Used by the two frequency-domain plugins only.
+
+Each plugin still builds and installs as its own binary.
+
+The two spectral plugins support two display modes:
 
 - **Spectrogram** — a time-frequency map from Morlet wavelets (or a Hann STFT), averaged over trials.
 - **Spectrum** — one tapered periodogram over the whole trial window, using DPSS multitaper
@@ -21,8 +34,10 @@ interface.
 
 ## Design notes
 
-- **All spectral work runs on a background thread.** `process()` only appends to a lock-free ring
+- **All per-trial work runs on a background thread.** `process()` only appends to a lock-free ring
   buffer and enqueues a capture request; the worker extracts the trial window and transforms it.
+  Broadcast messages arrive on the audio thread too, so arming happens there — it is one atomic
+  store — while committing and discarding are queued to the worker.
 - **No decimation here.** Put a downsampling plugin upstream in the signal chain if you want to
   analyse a reduced sample rate.
 - **Channel selection is the main performance lever**, since cost is linear in selected channels.
@@ -36,7 +51,7 @@ Sources are configured under **TRIGGERS**, and each can carry three broadcast-me
 
 | Pattern | Effect |
 |---|---|
-| Arm | Allows the next TTL edge to fire (`TTL and Message` sources fire once per arming) |
+| Arm | Gates the source: it fires on the next TTL edge only, once per arming |
 | Cancel | Disarms, and throws away a capture still waiting to be committed |
 | Commit | Folds a waiting capture into the accumulators |
 
@@ -69,8 +84,17 @@ that trial's own capture and nothing is ever kept. Cancel patterns are for messa
 precede the trigger or report an outcome directly (`TRIAL_ERROR`); relying on eviction plus the
 timeout is otherwise simpler and correct.
 
-Arm is only meaningful for `TTL and Message` sources. On a plain `TTL` source it is a no-op —
-the monitor shows `live` rather than `armed`/`disarmed` when that is the case.
+**Setting an arm pattern is what makes a source gated.** There is no trigger-type to choose:
+a source with no arm pattern fires on every rising edge and the monitor shows it as `live`; give
+it one and it fires only after an arming message, once per arming, shown as `armed`/`disarmed`.
+This mirrors the commit pattern, where setting one is what makes captures provisional. Two ways
+to say the same thing could disagree — a source marked "TTL + Message" with an empty arm pattern
+could never fire at all — so there is now one.
+
+Triggering on a message *alone*, with no TTL line, is deliberately not implemented. Broadcast
+messages arrive over HTTP and are unreliable in their timing, so a message-only trigger cannot
+carry a trustworthy trigger sample. The extension point is kept (`TriggerType::MSG_TRIGGER`) for
+anyone who does not need alignment precision.
 
 The **MONITOR** popup shows what is actually happening: TTL edges and broadcast messages received,
 per-source counts for each stage (edges → queued → trials, and arm / cancel / commit → kept), the
@@ -85,7 +109,7 @@ Expects to sit next to a built `plugin-GUI` checkout:
 ```
 <root>/
   plugin-GUI/
-  plugins/triggered-spectra/
+  plugins/event-triggered-analysis/
 ```
 
 Override with `-DGUI_BASE_DIR=<path>` or the `GUI_BASE_DIR` environment variable.
@@ -96,16 +120,22 @@ cmake --build Build --config Release
 cmake --install Build --config Release
 ```
 
-The install step copies both DLLs into `plugin-GUI/Build/<config>/plugins` and the vendored FFTW
-runtime into `plugin-GUI/Build/<config>/shared`.
+The install step copies the plugin DLLs into `plugin-GUI/Build/<config>/plugins` and the vendored
+FFTW runtime into `plugin-GUI/Build/<config>/shared`.
 
 ### Tests
 
+One binary per core layer:
+
 ```sh
 cmake -S . -B Build -DBUILD_TESTS=ON
-cmake --build Build --config Release --target TriggeredSpectra_tests
-ctest --test-dir Build -R "TriggeredSpectra_tests" -C Release
+cmake --build Build --config Release --target trigger_core_tests spectra_tests
+ctest --test-dir Build -C Release
 ```
+
+`trigger_core_tests` links `trigger_core` and *not* `spectra_core`, which is what keeps the core
+split honest: the day something FFTW-dependent is put on the wrong side of the line, that target
+stops linking.
 
 Enabling tests pulls the GUI in as a subproject to reuse its `gui_testable_source` and
 `test_helpers` targets, so the first configure is slow.
@@ -113,10 +143,12 @@ Enabling tests pulls the GUI in as a subproject to reuse its `gui_testable_sourc
 ## FFTW
 
 FFTW3 (double precision) is vendored under `libs/`, copied from the `OpenEphysFFTW` common
-library. The wrapper in `Source/Core/Fftw.h` is local rather than reusing `OpenEphysFFTW`, which
-still uses `ScopedPointer` (removed in JUCE 8) and has no batched-plan API.
+library. It is discovered and installed by `Source/Spectral` rather than at the top level, so a
+plugin that links only `trigger_core` never asks for it. The wrapper in `Source/Spectral/Fftw.h`
+is local rather than reusing `OpenEphysFFTW`, which still uses `ScopedPointer` (removed in JUCE 8)
+and has no batched-plan API.
 
-Both plugins load the *same* `libfftw3-3.dll`, and this build does **not** export
+Both spectral plugins load the *same* `libfftw3-3.dll`, and this build does **not** export
 `fftw_make_planner_thread_safe`, so planning is serialised with a process-wide named lock. Plan
 execution is thread-safe and is not serialised.
 

@@ -22,18 +22,16 @@
 */
 #include "TriggeredCoherenceNode.h"
 
+#include "Spectral/SpectralParameterNames.h"
 #include "Ui/TriggeredCoherenceCanvas.h"
 #include "Ui/TriggeredCoherenceEditor.h"
 
 #include <algorithm>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
-TriggeredCoherenceNode::TriggeredCoherenceNode()
-    : TriggeredSpectraNode ("Triggered Coherence")
-{
-}
+TriggeredCoherenceNode::TriggeredCoherenceNode() : TriggeredSpectraNode ("Triggered Coherence") {}
 
 TriggeredCoherenceNode::~TriggeredCoherenceNode() = default;
 
@@ -43,7 +41,7 @@ AudioProcessorEditor* TriggeredCoherenceNode::createEditor()
     return editor.get();
 }
 
-void TriggeredCoherenceNode::registerAdditionalParameters()
+void TriggeredCoherenceNode::registerPluginParameters()
 {
     // Wavelets give one estimate per trial, so with few trials the coherence
     // estimate is badly biased upwards. Pooling neighbouring time-frequency bins
@@ -318,8 +316,7 @@ void TriggeredCoherenceNode::analysisConfigurationChanged()
             auto& accumulators = m_accumulators[{ source, pairIndex }];
             accumulators.observed.setSize (m_engine.numFrequencies(),
                                            m_engine.numAccumulatorBins());
-            accumulators.ppc.setSize (m_engine.numFrequencies(),
-                                      m_engine.numAccumulatorBins());
+            accumulators.ppc.setSize (m_engine.numFrequencies(), m_engine.numAccumulatorBins());
 
             // Sized to zero when off, so the memory is not paid for and
             // addTrial() rejects anything that reaches it by mistake.
@@ -365,10 +362,10 @@ bool TriggeredCoherenceNode::processCapturedTrial (const CaptureRequest& request
     if (channels.isEmpty())
         return false;
 
-    m_engine.process (
-        trial,
-        std::span<const int> (channels.getRawDataPointer(), static_cast<std::size_t> (channels.size())),
-        m_coefficients);
+    m_engine.process (trial,
+                      std::span<const int> (channels.getRawDataPointer(),
+                                            static_cast<std::size_t> (channels.size())),
+                      m_coefficients);
 
     if (m_coefficients.empty())
         return false;
@@ -587,4 +584,4 @@ void TriggeredCoherenceNode::loadCustomParametersFromXml (XmlElement* xml)
     TriggeredSpectraNode::loadCustomParametersFromXml (xml);
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

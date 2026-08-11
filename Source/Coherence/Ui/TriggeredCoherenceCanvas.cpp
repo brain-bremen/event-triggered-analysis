@@ -23,12 +23,12 @@
 #include "TriggeredCoherenceCanvas.h"
 
 #include "../TriggeredCoherenceNode.h"
-#include "Core/Ui/ParameterLayout.h"
+#include "Spectral/Ui/ParameterLayout.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 namespace
@@ -487,4 +487,4 @@ void TriggeredCoherenceCanvas::loadCustomParametersFromXml (XmlElement* xml)
     rebuildPanels();
 }
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered

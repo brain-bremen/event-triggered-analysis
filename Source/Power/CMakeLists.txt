@@ -1,4 +1,4 @@
-spectra_add_plugin(TriggeredPower
+oe_add_plugin(TriggeredPower spectra_core
     ${CMAKE_CURRENT_SOURCE_DIR}/OpenEphysLib.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredPowerNode.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TriggeredPowerNode.h

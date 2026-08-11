@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
+
+env:
+  PLUGIN_GUI_VERSION: "v1.0.2"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+          submodules: recursive
+
+      - name: Checkout Open Ephys GUI
+        uses: actions/checkout@v4
+        with:
+          repository: open-ephys/plugin-GUI
+          ref: ${{ env.PLUGIN_GUI_VERSION }}
+          path: plugin-GUI
+          submodules: recursive
+
+      # The runner image ships CMake 3.31.x, which predates the
+      # "Visual Studio 18 2026" generator (added in CMake 4.2.3).
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Cache GUI dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            plugin-GUI/Build
+            plugin-GUI/installed_libs
+          key: ${{ runner.os }}-gui-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
+          restore-keys: |
+            ${{ runner.os }}-gui-
+
+      - name: Configure Open Ephys GUI
+        run: |
+          cd plugin-GUI
+          cmake -B Build -G "Visual Studio 18 2026" -A x64 -DBUILD_TESTS=OFF
+
+      - name: Build Open Ephys GUI
+        run: |
+          cd plugin-GUI
+          cmake --build Build --config Release -j4
+
+      - name: Configure plugin
+        run: |
+          cd plugin
+          cmake -B Build -G "Visual Studio 18 2026" -A x64 -DGUI_BASE_DIR="${{ github.workspace }}/plugin-GUI" -DBUILD_TESTS=OFF
+
+      - name: Build plugin
+        run: |
+          cd plugin
+          cmake --build Build --config Release -j4
+
+      - name: Upload Windows DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-windows
+          path: |
+            plugin/Build/Release/TriggeredPower.dll
+            plugin/Build/Release/TriggeredCoherence.dll
+            plugin/Build/Release/TriggeredAverage.dll
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+          submodules: recursive
+
+      - name: Checkout Open Ephys GUI
+        uses: actions/checkout@v4
+        with:
+          repository: open-ephys/plugin-GUI
+          ref: ${{ env.PLUGIN_GUI_VERSION }}
+          path: plugin-GUI
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxext-dev \
+            libxinerama-dev \
+            libasound2-dev \
+            libfreetype6-dev \
+            libcurl4-openssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev
+
+      - name: Cache GUI dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            plugin-GUI/Build
+            plugin-GUI/installed_libs
+          key: ${{ runner.os }}-gui-${{ hashFiles('plugin-GUI/CMakeLists.txt') }}-Release
+          restore-keys: |
+            ${{ runner.os }}-gui-
+
+      - name: Configure Open Ephys GUI
+        run: |
+          cd plugin-GUI
+          cmake -B Build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+
+      - name: Build Open Ephys GUI
+        run: |
+          cd plugin-GUI
+          cmake --build Build --config Release -j$(nproc)
+
+      - name: Configure plugin
+        run: |
+          cd plugin
+          cmake -B Build -DCMAKE_BUILD_TYPE=Release -DGUI_BASE_DIR="${{ github.workspace }}/plugin-GUI" -DBUILD_TESTS=OFF
+
+      - name: Build plugin
+        run: |
+          cd plugin
+          cmake --build Build --config Release -j$(nproc)
+
+      - name: Upload Linux SO
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-linux
+          path: |
+            plugin/Build/TriggeredPower.so
+            plugin/Build/TriggeredCoherence.so
+            plugin/Build/TriggeredAverage.so
+          if-no-files-found: error
+
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-windows
+          path: ./artifacts/windows
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-linux
+          path: ./artifacts/linux
+
+      - name: Create release archives
+        run: |
+          cd artifacts/windows
+          zip -j ../../event-triggered-analysis-windows-${{ github.ref_name }}.zip *.dll
+          cd ../linux
+          tar -czf ../../event-triggered-analysis-linux-${{ github.ref_name }}.tar.gz *.so
+          cd ../..
+
+      - name: Extract release notes
+        id: extract-notes
+        run: |
+          # Extract release notes from CHANGELOG.md if it exists
+          if [ -f CHANGELOG.md ]; then
+            # Try to extract notes for this version
+            TAG_VERSION="${{ github.ref_name }}"
+            VERSION="${TAG_VERSION#v}"
+
+            # Look for version header in CHANGELOG
+            awk "/## \[${VERSION}\]|## ${VERSION}/,/## \[|## [0-9]/" CHANGELOG.md | sed '1d;$d' > release_notes.txt
+
+            # If empty, use a default message
+            if [ ! -s release_notes.txt ]; then
+              echo "Release ${{ github.ref_name }}" > release_notes.txt
+              echo "" >> release_notes.txt
+              echo "See [CHANGELOG.md](CHANGELOG.md) for details." >> release_notes.txt
+            fi
+          else
+            echo "Release ${{ github.ref_name }}" > release_notes.txt
+          fi
+
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            event-triggered-analysis-windows-${{ github.ref_name }}.zip
+            event-triggered-analysis-linux-${{ github.ref_name }}.tar.gz
+          body: ${{ steps.extract-notes.outputs.notes }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

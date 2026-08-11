@@ -22,16 +22,16 @@
 */
 #pragma once
 
-#include "Core/Accumulators.h"
-#include "Core/PairRules.h"
-#include "Core/SpectralEngine.h"
-#include "Core/TriggeredSpectraNode.h"
+#include "Spectral/Accumulators.h"
+#include "Spectral/PairRules.h"
+#include "Spectral/SpectralEngine.h"
+#include "Spectral/TriggeredSpectraNode.h"
 
 #include <JuceHeader.h>
 #include <map>
 #include <vector>
 
-namespace TriggeredSpectra
+namespace EventTriggered
 {
 
 class TriggeredCoherenceCanvas;
@@ -176,7 +176,7 @@ public:
     void loadCustomParametersFromXml (XmlElement* xml) override;
 
 protected:
-    void registerAdditionalParameters() override;
+    void registerPluginParameters() override;
     void analysisConfigurationChanged() override;
 
     /** Adds `shift_predictor` to the base list: toggling it allocates a second
@@ -248,4 +248,4 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceNode)
 };
 
-} // namespace TriggeredSpectra
+} // namespace EventTriggered
