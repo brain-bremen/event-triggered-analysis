@@ -5,3 +5,6 @@ out/
 .cache/
 compile_commands.json
 *.user
+
+# Papers kept locally for reference — not ours to redistribute
+*.pdf
