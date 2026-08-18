@@ -116,6 +116,75 @@ Mitigations, all cheap, all in Phase 4:
 
 ---
 
+## 2b. Angle convention — configurable, VStim as the default
+
+The two conventions in play disagree, and by the worst possible amount.
+
+**VStim** (`VStimLib/Actions/LinearSweepThroughCenter.{h,cpp}`,
+`Config::sweepDirectionDegPerTrialType`, commented *"ccw, 0.0 = rightward"*)
+computes the sweep endpoints as
+
+```cpp
+initial = centre - 0.5 * travelDistanceMM * (cos θ, sin θ)
+final   = centre + 0.5 * travelDistanceMM * (cos θ, sin θ)
+```
+
+so the motion vector is `(cos θ, sin θ)`: **degrees, counter-clockwise, 0° =
+rightward (+x)** — the standard mathematical convention. Its defaults are twelve
+directions, 0–330° in 30° steps, one per trial type. The bar is rotated with the
+sweep when `linkOrientationOfObjectToSweepDirection` is set, which is what the
+paper's method assumes.
+
+**The paper's appendix** states *"DIRECTIONS in DEGREES (zero at left,
+counterclockwise)"*.
+
+The two therefore differ by exactly **180°** — the one error that produces a
+perfectly plausible, wrong map, and the reason this is worth a section.
+
+### Design
+
+One `AngleConvention` value, two fields:
+
+| Field | Values |
+|---|---|
+| `zeroDirection` | Right, Up, Left, Down |
+| `sense` | counter-clockwise, clockwise |
+
+Eight combinations, which is the complete set of axis-aligned symmetries — a
+screen with the y-axis pointing down is a sense flip, not a third knob, so two
+fields genuinely cover every convention anyone uses. User angles are normalised
+to one internal canonical form at the boundary and nowhere else:
+
+```
+θ_internal = wrap360( sense * θ_user + zeroOffset )
+```
+
+Everything inside `rf_math` speaks the canonical form only.
+
+Presets in the dropdown, with the arithmetic shown rather than hidden:
+
+- **VStim** — 0° = right, CCW *(default)*
+- **Fiorani et al. 2014** — 0° = left, CCW
+- **Custom** — the two fields exposed directly
+
+### Making a wrong choice visible
+
+The convention setting feeds the compass preview from §2a, so switching it
+visibly rotates the arrows. That turns an invisible 180° error into something you
+can see before acquiring, which is the whole point.
+
+Tests (`test_AngleConvention.cpp`):
+
+- The eight conventions form the dihedral group: composing any two is another
+  member, and each is its own inverse or has one in the set.
+- VStim's convention and the paper's differ by exactly 180° for every input.
+- Round-trip: `toCanonical` then `fromCanonical` is the identity within float
+  tolerance, for all eight, across the full circle including the wrap at 0/360.
+- A golden table of `(convention, θ_user) → (motion vector)` covering all eight
+  at 0/90/180/270, checked against hand-computed unit vectors.
+
+---
+
 ## 3. Target layout
 
 ```
@@ -135,6 +204,7 @@ Source/AverageCore/                 # moved out of Source/Average, unchanged
 
 Source/ReceptiveField/
   RfMath/                           # pure C++: no JUCE, no ProcessorHeaders
+    AngleConvention.h               # zero direction + sense, canonical normalisation
     StimulusGeometry.h              # angle, speed, sweep start/extent, screen origin
     MapGeometry.h                   # pixels, degrees per pixel, map centre
     ResponseProfile.{h,cpp}         # steps 2–4, 6
@@ -227,6 +297,11 @@ plain unit tests.
    including the sign-restore step (`s = sign(map); map = abs(map).^(1/n).*s`).
 6. **Bounds.** Lookups outside the profile read the pad value, never out of
    range — fuzz the geometry with odd/even sizes and extreme angles.
+
+### `test_AngleConvention.cpp`
+
+See §2b — group structure, the 180° VStim/paper offset, round-trips across the
+0/360 wrap, and a golden table of motion vectors for all eight conventions.
 
 ### `test_ResponseProfile.cpp`
 
@@ -357,6 +432,9 @@ plugin in an experiment.
 - Directions are assigned to trigger sources by hand in the plugin, one source
   per direction on its own TTL line. No broadcast messages, no arm patterns, no
   message parsing anywhere in this plugin (§2a).
+- The angle convention is a setting, not a constant: zero direction (R/U/L/D) ×
+  sense (CCW/CW), with VStim's "0° = right, CCW" as the default and the paper's
+  "0° = left, CCW" as a preset (§2b).
 - Latency correction is an explicit per-channel action, not a continuous
   recompute. The paper's own advice (§2.4.5) is to find the coarse RF position on
   the full map first and then scan latency on a restricted region; doing a full
@@ -369,10 +447,15 @@ plugin in an experiment.
 
 **To confirm with you:**
 
-1. **Angle convention.** The appendix uses degrees, zero at left,
-   counter-clockwise. Do we keep that, or use the convention of your stimulus
-   software? Whichever we pick has to be stated in the UI next to the field,
-   because a 180° error produces a map that looks entirely plausible.
+1. **How does the direction reach a TTL line?** VStim selects the sweep direction
+   *per trial type* (`sweepDirectionDegPerTrialType`), while
+   `LinearSweepThroughCenter` itself uses one start trigger
+   (`inTriggerStart = 2`), one stop trigger and one output trigger — none of
+   which distinguishes direction. For "one trigger source per direction" to work,
+   something has to put the trial type on distinct digital lines. Does your
+   protocol already do that, and if so on which lines? If it cannot, the fallback
+   is one source plus a direction *sequence* the plugin cycles through, which is
+   fragile against a dropped trial and I would rather avoid.
 2. **Spontaneous activity.** From the pre-trigger baseline window, or from the
    map periphery as the paper does (§2.4.1)? The pre-trigger window is available
    here and is cleaner; I would offer both with pre-trigger as the default.
