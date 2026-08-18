@@ -142,7 +142,7 @@ void RfOptionsBar::resized()
 
 // --- Canvas ----------------------------------------------------------------
 
-RfCanvas::RfCanvas (ReceptiveFieldNode* node) : m_node (node)
+RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
 {
     m_mapViewport = std::make_unique<Viewport>();
     m_mapGrid = new RfMapGrid();

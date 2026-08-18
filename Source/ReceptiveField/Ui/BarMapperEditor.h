@@ -33,7 +33,7 @@ namespace EventTriggered
 {
 
 class RfCanvas;
-class ReceptiveFieldNode;
+class BarMapperNode;
 class TriggerSource;
 
 /** The receptive-field plugin's editor.
@@ -49,13 +49,13 @@ class TriggerSource;
  *  plugin's own configuration, and it does not belong on a row the other plugins
  *  share.
  */
-class RfEditor : public VisualizerEditor,
+class BarMapperEditor : public VisualizerEditor,
                  public Button::Listener,
                  public TriggerCountDisplay
 {
 public:
-    explicit RfEditor (GenericProcessor* parentNode);
-    ~RfEditor() override = default;
+    explicit BarMapperEditor (GenericProcessor* parentNode);
+    ~BarMapperEditor() override = default;
 
     Visualizer* createNewCanvas() override;
 
@@ -77,7 +77,7 @@ public:
     void buttonClicked (Button* button) override;
 
 private:
-    ReceptiveFieldNode* getNode();
+    BarMapperNode* getNode();
 
     std::unique_ptr<UtilityButton> m_triggersButton;
     std::unique_ptr<UtilityButton> m_monitorButton;
@@ -101,7 +101,7 @@ private:
 
     RfCanvas* m_canvas = nullptr;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BarMapperEditor)
 };
 
 } // namespace EventTriggered

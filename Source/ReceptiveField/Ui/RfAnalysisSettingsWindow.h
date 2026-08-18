@@ -32,7 +32,7 @@
 namespace EventTriggered
 {
 
-class ReceptiveFieldNode;
+class BarMapperNode;
 
 /** Everything that turns the accumulated averages into a map, behind ANALYSIS.
  *
@@ -46,7 +46,7 @@ class ReceptiveFieldNode;
 class RfAnalysisSettingsWindow : public PopupComponent
 {
 public:
-    RfAnalysisSettingsWindow (ReceptiveFieldNode* node,
+    RfAnalysisSettingsWindow (BarMapperNode* node,
                               bool acquisitionIsActive,
                               juce::Component* anchor);
     ~RfAnalysisSettingsWindow() override;
@@ -67,7 +67,7 @@ private:
     static constexpr int headerHeight = 32;
     static constexpr int footerHeight = 28;
 
-    ReceptiveFieldNode* m_node = nullptr;
+    BarMapperNode* m_node = nullptr;
     bool m_acquisitionIsActive = false;
 
     /** Null entries are section breaks, so the layout keeps one list rather than

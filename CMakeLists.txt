@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.23.0)
 
 # ---------------------------------------------------------------------------
 # Event-Triggered Analysis: four Open Ephys plugins (TriggeredPower,
-# TriggeredCoherence, TriggeredAverage, ReceptiveFieldMapper) over four
+# TriggeredCoherence, TriggeredAverage, ReceptiveFieldBarMapper) over four
 # statically-linked cores.
 #
 #   trigger_core   ring buffer, trigger sources, work queue, capture worker,

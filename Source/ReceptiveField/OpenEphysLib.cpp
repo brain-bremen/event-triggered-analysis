@@ -20,7 +20,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "ReceptiveFieldNode.h"
+#include "BarMapperNode.h"
 
 #include <PluginInfo.h>
 
@@ -38,7 +38,7 @@ using namespace Plugin;
 extern "C" EXPORT void getLibInfo (Plugin::LibraryInfo* info)
 {
     info->apiVersion = PLUGIN_API_VER;
-    info->name = "Receptive Field";
+    info->name = "Receptive Field Bar Mapper";
     info->libVersion = PLUGIN_VERSION_STRING;
     info->numPlugins = 1;
 }
@@ -49,9 +49,9 @@ extern "C" EXPORT int getPluginInfo (int index, Plugin::PluginInfo* info)
     {
         case 0:
             info->type = Plugin::Type::PROCESSOR;
-            info->processor.name = "Receptive Field";
+            info->processor.name = "Receptive Field Bars";
             info->processor.type = Plugin::Processor::SINK;
-            info->processor.creator = &(Plugin::createProcessor<EventTriggered::ReceptiveFieldNode>);
+            info->processor.creator = &(Plugin::createProcessor<EventTriggered::BarMapperNode>);
             return 0;
 
         default:

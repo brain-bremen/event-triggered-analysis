@@ -80,11 +80,11 @@ namespace RfParameterNames
  *  the angle table, and the warnings around it, because a swapped pair of angles
  *  produces a perfectly plausible wrong map.
  */
-class ReceptiveFieldNode : public TriggeredCaptureNode
+class BarMapperNode : public TriggeredCaptureNode
 {
 public:
-    ReceptiveFieldNode();
-    ~ReceptiveFieldNode() override;
+    BarMapperNode();
+    ~BarMapperNode() override;
 
     AudioProcessorEditor* createEditor() override;
 
@@ -221,7 +221,7 @@ private:
         so it needs no synchronisation. */
     juce::AudioBuffer<float> m_narrowedTrial;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ReceptiveFieldNode)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BarMapperNode)
 };
 
 } // namespace EventTriggered

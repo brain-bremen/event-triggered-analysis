@@ -22,7 +22,7 @@
 */
 #pragma once
 
-#include "../ReceptiveFieldNode.h"
+#include "../BarMapperNode.h"
 #include "RfDisplayMode.h"
 #include "RfMapPanel.h"
 
@@ -80,7 +80,7 @@ private:
 class RfCanvas : public Visualizer
 {
 public:
-    explicit RfCanvas (ReceptiveFieldNode* node);
+    explicit RfCanvas (BarMapperNode* node);
     ~RfCanvas() override;
 
     void refreshState() override;
@@ -98,7 +98,7 @@ public:
     void setSharedColourRange (bool shared);
     void clearData();
 
-    ReceptiveFieldNode* getNode() { return m_node; }
+    BarMapperNode* getNode() { return m_node; }
 
     // --- Trace view, driven by the node exactly as TriggeredAverage's is -----
 
@@ -114,7 +114,7 @@ public:
 private:
     void layoutViews();
 
-    ReceptiveFieldNode* m_node;
+    BarMapperNode* m_node;
     RfDisplayMode m_mode = RfDisplayMode::Map;
 
     std::unique_ptr<juce::Viewport> m_mapViewport;

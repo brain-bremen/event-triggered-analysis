@@ -22,14 +22,14 @@
 */
 #include "RfAnalysisSettingsWindow.h"
 
-#include "../ReceptiveFieldNode.h"
+#include "../BarMapperNode.h"
 
 using namespace juce;
 
 namespace EventTriggered
 {
 
-RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (ReceptiveFieldNode* node,
+RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
                                                     bool acquisitionIsActive,
                                                     Component* anchor)
     : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)

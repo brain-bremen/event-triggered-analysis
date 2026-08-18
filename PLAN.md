@@ -260,7 +260,7 @@ trigger_core ──┬── spectra_core ── TriggeredPower, TriggeredCohere
                │
                ├── average_core  ──┬── TriggeredAverage
                │                   │
-               │                   └── ReceptiveFieldMapper
+               │                   └── ReceptiveFieldBarMapper
                └───────────────────────────┘
                                    rf_math (no JUCE, no OE)
 ```
@@ -279,7 +279,7 @@ Source/ReceptiveField/
     BackProjection.{h,cpp}          # step 7 + the latency scan driver
     RfMetrics.{h,cpp}               # step 8
     RfSimulator.{h,cpp}             # §2.2 synthetic data — see §6
-  ReceptiveFieldNode.{h,cpp}        # TriggeredCaptureNode + average_core
+  BarMapperNode.{h,cpp}             # TriggeredCaptureNode + average_core
   RfComputeJob.{h,cpp}              # background recompute
   OpenEphysLib.cpp
   Ui/
@@ -321,7 +321,7 @@ The whole algorithm, testable, with no GUI in the loop. Deliverable at the end o
 this phase is `rf_demo` writing map images to disk — the first point at which
 the work is visible without a rig.
 
-### Phase 3 — `ReceptiveFieldNode`
+### Phase 3 — `BarMapperNode`
 
 `TriggeredCaptureNode` + `average_core`, per-source `StimulusGeometry`
 parameters, and `RfComputeJob` recomputing maps on a background thread when the
@@ -462,7 +462,7 @@ eye, and the fastest possible iteration loop on the algorithm itself.
 
 ### (b) Demo mode inside the plugin *(Phase 5)*
 
-A `demo_mode` parameter on `ReceptiveFieldNode`. When enabled, `RfSimulator`
+A demo-mode toggle on `BarMapperNode`. When enabled, `RfSimulator`
 fills the `DataStore` with simulated per-direction averages for every selected
 channel and the canvas draws them — **with the GUI idle, no acquisition, no
 signal chain beyond the plugin itself**. Different channels get RFs on a
@@ -543,7 +543,7 @@ whether it should be committed under `Resources/` or added to `.gitignore`.
 |---|---|---|
 | 1 | `average_core` extracted | existing tests still green |
 | 2 | `rf_math` + `rf_math_tests` + `rf_demo` | **map images on disk, paper figures reproduced** |
-| 3 | `ReceptiveFieldNode` + `rf_node_tests` | plugin loads, accumulates, logs metrics |
+| 3 | `BarMapperNode` + `rf_node_tests` | plugin loads, accumulates, logs metrics |
 | 4 | `RfCanvas` and friends | **maps drawn in the GUI** |
 | 5 | demo mode, README, CHANGELOG, screenshots | **the whole plugin usable with no rig** |
 

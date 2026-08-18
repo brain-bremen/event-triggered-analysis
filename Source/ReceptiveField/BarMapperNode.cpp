@@ -20,12 +20,12 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "ReceptiveFieldNode.h"
+#include "BarMapperNode.h"
 
 #include "TriggerCore/ParameterNames.h"
 
 #include "Ui/RfCanvas.h"
-#include "Ui/RfEditor.h"
+#include "Ui/BarMapperEditor.h"
 
 #include <algorithm>
 
@@ -41,8 +41,8 @@ namespace
     constexpr int rotationSenseCount = 2;
 } // namespace
 
-ReceptiveFieldNode::ReceptiveFieldNode()
-    : TriggeredCaptureNode ("Receptive Field"),
+BarMapperNode::BarMapperNode()
+    : TriggeredCaptureNode ("Receptive Field Bars"),
       m_compute ([this] (std::vector<std::vector<Rf::DirectionTrace>>& traces,
                          std::vector<int>& channels,
                          Rf::MappingSettings& settings) {
@@ -53,7 +53,7 @@ ReceptiveFieldNode::ReceptiveFieldNode()
     m_compute.start();
 }
 
-ReceptiveFieldNode::~ReceptiveFieldNode()
+BarMapperNode::~BarMapperNode()
 {
     // Before the DataStore goes away: the compute thread reads it under its lock,
     // and a thread still running while its inputs are destroyed is the one
@@ -61,13 +61,13 @@ ReceptiveFieldNode::~ReceptiveFieldNode()
     m_compute.stop();
 }
 
-AudioProcessorEditor* ReceptiveFieldNode::createEditor()
+AudioProcessorEditor* BarMapperNode::createEditor()
 {
-    editor = std::make_unique<RfEditor> (this);
+    editor = std::make_unique<BarMapperEditor> (this);
     return editor.get();
 }
 
-void ReceptiveFieldNode::rebuildDisplayPanels()
+void BarMapperNode::rebuildDisplayPanels()
 {
     if (m_canvas == nullptr)
         return;
@@ -100,7 +100,7 @@ void ReceptiveFieldNode::rebuildDisplayPanels()
 
 // --- Parameters ------------------------------------------------------------
 
-void ReceptiveFieldNode::registerAdditionalParameters()
+void BarMapperNode::registerAdditionalParameters()
 {
     using P = Parameter;
 
@@ -192,7 +192,7 @@ void ReceptiveFieldNode::registerAdditionalParameters()
                        static_cast<float> (Rf::defaultBorderFraction), 0.1f, 0.99f, 0.01f);
 }
 
-bool ReceptiveFieldNode::isAnalysisParameter (const juce::String& parameterName) const
+bool BarMapperNode::isAnalysisParameter (const juce::String& parameterName) const
 {
     // Nothing here is one. Every parameter above changes how the *accumulated*
     // averages are turned into a map, not how trials are captured — so editing
@@ -202,7 +202,7 @@ bool ReceptiveFieldNode::isAnalysisParameter (const juce::String& parameterName)
     return TriggeredCaptureNode::isAnalysisParameter (parameterName);
 }
 
-void ReceptiveFieldNode::parameterValueChanged (Parameter* parameter)
+void BarMapperNode::parameterValueChanged (Parameter* parameter)
 {
     TriggeredCaptureNode::parameterValueChanged (parameter);
 
@@ -210,7 +210,7 @@ void ReceptiveFieldNode::parameterValueChanged (Parameter* parameter)
         m_compute.requestRecompute();
 }
 
-double ReceptiveFieldNode::getDoubleParameter (const char* name, double fallback) const
+double BarMapperNode::getDoubleParameter (const char* name, double fallback) const
 {
     if (auto* parameter = getParameter (name))
         return static_cast<double> (static_cast<float> (parameter->getValue()));
@@ -220,7 +220,7 @@ double ReceptiveFieldNode::getDoubleParameter (const char* name, double fallback
 
 // --- Settings --------------------------------------------------------------
 
-Rf::AngleConvention ReceptiveFieldNode::getAngleConvention() const
+Rf::AngleConvention BarMapperNode::getAngleConvention() const
 {
     Rf::AngleConvention convention = Rf::AngleConvention::vstim();
 
@@ -241,7 +241,7 @@ Rf::AngleConvention ReceptiveFieldNode::getAngleConvention() const
     return convention;
 }
 
-Rf::MappingSettings ReceptiveFieldNode::getMappingSettings() const
+Rf::MappingSettings BarMapperNode::getMappingSettings() const
 {
     Rf::MappingSettings settings;
 
@@ -306,7 +306,7 @@ Rf::MappingSettings ReceptiveFieldNode::getMappingSettings() const
     return settings;
 }
 
-std::optional<Rf::SweepGeometry> ReceptiveFieldNode::getSweepForSource (
+std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
     const TriggerSource* source) const
 {
     const auto angle = m_angles.getAngleDeg (source);
@@ -326,18 +326,18 @@ std::optional<Rf::SweepGeometry> ReceptiveFieldNode::getSweepForSource (
 
 // --- The angle table -------------------------------------------------------
 
-void ReceptiveFieldNode::setAngleForSource (TriggerSource* source, double angleDeg)
+void BarMapperNode::setAngleForSource (TriggerSource* source, double angleDeg)
 {
     m_angles.setAngleDeg (source, angleDeg);
     m_compute.requestRecompute();
 }
 
-std::vector<Rf::AngleSetWarning> ReceptiveFieldNode::checkAngles() const
+std::vector<Rf::AngleSetWarning> BarMapperNode::checkAngles() const
 {
     return m_angles.check (m_triggerSources.getAll(), getAngleConvention());
 }
 
-void ReceptiveFieldNode::generateDirectionSources (int count,
+void BarMapperNode::generateDirectionSources (int count,
                                                    int line,
                                                    int firstTrialType,
                                                    double firstAngleDeg)
@@ -373,7 +373,7 @@ void ReceptiveFieldNode::generateDirectionSources (int count,
 
 // --- Configuration ---------------------------------------------------------
 
-void ReceptiveFieldNode::analysisConfigurationChanged()
+void BarMapperNode::analysisConfigurationChanged()
 {
     const auto lock = m_dataStore.GetLock();
 
@@ -392,7 +392,7 @@ void ReceptiveFieldNode::analysisConfigurationChanged()
     m_compute.requestRecompute();
 }
 
-void ReceptiveFieldNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources)
+void BarMapperNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources)
 {
     // Order matters, exactly as in TriggeredAverage: the base stops the worker
     // and flushes the queue first, so nothing is mid-capture against one of these
@@ -412,21 +412,21 @@ void ReceptiveFieldNode::triggerSourcesAboutToBeRemoved (const juce::Array<Trigg
     }
 }
 
-void ReceptiveFieldNode::clearAllData()
+void BarMapperNode::clearAllData()
 {
     const auto lock = m_dataStore.GetLock();
     m_dataStore.ResetAllBuffers();
     m_compute.requestRecompute();
 }
 
-void ReceptiveFieldNode::refreshDisplay()
+void BarMapperNode::refreshDisplay()
 {
     m_compute.requestRecompute();
 }
 
 // --- Gathering -------------------------------------------------------------
 
-bool ReceptiveFieldNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& tracesPerChannel,
+bool BarMapperNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& tracesPerChannel,
                                        std::vector<int>& channelIndices,
                                        Rf::MappingSettings& settings)
 {
@@ -492,7 +492,7 @@ bool ReceptiveFieldNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrac
     return true;
 }
 
-std::vector<Rf::DirectionTrace> ReceptiveFieldNode::gatherTracesForChannel (int channelIndex) const
+std::vector<Rf::DirectionTrace> BarMapperNode::gatherTracesForChannel (int channelIndex) const
 {
     std::vector<Rf::DirectionTrace> traces;
 
@@ -535,14 +535,14 @@ std::vector<Rf::DirectionTrace> ReceptiveFieldNode::gatherTracesForChannel (int 
     return traces;
 }
 
-Rf::LatencyScanResult ReceptiveFieldNode::estimateLatencyForChannel (int channelIndex)
+Rf::LatencyScanResult BarMapperNode::estimateLatencyForChannel (int channelIndex)
 {
     return Rf::estimateLatency (gatherTracesForChannel (channelIndex), getMappingSettings());
 }
 
 // --- Demo mode -------------------------------------------------------------
 
-bool ReceptiveFieldNode::setDemoMode (bool shouldBeOn)
+bool BarMapperNode::setDemoMode (bool shouldBeOn)
 {
     if (shouldBeOn == m_demoMode)
         return m_demoMode;
@@ -576,13 +576,13 @@ bool ReceptiveFieldNode::setDemoMode (bool shouldBeOn)
 
     m_compute.requestRecompute();
 
-    if (auto* rfEditor = dynamic_cast<RfEditor*> (getEditor()))
+    if (auto* rfEditor = dynamic_cast<BarMapperEditor*> (getEditor()))
         rfEditor->demoModeChanged();
 
     return m_demoMode;
 }
 
-void ReceptiveFieldNode::setDemoSettings (const RfDemoSettings& settings)
+void BarMapperNode::setDemoSettings (const RfDemoSettings& settings)
 {
     m_demoSettings = settings;
 
@@ -590,7 +590,7 @@ void ReceptiveFieldNode::setDemoSettings (const RfDemoSettings& settings)
         populateDemoData();
 }
 
-void ReceptiveFieldNode::populateDemoData()
+void BarMapperNode::populateDemoData()
 {
     const std::vector<RfDemoDirection> dataset = buildDemoDataset (m_demoSettings);
 
@@ -658,7 +658,7 @@ void ReceptiveFieldNode::populateDemoData()
     rebuildDisplayPanels();
 }
 
-bool ReceptiveFieldNode::startAcquisition()
+bool BarMapperNode::startAcquisition()
 {
     // Starting a recording is the moment demo data stops being harmless. It is
     // cleared rather than merely hidden, so nothing synthetic can survive into
@@ -671,7 +671,7 @@ bool ReceptiveFieldNode::startAcquisition()
 
 // --- Capture ---------------------------------------------------------------
 
-bool ReceptiveFieldNode::processCapturedTrial (const CaptureRequest& request,
+bool BarMapperNode::processCapturedTrial (const CaptureRequest& request,
                                                const juce::AudioBuffer<float>& trial)
 {
     if (request.triggerSource == nullptr)
@@ -709,19 +709,19 @@ bool ReceptiveFieldNode::processCapturedTrial (const CaptureRequest& request,
     return m_dataStore.addTrialForTriggerSource (request.triggerSource, m_narrowedTrial);
 }
 
-bool ReceptiveFieldNode::commitCapture (TriggerSource* source)
+bool BarMapperNode::commitCapture (TriggerSource* source)
 {
     const auto lock = m_dataStore.GetLock();
     return m_dataStore.commitPendingCapture (source);
 }
 
-void ReceptiveFieldNode::discardCapture (TriggerSource* source)
+void BarMapperNode::discardCapture (TriggerSource* source)
 {
     const auto lock = m_dataStore.GetLock();
     m_dataStore.discardPendingCapture (source);
 }
 
-void ReceptiveFieldNode::discardExpiredCaptures (std::int64_t nowMs)
+void BarMapperNode::discardExpiredCaptures (std::int64_t nowMs)
 {
     const auto lock = m_dataStore.GetLock();
     m_dataStore.discardExpiredPendingCaptures (nowMs);
@@ -729,7 +729,7 @@ void ReceptiveFieldNode::discardExpiredCaptures (std::int64_t nowMs)
 
 // --- Persistence -----------------------------------------------------------
 
-void ReceptiveFieldNode::saveCustomParametersToXml (XmlElement* xml)
+void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
 {
     TriggeredCaptureNode::saveCustomParametersToXml (xml);
 
@@ -752,7 +752,7 @@ void ReceptiveFieldNode::saveCustomParametersToXml (XmlElement* xml)
     }
 }
 
-void ReceptiveFieldNode::loadCustomParametersFromXml (XmlElement* xml)
+void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
 {
     // Demo state is deliberately never written, so nothing here restores it. A
     // chain that reloaded full of synthetic receptive fields would be a trap:

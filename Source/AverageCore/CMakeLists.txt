@@ -14,7 +14,7 @@
 #
 # Layered on trigger_core exactly as spectra_core is, and free of FFTW for the
 # same reason: this is what a plugin needs to *hold* trials, not what it computes
-# from them. TriggeredAverage draws the traces; ReceptiveFieldMapper
+# from them. TriggeredAverage draws the traces; ReceptiveFieldBarMapper
 # back-projects them into a map. Neither cares how the other displays them, and
 # both want this storage unchanged.
 #

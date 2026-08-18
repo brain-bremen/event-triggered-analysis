@@ -31,7 +31,7 @@
 namespace EventTriggered
 {
 
-class ReceptiveFieldNode;
+class BarMapperNode;
 class TriggerSource;
 
 /** N arrows at the configured angles, labelled.
@@ -67,7 +67,7 @@ class StimulusConfigWindow : public PopupComponent,
                              public juce::ComboBox::Listener
 {
 public:
-    StimulusConfigWindow (ReceptiveFieldNode* node, bool acquisitionIsActive, juce::Component* anchor);
+    StimulusConfigWindow (BarMapperNode* node, bool acquisitionIsActive, juce::Component* anchor);
     ~StimulusConfigWindow() override;
 
     void updatePopup() override;
@@ -93,7 +93,7 @@ private:
         std::unique_ptr<juce::Label> angle;
     };
 
-    ReceptiveFieldNode* m_node = nullptr;
+    BarMapperNode* m_node = nullptr;
     bool m_acquisitionIsActive = false;
 
     std::vector<Row> m_rows;

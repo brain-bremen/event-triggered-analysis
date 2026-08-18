@@ -20,9 +20,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "RfEditor.h"
+#include "BarMapperEditor.h"
 
-#include "../ReceptiveFieldNode.h"
+#include "../BarMapperNode.h"
 #include "RfAnalysisSettingsWindow.h"
 #include "RfCanvas.h"
 #include "StimulusConfigWindow.h"
@@ -37,8 +37,8 @@ using namespace juce;
 namespace EventTriggered
 {
 
-RfEditor::RfEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "RF MAP", EditorLayout::totalWidth)
+BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
+    : VisualizerEditor (parentNode, "RF BARS", EditorLayout::totalWidth)
 {
     const auto makeButton = [this] (const String& text) {
         auto button = std::make_unique<UtilityButton> (text);
@@ -75,12 +75,12 @@ RfEditor::RfEditor (GenericProcessor* parentNode)
     addAndMakeVisible (m_postLabel.get());
 }
 
-ReceptiveFieldNode* RfEditor::getNode()
+BarMapperNode* BarMapperEditor::getNode()
 {
-    return static_cast<ReceptiveFieldNode*> (getProcessor());
+    return static_cast<BarMapperNode*> (getProcessor());
 }
 
-void RfEditor::resized()
+void BarMapperEditor::resized()
 {
     VisualizerEditor::resized();
 
@@ -99,7 +99,7 @@ void RfEditor::resized()
     m_demoButton->setBounds (getWidth() - 60, getHeight() - 24, 48, 18);
 }
 
-void RfEditor::demoModeChanged()
+void BarMapperEditor::demoModeChanged()
 {
     if (auto* node = getNode())
         m_demoButton->setToggleState (node->isDemoMode(), dontSendNotification);
@@ -107,7 +107,7 @@ void RfEditor::demoModeChanged()
     repaint();
 }
 
-void RfEditor::paintOverChildren (Graphics& g)
+void BarMapperEditor::paintOverChildren (Graphics& g)
 {
     auto* node = getNode();
 
@@ -128,7 +128,7 @@ void RfEditor::paintOverChildren (Graphics& g)
     g.drawText ("DEMO", badge, Justification::centred);
 }
 
-void RfEditor::setTriggerCount (int count)
+void BarMapperEditor::setTriggerCount (int count)
 {
     m_triggersButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
 
@@ -144,7 +144,7 @@ void RfEditor::setTriggerCount (int count)
     }
 }
 
-Visualizer* RfEditor::createNewCanvas()
+Visualizer* BarMapperEditor::createNewCanvas()
 {
     auto* node = getNode();
     jassert (node != nullptr);
@@ -158,7 +158,7 @@ Visualizer* RfEditor::createNewCanvas()
     return m_canvas;
 }
 
-void RfEditor::updateSettings()
+void BarMapperEditor::updateSettings()
 {
     if (m_canvas == nullptr)
         return;
@@ -169,19 +169,19 @@ void RfEditor::updateSettings()
     getNode()->rebuildDisplayPanels();
 }
 
-void RfEditor::updateColours (TriggerSource* source)
+void BarMapperEditor::updateColours (TriggerSource* source)
 {
     if (m_canvas != nullptr)
         m_canvas->updateColourForSource (source);
 }
 
-void RfEditor::updateConditionName (TriggerSource* source)
+void BarMapperEditor::updateConditionName (TriggerSource* source)
 {
     if (m_canvas != nullptr)
         m_canvas->updateConditionName (source);
 }
 
-void RfEditor::buttonClicked (Button* button)
+void BarMapperEditor::buttonClicked (Button* button)
 {
     auto* node = getNode();
 

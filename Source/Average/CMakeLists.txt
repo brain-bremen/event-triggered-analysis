@@ -4,7 +4,7 @@
 # That is the whole reason the cores were split: this plugin needs trial windows
 # and nothing frequency-domain, so it must not inherit FFTW.
 #
-# The storage itself lives in average_core because ReceptiveFieldMapper wants the
+# The storage itself lives in average_core because the receptive-field mappers want the
 # same accumulators; everything left here is this plugin's own display.
 
 oe_add_plugin(TriggeredAverage average_core

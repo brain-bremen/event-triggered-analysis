@@ -22,7 +22,7 @@
 */
 #include "StimulusConfigWindow.h"
 
-#include "../ReceptiveFieldNode.h"
+#include "../BarMapperNode.h"
 
 #include "TriggerCore/TriggerSource.h"
 
@@ -96,7 +96,7 @@ void CompassPreview::paint (Graphics& g)
 
 // --- Window ----------------------------------------------------------------
 
-StimulusConfigWindow::StimulusConfigWindow (ReceptiveFieldNode* node,
+StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
                                             bool acquisitionIsActive,
                                             Component* anchor)
     : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)

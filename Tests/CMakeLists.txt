@@ -60,7 +60,7 @@ set(SPECTRA_TEST_SOURCES
     Spectral/test_ParameterLayout.cpp
 )
 
-# The trial storage shared by TriggeredAverage and ReceptiveFieldMapper. Links
+# The trial storage shared by TriggeredAverage and ReceptiveFieldBarMapper. Links
 # average_core rather than compiling its sources directly, which is what makes
 # these tests exercise the same library the plugins link.
 set(AVERAGE_TEST_SOURCES

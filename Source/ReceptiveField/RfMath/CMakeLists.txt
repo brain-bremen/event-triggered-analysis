@@ -1,4 +1,10 @@
-# rf_math: the receptive-field mapping algorithm, and nothing else.
+# rf_math: the back-projection receptive-field algorithm, and nothing else.
+#
+# Bar-specific, despite the general name. The method takes one-dimensional
+# projections of a receptive field and intersects them, which is what sweeping a
+# bar produces; a flashed-dot mapper samples the field directly and shares only
+# the map, the metrics measured on it, and the display. See the note in
+# ../CMakeLists.txt for where that boundary falls.
 #
 # No JUCE, no Open Ephys, no FFTW. That is not tidiness either: the whole of the
 # back-projection method is arithmetic over spans of floats, so keeping it free
