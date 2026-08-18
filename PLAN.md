@@ -81,19 +81,62 @@ the map σ interact, so the README must say so.
 
 ## 2a. How directions reach the plugin
 
-**Decided: manually, in the plugin. No broadcast messages are involved.**
+**The trial type arrives as a broadcast message and arms the matching trigger
+source. The angle for each source is typed in by hand.**
 
-Each direction is one trigger source, fired by its own TTL line, exactly as any
-other condition in this repository. The plugin adds one thing: an **angle column**
-in its stimulus config table, where the user types the direction each source
-corresponds to. Bar speed, sweep start and extent, and the screen origin are
-configured once for the whole sweep set, since they do not vary between
-directions in the paper's protocol.
+Those are two separate things, and keeping them separate is the design:
 
-This is the simplest possible arrangement and it removes arm patterns, message
-parsing and the whole gated-source path from the design. It also means the
-angle-to-source mapping is an *assertion by the user that the plugin cannot
-check*, which has one consequence worth designing around:
+| | Mechanism | Who is responsible |
+|---|---|---|
+| *Which* condition this trial is | `VSTIM: ... TRIALTYPE <t> ...` message → arm pattern | VStim and the existing `trigger_core` gating |
+| *When* the sweep started | hardware TTL edge | the acquisition hardware |
+| *What angle* trial type `t` means | angle column in the plugin's table | the user, once |
+
+So the plugin parses nothing. It never reads a number out of a message and never
+needs to know VStim's message grammar — it uses the arm/gate machinery exactly as
+the other three plugins do, and the direction is a static property of the source.
+
+### The messages VStim actually sends
+
+From `VStimLib/Networking/OpenEphysInterface.cpp`, on `TrialStarted`, two messages
+in order:
+
+```
+VSTIM: TRIAL_START <trialNumber> TRIALTYPE <t> TIMESEQUENCE <idx> FRAME <frame>
+VSTIM: TRIALTYPE <t>
+```
+
+and on any trial end:
+
+```
+VSTIM: TRIAL_END <trialNumber> TRIALTYPE <t> OUTCOME <code> FRAME <frame>
+```
+
+### The arm pattern to use
+
+Patterns here are plain case-insensitive substring matches, so the pattern has to
+be chosen to bind the trial type without being a prefix of another one and
+without also matching the trial-end message. The one that does all three:
+
+```
+TRIALTYPE 3 TIMESEQUENCE
+```
+
+- contiguous in the start message, so a single substring covers it;
+- the space before `TIMESEQUENCE` excludes `TRIALTYPE 30`, `31`, … — the same
+  prefix trap the README already documents for `OUTCOME 0 `;
+- `TRIAL_END` carries `OUTCOME` in that position, so it cannot re-arm the source
+  after the trial. That matters: a source re-armed at trial end would fire on the
+  *next* trial's edge, which is very likely a different direction, and the
+  resulting map would be wrong without anything looking wrong.
+
+The **"generate N directions"** button writes these patterns itself, from a trial
+type range and a starting angle, so the user never types one. That is the whole
+reason to have the button.
+
+### The part that cannot be checked
+
+The angle assigned to each trial type is an assertion the plugin cannot verify:
 
 > **A wrong angle assignment produces a map that looks entirely plausible.**
 > Swap two directions and you get a shifted, distorted RF with no error anywhere.
@@ -103,18 +146,40 @@ Mitigations, all cheap, all in Phase 4:
 - The angle is shown on the source's row **and** next to its trace in the
   per-direction profile view — not hidden in a settings dialog.
 - A **compass preview** in the config window: N arrows at the configured angles,
-  labelled with line number and source name. A mis-typed or duplicated angle is
+  labelled with trial type and source name. A mis-typed or duplicated angle is
   then visible at a glance rather than inferable from a bad map.
 - **Warnings, not errors**, for angles that are duplicated, unevenly spaced, or
   do not span the full circle. All three are legitimate — the paper itself
   discusses odd direction counts (their Fig. 10) — but all three are more often
   a typo.
-- The **"generate N directions" button** fills the table with N evenly spaced
-  angles across consecutive TTL lines starting at a chosen line, so the common
-  case (8 directions, lines 0–7, 45° apart) is one click and the user only checks
-  that the line order matches their stimulus program.
+- The monitor already counts arm messages per source, so "trial type 5 never
+  armed anything" is diagnosable without guessing.
 
----
+### The timing constraint this imposes
+
+**The arm message must arrive before the TTL edge it gates.** The README's
+existing warning is the same hazard from the other side: broadcast messages
+travel through the message centre and land a block or more after a TTL pulse
+that was emitted at the same instant.
+
+That is fine if the trigger marks *sweep onset* and `TrialStarted` fires earlier
+(fixation acquired, trial begun) — there is real time between them. It breaks if
+the trigger edge *is* trial start, in which case every source is armed one trial
+late and the maps are silently scrambled across directions.
+
+This has to be established before Phase 3, and it is checkable without a rig:
+the trigger monitor timestamps both TTL edges and messages, so a single run of
+the protocol answers it. See §7.
+
+### One caveat about VStim's own event path
+
+`OpenEphysInterface::OnEvent` sends every VStim event to the NetworkEvents plugin
+as `TTL Word=<code>`. Those are **network-generated TTL events, not hardware
+edges** — they arrive over ZMQ with the same jitter as the broadcast messages, so
+they are unsuitable as the alignment trigger for this analysis. The trigger
+source must be pointed at a genuine hardware line (VStim's `DigIO` output, e.g.
+`outTriggerStop = 33` and whatever marks sweep onset), not at a NetworkEvents
+word.
 
 ## 2b. Angle convention — configurable, VStim as the default
 
@@ -264,7 +329,8 @@ phase adds no new threading model.
 
 `RfCanvas` as a channel grid of `RfMapPanel`s; `StimulusConfigWindow` with the
 angle column, the compass preview, the spacing warnings and the "generate N
-directions" button (§2a); per-channel "estimate latency" action; polargram.
+directions" button — which writes the `TRIALTYPE <t> TIMESEQUENCE` arm patterns
+itself (§2a); per-channel "estimate latency" action; polargram.
 
 ### Phase 5 — demo mode in the GUI, README, CHANGELOG
 
@@ -356,10 +422,14 @@ available without a rig.
     prevent.
 21. Geometry validation: zero speed and zero extent are rejected with a message
     rather than producing a garbage map.
-22. Angle table (§2a): "generate N directions" produces N evenly spaced angles on
-    consecutive lines from a chosen start; duplicated, unevenly spaced and
-    non-spanning angle sets each raise a warning without blocking computation;
-    angles survive the save/load round-trip alongside their source.
+22. Angle table (§2a): "generate N directions" produces N evenly spaced angles
+    over a trial-type range; duplicated, unevenly spaced and non-spanning angle
+    sets each raise a warning without blocking computation; angles survive the
+    save/load round-trip alongside their source.
+23. Generated arm patterns (§2a) match the real VStim trial-start message for
+    their own trial type and **no other** — checked against literal recorded
+    strings for types 0–12, including the prefix trap (`TRIALTYPE 1` vs `10`,
+    `11`, `12`) and the trial-end message, which must never re-arm.
 
 ---
 
@@ -416,12 +486,16 @@ must be impossible to screenshot one and later mistake it for a recording.
 The capture path is inherited from `TriggeredCaptureNode` and already tested, but
 if you want to see the *whole* chain move without a rig: GUI File Reader on the
 bundled example data → Bandpass → Amplitude Estimator → Phase Detector (to
-manufacture TTL edges) → Receptive Field Mapper, with one source per TTL line and
-angles typed into the table. The maps are meaningless — the "directions" are
-unrelated to the data — but it exercises capture, averaging, the angle table and
-redraw under acquisition. Simpler now that no messages are involved: the whole
-test is "some lines pulse, do maps appear". Worth doing once before trusting the
-plugin in an experiment.
+manufacture TTL edges) → Receptive Field Mapper, with the eight sources generated
+as usual and arming messages replayed over the GUI's HTTP endpoint from a short
+script that emits real VStim-format strings.
+
+The maps are meaningless — the "directions" are unrelated to the data — but this
+is the one route that exercises **arming order** end to end, which §2a identifies
+as the thing most able to invalidate a real session. Emit the arm message and the
+TTL edge with a deliberate delay between them, then with none, and confirm the
+monitor's per-source arm and trial counts change the way you predict. Worth doing
+once before trusting the plugin in an experiment.
 
 ---
 
@@ -429,9 +503,9 @@ plugin in an experiment.
 
 **Decided:**
 
-- Directions are assigned to trigger sources by hand in the plugin, one source
-  per direction on its own TTL line. No broadcast messages, no arm patterns, no
-  message parsing anywhere in this plugin (§2a).
+- The trial-type message arms the matching trigger source, using the existing
+  arm-pattern machinery; the angle each source stands for is typed in by hand.
+  The plugin parses no messages and knows no message grammar (§2a).
 - The angle convention is a setting, not a constant: zero direction (R/U/L/D) ×
   sense (CCW/CW), with VStim's "0° = right, CCW" as the default and the paper's
   "0° = left, CCW" as a preset (§2b).
@@ -447,15 +521,12 @@ plugin in an experiment.
 
 **To confirm with you:**
 
-1. **How does the direction reach a TTL line?** VStim selects the sweep direction
-   *per trial type* (`sweepDirectionDegPerTrialType`), while
-   `LinearSweepThroughCenter` itself uses one start trigger
-   (`inTriggerStart = 2`), one stop trigger and one output trigger — none of
-   which distinguishes direction. For "one trigger source per direction" to work,
-   something has to put the trial type on distinct digital lines. Does your
-   protocol already do that, and if so on which lines? If it cannot, the fallback
-   is one source plus a direction *sequence* the plugin cycles through, which is
-   fragile against a dropped trial and I would rather avoid.
+1. **Which hardware line marks sweep onset, and does `TrialStarted` precede it?**
+   This is the one thing that can silently invalidate every map (§2a, "the timing
+   constraint"). If the arming message and the trigger edge are the same instant,
+   every source arms one trial late and directions are scrambled with nothing
+   looking wrong. Checkable in one run of the protocol using the trigger monitor,
+   which timestamps both — worth doing before Phase 3 rather than after.
 2. **Spontaneous activity.** From the pre-trigger baseline window, or from the
    map periphery as the paper does (§2.4.1)? The pre-trigger window is available
    here and is cleaner; I would offer both with pre-trigger as the default.
