@@ -14,6 +14,7 @@ set(RF_MATH_SOURCES
     ResponseProfile.cpp
     BackProjection.cpp
     RfMetrics.cpp
+    RfPipeline.cpp
     RfSimulator.cpp
     StimulusGeometry.cpp
 )
@@ -25,6 +26,7 @@ set(RF_MATH_HEADERS
     ResponseProfile.h
     BackProjection.h
     RfMetrics.h
+    RfPipeline.h
     RfSimulator.h
 )
 

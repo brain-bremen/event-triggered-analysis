@@ -81,6 +81,7 @@ set(RF_MATH_TEST_SOURCES
     ReceptiveField/test_LatencyScan.cpp
     ReceptiveField/test_RfMetrics.cpp
     ReceptiveField/test_Pipeline.cpp
+    ReceptiveField/test_RfPipeline.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -164,6 +165,18 @@ endfunction()
 oe_add_test_binary(trigger_core_tests trigger_core OFF ${TRIGGER_CORE_TEST_SOURCES})
 oe_add_test_binary(spectra_tests      spectra_core ON  ${SPECTRA_TEST_SOURCES})
 oe_add_test_binary(average_tests      average_core OFF ${AVERAGE_TEST_SOURCES})
+
+# The receptive-field plugin's own glue: the angle table and the arm patterns it
+# generates. Needs JUCE and trigger_core (it matches against real message
+# strings), which is why it cannot live in rf_math_tests.
+set(RF_NODE_TEST_SOURCES
+    ReceptiveField/test_SweepAngles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/ReceptiveField/SweepAngles.cpp
+)
+
+oe_add_test_binary(rf_node_tests      average_core OFF ${RF_NODE_TEST_SOURCES})
+target_link_libraries(rf_node_tests PRIVATE rf_math)
+target_include_directories(rf_node_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../Source)
 
 # rf_math_tests is deliberately *not* built with oe_add_test_binary(): it links
 # rf_math and gtest_main and nothing else — no gui_testable_source, no
