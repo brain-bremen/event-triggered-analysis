@@ -2,11 +2,13 @@ cmake_minimum_required(VERSION 3.23.0)
 
 # ---------------------------------------------------------------------------
 # Event-Triggered Analysis: three Open Ephys plugins (TriggeredPower,
-# TriggeredCoherence, TriggeredAverage) over two statically-linked cores.
+# TriggeredCoherence, TriggeredAverage) over three statically-linked cores.
 #
 #   trigger_core   ring buffer, trigger sources, work queue, capture worker,
 #                  broadcast-message path, trigger config + monitor windows.
 #                  No FFTW, no DSP.
+#   average_core   single-trial ring, running mean/SD accumulator and the
+#                  per-source DataStore. Layered on trigger_core, no FFTW.
 #   spectra_core   FFTW, DPSS, Morlet, accumulators, spectral display widgets.
 #                  Layered on trigger_core; used by the two spectral plugins.
 # ---------------------------------------------------------------------------
@@ -204,6 +206,7 @@ endfunction()
 
 # ---------------------------------------------------------------------------
 add_subdirectory(Source/TriggerCore)
+add_subdirectory(Source/AverageCore)
 add_subdirectory(Source/Spectral)
 add_subdirectory(Source/Power)
 add_subdirectory(Source/Coherence)

@@ -22,7 +22,7 @@
 
 */
 #include "SinglePlotPanel.h"
-#include "../DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "PerformanceTimer.h"
 #include "TriggerCore/TriggerSource.h"
 #include "TriggeredAvgCanvas.h"

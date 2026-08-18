@@ -22,7 +22,7 @@
 
 */
 #include "TriggeredAvgCanvas.h"
-#include "../DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "DisplayMode.h"
 #include "GridDisplay.h"
 #include "TimeAxis.h"

@@ -22,7 +22,7 @@
 
 */
 #include "GridDisplay.h"
-#include "../DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "SinglePlotPanel.h"
 #include "TriggerCore/TriggerSource.h"
 #include "../TriggeredAvgNode.h"

@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "DataCollector.h"
+#include "AverageCore/DataCollector.h"
 
 #include "TriggerCore/TriggeredCaptureNode.h"
 
