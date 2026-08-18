@@ -71,17 +71,48 @@ The averages are the right input and `DataStore` already holds exactly
   one sweep set, so the plugin can generate them, instead of asking the user to
   hand-build eight sources that must agree with each other.
 
-Two facts already work in our favour:
+**Amplitude Estimator is the spike-density-function substitute.** The paper's
+input is a Gaussian-convolved SDF. `Bandpass (500–3000 Hz) → Amplitude Estimator
+(rms, boxcar ~20 ms)` gives a MUA envelope whose trial average is directly
+analogous, and step 3 above then plays the role of §2.4.3. The boxcar window and
+the map σ interact, so the README must say so.
 
-- **`TriggerSources` puts no uniqueness constraint on `line`.** Eight sources can
-  share the stimulus-onset TTL, each gated by its own arm pattern
-  (`DIRECTION 45 ` — note the trailing space, per the README's own warning). The
-  direction-encoding problem is solved with existing machinery.
-- **Amplitude Estimator is the spike-density-function substitute.** The paper's
-  input is a Gaussian-convolved SDF. `Bandpass (500–3000 Hz) → Amplitude
-  Estimator (rms, boxcar ~20 ms)` gives a MUA envelope whose trial average is
-  directly analogous, and step 3 above then plays the role of §2.4.3. The boxcar
-  window and the map σ interact, so the README must say so.
+---
+
+## 2a. How directions reach the plugin
+
+**Decided: manually, in the plugin. No broadcast messages are involved.**
+
+Each direction is one trigger source, fired by its own TTL line, exactly as any
+other condition in this repository. The plugin adds one thing: an **angle column**
+in its stimulus config table, where the user types the direction each source
+corresponds to. Bar speed, sweep start and extent, and the screen origin are
+configured once for the whole sweep set, since they do not vary between
+directions in the paper's protocol.
+
+This is the simplest possible arrangement and it removes arm patterns, message
+parsing and the whole gated-source path from the design. It also means the
+angle-to-source mapping is an *assertion by the user that the plugin cannot
+check*, which has one consequence worth designing around:
+
+> **A wrong angle assignment produces a map that looks entirely plausible.**
+> Swap two directions and you get a shifted, distorted RF with no error anywhere.
+
+Mitigations, all cheap, all in Phase 4:
+
+- The angle is shown on the source's row **and** next to its trace in the
+  per-direction profile view — not hidden in a settings dialog.
+- A **compass preview** in the config window: N arrows at the configured angles,
+  labelled with line number and source name. A mis-typed or duplicated angle is
+  then visible at a glance rather than inferable from a bad map.
+- **Warnings, not errors**, for angles that are duplicated, unevenly spaced, or
+  do not span the full circle. All three are legitimate — the paper itself
+  discusses odd direction counts (their Fig. 10) — but all three are more often
+  a typo.
+- The **"generate N directions" button** fills the table with N evenly spaced
+  angles across consecutive TTL lines starting at a chosen line, so the common
+  case (8 directions, lines 0–7, 45° apart) is one click and the user only checks
+  that the line order matches their stimulus program.
 
 ---
 
@@ -117,7 +148,7 @@ Source/ReceptiveField/
     RfCanvas.{h,cpp}
     RfMapPanel.{h,cpp}              # one channel's map + contour + colour bar
     PolarPanel.{h,cpp}
-    StimulusConfigWindow.{h,cpp}    # per-source geometry + "generate N directions"
+    StimulusConfigWindow.{h,cpp}    # angle column, compass preview, generate-N
     RfColourMap.h
 
 Tools/
@@ -162,9 +193,8 @@ phase adds no new threading model.
 ### Phase 4 — UI
 
 `RfCanvas` as a channel grid of `RfMapPanel`s; `StimulusConfigWindow` with the
-"generate N directions" button that creates N gated sources on one line with
-matching arm patterns and angles; per-channel "estimate latency" action;
-polargram.
+angle column, the compass preview, the spacing warnings and the "generate N
+directions" button (§2a); per-channel "estimate latency" action; polargram.
 
 ### Phase 5 — demo mode in the GUI, README, CHANGELOG
 
@@ -249,8 +279,12 @@ available without a rig.
 20. Removing a trigger source drops its geometry and its cached map — the same
     dangling-pointer class of bug `DataStore::RemoveTriggerSource` exists to
     prevent.
-21. Geometry validation: zero speed, zero extent, duplicate angles are rejected
-    with a message rather than producing a garbage map.
+21. Geometry validation: zero speed and zero extent are rejected with a message
+    rather than producing a garbage map.
+22. Angle table (§2a): "generate N directions" produces N evenly spaced angles on
+    consecutive lines from a chosen start; duplicated, unevenly spaced and
+    non-spanning angle sets each raise a warning without blocking computation;
+    angles survive the save/load round-trip alongside their source.
 
 ---
 
@@ -307,11 +341,12 @@ must be impossible to screenshot one and later mistake it for a recording.
 The capture path is inherited from `TriggeredCaptureNode` and already tested, but
 if you want to see the *whole* chain move without a rig: GUI File Reader on the
 bundled example data → Bandpass → Amplitude Estimator → Phase Detector (to
-manufacture TTL edges) → Receptive Field Mapper, with direction messages sent
-over the GUI's HTTP broadcast endpoint from a short Python script. The maps are
-meaningless — the "directions" are unrelated to the data — but it exercises
-arming, gating, capture, averaging and redraw under acquisition. Worth doing once
-before trusting the plugin in an experiment.
+manufacture TTL edges) → Receptive Field Mapper, with one source per TTL line and
+angles typed into the table. The maps are meaningless — the "directions" are
+unrelated to the data — but it exercises capture, averaging, the angle table and
+redraw under acquisition. Simpler now that no messages are involved: the whole
+test is "some lines pulse, do maps appear". Worth doing once before trusting the
+plugin in an experiment.
 
 ---
 
@@ -319,6 +354,9 @@ before trusting the plugin in an experiment.
 
 **Decided:**
 
+- Directions are assigned to trigger sources by hand in the plugin, one source
+  per direction on its own TTL line. No broadcast messages, no arm patterns, no
+  message parsing anywhere in this plugin (§2a).
 - Latency correction is an explicit per-channel action, not a continuous
   recompute. The paper's own advice (§2.4.5) is to find the coarse RF position on
   the full map first and then scan latency on a restricted region; doing a full
@@ -335,15 +373,10 @@ before trusting the plugin in an experiment.
    counter-clockwise. Do we keep that, or use the convention of your stimulus
    software? Whichever we pick has to be stated in the UI next to the field,
    because a 180° error produces a map that looks entirely plausible.
-2. **Screen geometry source.** Does the direction/geometry come from the
-   broadcast message itself (parseable — `DIRECTION 45 SPEED 10`), or is it
-   configured once in the plugin and only the direction index arrives at
-   runtime? The second is simpler and is what I have assumed; the first is more
-   robust against a mismatch between stimulus code and plugin settings.
-3. **Spontaneous activity.** From the pre-trigger baseline window, or from the
+2. **Spontaneous activity.** From the pre-trigger baseline window, or from the
    map periphery as the paper does (§2.4.1)? The pre-trigger window is available
    here and is cleaner; I would offer both with pre-trigger as the default.
-4. **Export.** Do you want the maps written to disk (CSV/NPY per channel) for
+3. **Export.** Do you want the maps written to disk (CSV/NPY per channel) for
    offline analysis, and if so on what trigger — a button, or every N trials?
 
 **Also:** `fiorani2014.pdf` is currently untracked in the working tree. Say
