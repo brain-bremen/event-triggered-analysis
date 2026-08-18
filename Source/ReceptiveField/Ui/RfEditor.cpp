@@ -53,6 +53,11 @@ RfEditor::RfEditor (GenericProcessor* parentNode)
     m_analysisButton = makeButton ("ANALYSIS");
     m_stimulusButton = makeButton ("STIMULUS");
 
+    m_demoButton = makeButton ("DEMO");
+    m_demoButton->setClickingTogglesState (true);
+    m_demoButton->setTooltip ("Fill the plugin with simulated receptive fields, with no "
+                              "acquisition. Cleared when acquisition starts.");
+
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
     m_channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
@@ -87,6 +92,40 @@ void RfEditor::resized()
         m_postLabel.get(),
         m_stimulusButton.get(),
         m_stimulusLabel.get());
+
+    // Tucked into the bottom-right corner rather than given a row of its own:
+    // the three shared rows are what makes this editor look like its siblings,
+    // and DEMO is not part of the shape they share.
+    m_demoButton->setBounds (getWidth() - 60, getHeight() - 24, 48, 18);
+}
+
+void RfEditor::demoModeChanged()
+{
+    if (auto* node = getNode())
+        m_demoButton->setToggleState (node->isDemoMode(), dontSendNotification);
+
+    repaint();
+}
+
+void RfEditor::paintOverChildren (Graphics& g)
+{
+    auto* node = getNode();
+
+    if (node == nullptr || ! node->isDemoMode())
+        return;
+
+    // Drawn over the editor rather than beside it, and in a colour nothing else
+    // in this GUI uses. The point is not decoration: everything on screen in
+    // demo mode is a plausible receptive-field map computed from data that does
+    // not exist, and the only thing separating it from a result is this badge.
+    const Rectangle<int> badge (getWidth() - 128, 4, 62, 16);
+
+    g.setColour (Colours::red.withAlpha (0.85f));
+    g.fillRoundedRectangle (badge.toFloat(), 3.0f);
+
+    g.setColour (Colours::white);
+    g.setFont (FontOptions (11.0f, Font::bold));
+    g.drawText ("DEMO", badge, Justification::centred);
 }
 
 void RfEditor::setTriggerCount (int count)
@@ -112,6 +151,7 @@ Visualizer* RfEditor::createNewCanvas()
 
     m_canvas = new RfCanvas (node);
     node->setCanvas (m_canvas);
+    m_demoButton->setToggleState (node->isDemoMode(), dontSendNotification);
 
     updateSettings();
 
@@ -164,6 +204,18 @@ void RfEditor::buttonClicked (Button* button)
     {
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<StimulusConfigWindow> (node, acquisitionIsActive, button), button);
+    }
+    else if (button == m_demoButton.get())
+    {
+        // The node has the last word: it refuses during acquisition, so the
+        // button follows what actually happened rather than what was clicked.
+        const bool actual = node->setDemoMode (m_demoButton->getToggleState());
+        m_demoButton->setToggleState (actual, dontSendNotification);
+
+        if (! actual && m_demoButton->getToggleState() != actual)
+            CoreServices::sendStatusMessage ("Stop acquisition before enabling demo mode.");
+
+        repaint();
     }
 }
 

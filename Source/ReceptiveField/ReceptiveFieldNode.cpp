@@ -245,8 +245,20 @@ Rf::MappingSettings ReceptiveFieldNode::getMappingSettings() const
 {
     Rf::MappingSettings settings;
 
-    settings.sampleRateHz = getTrialGeometry().sampleRate;
-    settings.preSamples = getTrialGeometry().preSamples;
+    // Demo mode has no stream to ask, so it supplies its own geometry. Without
+    // this the sample rate is zero with the GUI idle and every map comes out
+    // empty -- which would make the demo useless in exactly the situation it
+    // exists for.
+    if (m_demoMode)
+    {
+        settings.sampleRateHz = m_demoSettings.sampleRateHz;
+        settings.preSamples = m_demoSettings.preSamples;
+    }
+    else
+    {
+        settings.sampleRateHz = getTrialGeometry().sampleRate;
+        settings.preSamples = getTrialGeometry().preSamples;
+    }
 
     settings.map.pixels = getParameter (RfParameterNames::map_pixels) != nullptr
                               ? static_cast<int> (getParameter (RfParameterNames::map_pixels)->getValue())
@@ -263,7 +275,7 @@ Rf::MappingSettings ReceptiveFieldNode::getMappingSettings() const
     settings.map.centreYDeg = getDoubleParameter (RfParameterNames::map_centre_y, 0.0);
 
     settings.profile.zScore.source = Rf::BaselineSource::PreTrigger;
-    settings.profile.zScore.preTriggerSamples = getTrialGeometry().preSamples;
+    settings.profile.zScore.preTriggerSamples = settings.preSamples;
     settings.profile.smoothingSigmaMs = getDoubleParameter (RfParameterNames::smoothing_sigma_ms, 100.0);
 
     if (auto* parameter = getParameter (RfParameterNames::use_absolute_z))
@@ -422,7 +434,21 @@ bool ReceptiveFieldNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrac
 
     settings = getMappingSettings();
 
-    const juce::Array<int>& channels = getSelectedChannels();
+    // Demo mode addresses the accumulators it filled itself, which exist
+    // whether or not a stream does. Reading the real selection here would find
+    // it empty with the GUI idle and produce nothing.
+    juce::Array<int> channels;
+
+    if (m_demoMode)
+    {
+        for (int i = 0; i < m_demoSettings.channels; ++i)
+            channels.add (i);
+    }
+    else
+    {
+        channels = getSelectedChannels();
+    }
+
     const juce::Array<TriggerSource*> sources = m_triggerSources.getAll();
 
     if (channels.isEmpty() || sources.isEmpty() || ! settings.map.isValid())
@@ -514,6 +540,135 @@ Rf::LatencyScanResult ReceptiveFieldNode::estimateLatencyForChannel (int channel
     return Rf::estimateLatency (gatherTracesForChannel (channelIndex), getMappingSettings());
 }
 
+// --- Demo mode -------------------------------------------------------------
+
+bool ReceptiveFieldNode::setDemoMode (bool shouldBeOn)
+{
+    if (shouldBeOn == m_demoMode)
+        return m_demoMode;
+
+    // Refused during acquisition rather than deferred. The accumulators belong
+    // to the recording then, and there is no version of "write synthetic trials
+    // into a live session" that is a good idea.
+    if (shouldBeOn && CoreServices::getAcquisitionStatus())
+        return false;
+
+    m_demoMode = shouldBeOn;
+
+    if (m_demoMode)
+    {
+        populateDemoData();
+    }
+    else
+    {
+        const auto lock = m_dataStore.GetLock();
+        m_dataStore.ResetAllBuffers();
+
+        // Only the sources demo mode created itself. A user who configured
+        // their own conditions and then looked at the demo gets them back.
+        if (m_demoOwnsSources)
+        {
+            m_triggerSources.clear();
+            m_angles.clear();
+            m_demoOwnsSources = false;
+        }
+    }
+
+    m_compute.requestRecompute();
+
+    if (auto* rfEditor = dynamic_cast<RfEditor*> (getEditor()))
+        rfEditor->demoModeChanged();
+
+    return m_demoMode;
+}
+
+void ReceptiveFieldNode::setDemoSettings (const RfDemoSettings& settings)
+{
+    m_demoSettings = settings;
+
+    if (m_demoMode)
+        populateDemoData();
+}
+
+void ReceptiveFieldNode::populateDemoData()
+{
+    const std::vector<RfDemoDirection> dataset = buildDemoDataset (m_demoSettings);
+
+    if (dataset.empty())
+        return;
+
+    const auto lock = m_dataStore.GetLock();
+
+    // Take over the condition list only if there is nothing to lose. A user who
+    // already configured eight directions sees the demo through *their*
+    // conditions, which is the more useful thing anyway: it shows what their
+    // configuration would produce.
+    juce::Array<TriggerSource*> sources = m_triggerSources.getAll();
+
+    if (sources.isEmpty())
+    {
+        for (const RfDemoDirection& direction : dataset)
+        {
+            TriggerSource* source = addTriggerSource (0, TriggerType::TTL_TRIGGER);
+
+            if (source == nullptr)
+                continue;
+
+            source->name = juce::String (juce::roundToInt (direction.angleDeg))
+                           + juce::String::charToString (static_cast<juce::juce_wchar> (0x00B0));
+            m_triggerSources.setArmPattern (source, armPatternForTrialType (direction.trialType));
+            m_angles.setAngleDeg (source, direction.angleDeg);
+        }
+
+        m_demoOwnsSources = true;
+        sources = m_triggerSources.getAll();
+    }
+
+    const int channels = m_demoSettings.channels;
+    const int samples = m_demoSettings.preSamples + m_demoSettings.postSamples;
+
+    m_dataStore.ResizeAllAverageBuffers (channels, samples, true);
+
+    for (TriggerSource* source : sources)
+        m_dataStore.ResetAndResizeBuffersForTriggerSource (source, channels, samples);
+
+    // One "trial" per direction, already averaged. The accumulators divide by
+    // the trial count, so folding in a single pre-averaged window reproduces it
+    // exactly -- and the alternative, replaying every simulated trial, would
+    // burn ten times the work to arrive at the same numbers.
+    juce::AudioBuffer<float> buffer (channels, samples);
+
+    for (int i = 0; i < sources.size() && i < static_cast<int> (dataset.size()); ++i)
+    {
+        const RfDemoDirection& direction = dataset[static_cast<std::size_t> (i)];
+
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            const std::vector<float>& trace =
+                direction.tracesByChannel[static_cast<std::size_t> (channel)];
+
+            const int count = std::min (samples, static_cast<int> (trace.size()));
+            buffer.clear (channel, 0, samples);
+            buffer.copyFrom (channel, 0, trace.data(), count);
+        }
+
+        m_dataStore.addTrialForTriggerSource (sources[i], buffer);
+    }
+
+    rebuildDisplayPanels();
+}
+
+bool ReceptiveFieldNode::startAcquisition()
+{
+    // Starting a recording is the moment demo data stops being harmless. It is
+    // cleared rather than merely hidden, so nothing synthetic can survive into
+    // a session and be mistaken for a result later.
+    if (m_demoMode)
+        setDemoMode (false);
+
+    return TriggeredCaptureNode::startAcquisition();
+}
+
 // --- Capture ---------------------------------------------------------------
 
 bool ReceptiveFieldNode::processCapturedTrial (const CaptureRequest& request,
@@ -599,6 +754,13 @@ void ReceptiveFieldNode::saveCustomParametersToXml (XmlElement* xml)
 
 void ReceptiveFieldNode::loadCustomParametersFromXml (XmlElement* xml)
 {
+    // Demo state is deliberately never written, so nothing here restores it. A
+    // chain that reloaded full of synthetic receptive fields would be a trap:
+    // they are convincing, and the only thing distinguishing them is a badge
+    // that a saved-and-reopened chain would not have earned.
+    m_demoMode = false;
+    m_demoOwnsSources = false;
+
     m_angles.clear();
 
     TriggeredCaptureNode::loadCustomParametersFromXml (xml);

@@ -171,7 +171,9 @@ oe_add_test_binary(average_tests      average_core OFF ${AVERAGE_TEST_SOURCES})
 # strings), which is why it cannot live in rf_math_tests.
 set(RF_NODE_TEST_SOURCES
     ReceptiveField/test_SweepAngles.cpp
+    ReceptiveField/test_RfDemo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../Source/ReceptiveField/SweepAngles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/ReceptiveField/RfDemo.cpp
 )
 
 oe_add_test_binary(rf_node_tests      average_core OFF ${RF_NODE_TEST_SOURCES})

@@ -23,6 +23,7 @@
 #pragma once
 
 #include "RfComputeJob.h"
+#include "RfDemo.h"
 #include "SweepAngles.h"
 
 #include "AverageCore/DataCollector.h"
@@ -148,6 +149,31 @@ public:
 
     void requestRecompute() { m_compute.requestRecompute(); }
 
+    // --- Demo mode ----------------------------------------------------------
+    //
+    // Fills the accumulators with the paper's own simulation so the whole
+    // plugin can be exercised with the GUI idle -- no rig, no acquisition, no
+    // signal chain beyond this node. It goes through the *real* DataStore and
+    // the real compute path rather than injecting finished maps, because a demo
+    // that bypassed the pipeline would keep working on the day the pipeline
+    // broke, which is precisely when it would be believed.
+    //
+    // Deliberately not an Open Ephys Parameter: parameters are saved with the
+    // signal chain, and a chain that reloads full of synthetic receptive fields
+    // is a trap. It is runtime state, reset on load and on acquisition.
+
+    bool isDemoMode() const { return m_demoMode; }
+
+    /** Turns demo mode on or off. Refused while acquiring — the accumulators
+     *  belong to the recording then, and demo data would be written straight
+     *  into it. Returns what the mode actually is afterwards. */
+    bool setDemoMode (bool shouldBeOn);
+
+    RfDemoSettings getDemoSettings() const { return m_demoSettings; }
+    void setDemoSettings (const RfDemoSettings& settings);
+
+    bool startAcquisition() override;
+
 protected:
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
@@ -174,6 +200,17 @@ private:
     std::vector<Rf::DirectionTrace> gatherTracesForChannel (int channelIndex) const;
 
     double getDoubleParameter (const char* name, double fallback) const;
+
+    /** Builds the synthetic dataset and folds it into the accumulators. */
+    void populateDemoData();
+
+    /** Demo mode created these, so leaving demo mode removes them. Kept as a
+     *  flag rather than inferred from the source names, which the user can
+     *  edit. */
+    bool m_demoOwnsSources = false;
+
+    bool m_demoMode = false;
+    RfDemoSettings m_demoSettings;
 
     DataStore m_dataStore;
     SweepAngles m_angles;

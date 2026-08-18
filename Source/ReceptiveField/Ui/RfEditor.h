@@ -65,6 +65,13 @@ public:
     void setTriggerCount (int count) override;
 
     void updateColours (TriggerSource* source);
+
+    /** Repaints the DEMO badge after the node changed the mode itself — on
+        acquisition start, or on loading a signal chain. */
+    void demoModeChanged();
+
+    /** Draws the DEMO badge over the editor when synthetic data is showing. */
+    void paintOverChildren (juce::Graphics& g) override;
     void updateConditionName (TriggerSource* source);
 
     void buttonClicked (Button* button) override;
@@ -79,6 +86,13 @@ private:
     /** Opens the angle table and the compass preview. Shows the direction count,
         so a set that is half configured is visible without opening it. */
     std::unique_ptr<UtilityButton> m_stimulusButton;
+
+    /** Fills the plugin with the paper's simulation so it can be driven with no
+     *  rig. Kept as a visibly separate control, never a saved parameter, and
+     *  always accompanied by the badge — a simulated receptive-field map is
+     *  entirely convincing, and it must be impossible to screenshot one and
+     *  later mistake it for a recording. */
+    std::unique_ptr<UtilityButton> m_demoButton;
 
     std::unique_ptr<Label> m_channelsLabel;
     std::unique_ptr<Label> m_stimulusLabel;
