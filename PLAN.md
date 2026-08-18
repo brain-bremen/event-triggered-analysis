@@ -162,14 +162,17 @@ existing warning is the same hazard from the other side: broadcast messages
 travel through the message centre and land a block or more after a TTL pulse
 that was emitted at the same instant.
 
-That is fine if the trigger marks *sweep onset* and `TrialStarted` fires earlier
-(fixation acquired, trial begun) — there is real time between them. It breaks if
-the trigger edge *is* trial start, in which case every source is armed one trial
-late and the maps are silently scrambled across directions.
+**Confirmed for this rig: `TrialStarted` does precede the sweep-onset edge.**
+The trigger marks sweep onset, and the trial-start message is emitted earlier
+(trial begun, fixation acquired), so there is real time between them and the arm
+lands before the edge it gates.
 
-This has to be established before Phase 3, and it is checkable without a rig:
-the trigger monitor timestamps both TTL edges and messages, so a single run of
-the protocol answers it. See §7.
+That makes the arrangement sound here, but it is a property of the protocol
+rather than of the plugin, so it stays documented: anyone who repoints the
+trigger source at a line that fires *at* trial start gets every source armed one
+trial late and directions silently scrambled. The trigger monitor timestamps
+both TTL edges and messages, which is how to check it on a new protocol without
+a rig.
 
 ### One caveat about VStim's own event path
 
@@ -506,6 +509,8 @@ once before trusting the plugin in an experiment.
 - The trial-type message arms the matching trigger source, using the existing
   arm-pattern machinery; the angle each source stands for is typed in by hand.
   The plugin parses no messages and knows no message grammar (§2a).
+- `TrialStarted` precedes the sweep-onset TTL edge on this rig, so arming lands
+  before the edge it gates and the message-armed scheme is sound (§2a).
 - The angle convention is a setting, not a constant: zero direction (R/U/L/D) ×
   sense (CCW/CW), with VStim's "0° = right, CCW" as the default and the paper's
   "0° = left, CCW" as a preset (§2b).
@@ -521,16 +526,10 @@ once before trusting the plugin in an experiment.
 
 **To confirm with you:**
 
-1. **Which hardware line marks sweep onset, and does `TrialStarted` precede it?**
-   This is the one thing that can silently invalidate every map (§2a, "the timing
-   constraint"). If the arming message and the trigger edge are the same instant,
-   every source arms one trial late and directions are scrambled with nothing
-   looking wrong. Checkable in one run of the protocol using the trigger monitor,
-   which timestamps both — worth doing before Phase 3 rather than after.
-2. **Spontaneous activity.** From the pre-trigger baseline window, or from the
+1. **Spontaneous activity.** From the pre-trigger baseline window, or from the
    map periphery as the paper does (§2.4.1)? The pre-trigger window is available
    here and is cleaner; I would offer both with pre-trigger as the default.
-3. **Export.** Do you want the maps written to disk (CSV/NPY per channel) for
+2. **Export.** Do you want the maps written to disk (CSV/NPY per channel) for
    offline analysis, and if so on what trigger — a button, or every N trials?
 
 **Also:** `fiorani2014.pdf` is currently untracked in the working tree. Say
