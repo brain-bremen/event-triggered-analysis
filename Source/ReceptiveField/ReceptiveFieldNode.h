@@ -34,6 +34,8 @@
 namespace EventTriggered
 {
 
+class RfCanvas;
+
 namespace RfParameterNames
 {
     // Channels, pre_ms, post_ms, trigger_line and trigger_type are registered by
@@ -92,6 +94,17 @@ public:
     void loadCustomParametersFromXml (XmlElement* xml) override;
 
     DataStore* getDataStore() { return &m_dataStore; }
+
+    void setCanvas (RfCanvas* canvas) { m_canvas = canvas; }
+
+    /** Rebuilds the trace view's panels from the current channel selection and
+     *  source list.
+     *
+     *  Lives on the node for the same reason TriggeredAverage's does: it is
+     *  driven by the configuration rather than by the UI, so it must run whenever
+     *  the selection or the source list changes, not only when the visualizer is
+     *  opened. */
+    void rebuildDisplayPanels();
 
     // --- The angle table ----------------------------------------------------
 
@@ -164,6 +177,7 @@ private:
 
     DataStore m_dataStore;
     SweepAngles m_angles;
+    RfCanvas* m_canvas = nullptr;
     RfComputeJob m_compute;
 
     /** The captured window narrowed to the selected channels. Worker thread only,

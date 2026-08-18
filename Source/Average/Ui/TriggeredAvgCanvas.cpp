@@ -23,9 +23,9 @@
 */
 #include "TriggeredAvgCanvas.h"
 #include "AverageCore/DataCollector.h"
-#include "DisplayMode.h"
-#include "GridDisplay.h"
-#include "TimeAxis.h"
+#include "AverageCore/Ui/DisplayMode.h"
+#include "AverageCore/Ui/GridDisplay.h"
+#include "AverageCore/Ui/TimeAxis.h"
 #include "../TriggeredAvgNode.h"
 
 using namespace EventTriggered;

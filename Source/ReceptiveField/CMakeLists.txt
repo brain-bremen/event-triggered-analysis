@@ -12,6 +12,17 @@ oe_add_plugin(ReceptiveFieldMapper average_core
     ${CMAKE_CURRENT_SOURCE_DIR}/RfComputeJob.h
     ${CMAKE_CURRENT_SOURCE_DIR}/SweepAngles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SweepAngles.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfDisplayMode.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfCanvas.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfCanvas.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfEditor.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapPanel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/StimulusConfigWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/StimulusConfigWindow.h
 )
 
 target_link_libraries(ReceptiveFieldMapper PRIVATE rf_math)

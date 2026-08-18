@@ -25,7 +25,6 @@
 #include "AverageCore/DataCollector.h"
 #include "PerformanceTimer.h"
 #include "TriggerCore/TriggerSource.h"
-#include "TriggeredAvgCanvas.h"
 
 using namespace EventTriggered;
 const static Colour panelBackground { 30, 30, 40 };

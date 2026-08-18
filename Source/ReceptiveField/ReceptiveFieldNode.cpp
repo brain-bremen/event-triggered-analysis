@@ -24,7 +24,8 @@
 
 #include "TriggerCore/ParameterNames.h"
 
-#include <EditorHeaders.h>
+#include "Ui/RfCanvas.h"
+#include "Ui/RfEditor.h"
 
 #include <algorithm>
 
@@ -62,11 +63,39 @@ ReceptiveFieldNode::~ReceptiveFieldNode()
 
 AudioProcessorEditor* ReceptiveFieldNode::createEditor()
 {
-    // Phase 4 replaces this with RfCanvas and the stimulus config window. Until
-    // then the generic editor is enough to load the plugin, select channels and
-    // configure triggers, which is what the node-level work needs to be exercised.
-    editor = std::make_unique<GenericEditor> (this);
+    editor = std::make_unique<RfEditor> (this);
     return editor.get();
+}
+
+void ReceptiveFieldNode::rebuildDisplayPanels()
+{
+    if (m_canvas == nullptr)
+        return;
+
+    const auto lock = m_dataStore.GetLock();
+
+    m_canvas->prepareToUpdate();
+
+    const auto& selected = getSelectedChannels();
+
+    // Grouped by channel so the per-direction traces for one channel overlay each
+    // other. That grouping is what makes the trace view useful here: eight
+    // directions on one set of axes is where a missing condition, a wrong
+    // latency or a baseline that never settled is obvious.
+    for (int row = 0; row < selected.size(); ++row)
+    {
+        const ContinuousChannel* channel = getContinuousChannel (selected[row]);
+
+        if (channel == nullptr)
+            continue;
+
+        for (auto* source : getTriggerSources().items())
+            m_canvas->addContChannel (
+                channel, source, row, m_dataStore.getRefToAverageBufferForTriggerSource (source));
+    }
+
+    m_canvas->setWindowSizeMs (getPreWindowMs(), getPostWindowMs());
+    m_canvas->resized();
 }
 
 // --- Parameters ------------------------------------------------------------
@@ -343,6 +372,10 @@ void ReceptiveFieldNode::analysisConfigurationChanged()
 
     for (auto* source : getTriggerSources().items())
         m_dataStore.ResetAndResizeBuffersForTriggerSource (source, numChannels, numSamples);
+
+    // The trace panels are keyed on the channels, the sources and the buffers,
+    // all of which have just changed.
+    rebuildDisplayPanels();
 
     m_compute.requestRecompute();
 }
