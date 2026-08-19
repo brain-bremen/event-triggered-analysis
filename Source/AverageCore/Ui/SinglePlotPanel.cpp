@@ -896,6 +896,15 @@ bool SinglePlotPanel::updateCachedAveragPath()
     if (avgBuffer.getNumSamples() == 0 || avgBuffer.getNumChannels() == 0)
         return false;
 
+    // The row this panel draws can be past the end of the buffer while a
+    // reconfiguration is in flight -- the panels and the accumulators are
+    // resized by separate calls, and a repaint can land between them. Reading
+    // past the end is a crash, not a glitch, so the panel simply draws nothing
+    // until the two agree again.
+    if (channelIndexInAverageBuffer < 0
+        || channelIndexInAverageBuffer >= avgBuffer.getNumChannels())
+        return false;
+
     const int numSamples = avgBuffer.getNumSamples();
     const float* channelData = avgBuffer.getReadPointer (channelIndexInAverageBuffer);
 

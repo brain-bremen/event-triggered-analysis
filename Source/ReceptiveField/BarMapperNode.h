@@ -209,6 +209,13 @@ private:
      *  edit. */
     bool m_demoOwnsSources = false;
 
+    /** Set while populateDemoData() is running. Adding a trigger source calls
+     *  back into analysisConfigurationChanged(), which in demo mode repopulates
+     *  -- so building the demo's own sources re-entered the build that was
+     *  creating them, and the inner pass drew panels against buffers the outer
+     *  pass had not sized yet. */
+    bool m_populatingDemo = false;
+
     bool m_demoMode = false;
     RfDemoSettings m_demoSettings;
 

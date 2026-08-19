@@ -28,6 +28,7 @@
 #include "Ui/BarMapperEditor.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace EventTriggered
 {
@@ -406,10 +407,6 @@ void BarMapperNode::analysisConfigurationChanged()
     // the new window instead, so the two controls do what they say.
     if (m_demoMode)
     {
-        const double rate = m_demoSettings.sampleRateHz;
-        m_demoSettings.preSamples = juce::roundToInt (getPreWindowMs() / 1000.0 * rate);
-        m_demoSettings.postSamples = juce::roundToInt (getPostWindowMs() / 1000.0 * rate);
-
         populateDemoData();
         m_compute.requestRecompute();
         return;
@@ -634,6 +631,30 @@ void BarMapperNode::setDemoSettings (const RfDemoSettings& settings)
 
 void BarMapperNode::populateDemoData()
 {
+    // Re-entered from analysisConfigurationChanged() by way of addTriggerSource()
+    // below. The outer call finishes the job; the inner one must not run against
+    // half-built state.
+    if (m_populatingDemo)
+        return;
+
+    const juce::ScopedValueSetter<bool> populating (m_populatingDemo, true);
+
+    // The demo follows Pre and Post, so those two controls mean the same thing
+    // here as they do on real data -- with a floor. The bar has to have time to
+    // cross the map at all: a post window shorter than the sweep takes would
+    // produce traces in which nothing ever happens, and a blank demo reads as a
+    // broken plugin rather than as a window set too short.
+    const double rate = m_demoSettings.sampleRateHz;
+    const double sweepSeconds =
+        m_demoSettings.speedDegPerSec > 0.0
+            ? 2.0 * std::abs (m_demoSettings.sweepStartDeg) / m_demoSettings.speedDegPerSec
+            : 0.0;
+
+    m_demoSettings.preSamples =
+        std::max (10, juce::roundToInt (getPreWindowMs() / 1000.0 * rate));
+    m_demoSettings.postSamples = std::max (juce::roundToInt (sweepSeconds * rate),
+                                           juce::roundToInt (getPostWindowMs() / 1000.0 * rate));
+
     const std::vector<RfDemoDirection> dataset = buildDemoDataset (m_demoSettings);
 
     if (dataset.empty())
