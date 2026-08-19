@@ -42,6 +42,18 @@ public:
                      int channelIndexInAverageBuffer,
                      const MultiChannelAverageBuffer*);
 
+    /** For a trace that has no ContinuousChannel behind it: the receptive-field
+     *  plugin's demo mode fills its average buffers with simulated data while the
+     *  GUI is idle, so there is no stream and no channel to take the name and
+     *  sample rate from. Everything else about the panel is identical; only the
+     *  two facts it would have read off the channel are passed in instead. */
+    SinglePlotPanel (const GridDisplay*,
+                     const String& channelName,
+                     double sampleRate,
+                     const TriggerSource*,
+                     int channelIndexInAverageBuffer,
+                     const MultiChannelAverageBuffer*);
+
     void paint (Graphics& g) override;
     void resized() override;
 
@@ -100,8 +112,14 @@ public:
     void setTrialOpacity (float opacity);
 
     uint16 streamId;
+
+    /** Null for a panel built from the name/sample-rate constructor. Used as a
+     *  grouping key by GridDisplay, which tolerates null. */
     const ContinuousChannel* contChannel;
     DynamicObject getInfo() const;
+
+    /** This panel's row in the average buffer, i.e. which channel it shows. */
+    int getChannelRow() const { return channelIndexInAverageBuffer; }
 
 private:
     struct DataRange
@@ -167,6 +185,7 @@ private:
     int overlayIndex = 0;
     bool overlayMode = false;
     bool waitingForWindowToClose;
+    const String m_channelName;
     const double m_sampleRate;
     int channelIndexInAverageBuffer;
 

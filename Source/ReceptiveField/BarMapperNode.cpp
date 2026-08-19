@@ -76,6 +76,28 @@ void BarMapperNode::rebuildDisplayPanels()
 
     m_canvas->prepareToUpdate();
 
+    // Demo mode has no stream, so getSelectedChannels() is empty and
+    // getContinuousChannel() has nothing to return -- the loop below would build
+    // no panels at all and the Traces view would sit blank while the Map view
+    // beside it was full. The demo's own channels are named here instead.
+    if (m_demoMode)
+    {
+        for (int row = 0; row < m_demoSettings.channels; ++row)
+            for (auto* source : getTriggerSources().items())
+                m_canvas->addNamedChannel (
+                    "CH" + juce::String (row + 1),
+                    m_demoSettings.sampleRateHz,
+                    source,
+                    row,
+                    m_dataStore.getRefToAverageBufferForTriggerSource (source));
+
+        m_canvas->setWindowSizeMs (
+            static_cast<float> (m_demoSettings.preSamples / m_demoSettings.sampleRateHz * 1000.0),
+            static_cast<float> (m_demoSettings.postSamples / m_demoSettings.sampleRateHz * 1000.0));
+        m_canvas->resized();
+        return;
+    }
+
     const auto& selected = getSelectedChannels();
 
     // Grouped by channel so the per-direction traces for one channel overlay each
@@ -377,6 +399,22 @@ void BarMapperNode::analysisConfigurationChanged()
 {
     const auto lock = m_dataStore.GetLock();
 
+    // In demo mode the buffers belong to the demo, not to a stream. Resizing
+    // them from the (empty) channel selection below would throw the simulated
+    // data away and leave the display blank, which is exactly what happened on
+    // the first change of Pre or Post with the demo showing. Rebuild the demo at
+    // the new window instead, so the two controls do what they say.
+    if (m_demoMode)
+    {
+        const double rate = m_demoSettings.sampleRateHz;
+        m_demoSettings.preSamples = juce::roundToInt (getPreWindowMs() / 1000.0 * rate);
+        m_demoSettings.postSamples = juce::roundToInt (getPostWindowMs() / 1000.0 * rate);
+
+        populateDemoData();
+        m_compute.requestRecompute();
+        return;
+    }
+
     const int numChannels = getSelectedChannels().size();
     const int numSamples = getTrialGeometry().totalDisplayedSamples();
 
@@ -572,6 +610,10 @@ bool BarMapperNode::setDemoMode (bool shouldBeOn)
             m_angles.clear();
             m_demoOwnsSources = false;
         }
+
+        // The trace panels still name the demo's channels, and nothing else is
+        // going to rebuild them: leaving the demo is not a signal-chain update.
+        rebuildDisplayPanels();
     }
 
     m_compute.requestRecompute();

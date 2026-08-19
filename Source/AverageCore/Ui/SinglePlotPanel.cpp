@@ -41,6 +41,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
       m_parentGrid (display_),
       m_averageBuffer (avgBuffer),
       waitingForWindowToClose (false),
+      m_channelName (channel->getName()),
       m_sampleRate (channel->getSampleRate()),
       channelIndexInAverageBuffer (channelIndexInAverageBuffer_)
 {
@@ -55,7 +56,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     channelLabel->setFont (font12pt);
     channelLabel->setJustificationType (Justification::topLeft);
     channelLabel->setColour (Label::textColourId, Colours::white);
-    channelLabel->setText (channel->getName(), dontSendNotification);
+    channelLabel->setText (m_channelName, dontSendNotification);
     addAndMakeVisible (channelLabel.get());
 
     conditionLabel = std::make_unique<Label> ("condition label");
@@ -63,6 +64,47 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     conditionLabel->setJustificationType (Justification::topLeft);
     String conditionText = m_triggerSource->name + " (N=" + String (numTrials) + ")";
     conditionLabel->setText (conditionText, dontSendNotification);
+    conditionLabel->setColour (Label::textColourId, baseColour);
+    addAndMakeVisible (conditionLabel.get());
+
+    clear();
+}
+
+SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
+                                  const String& channelName,
+                                  double sampleRate,
+                                  const TriggerSource* source_,
+                                  int channelIndexInAverageBuffer_,
+                                  const MultiChannelAverageBuffer* avgBuffer)
+    : streamId (0),
+      contChannel (nullptr),
+      baseColour (source_->colour),
+      m_triggerSource (source_),
+      m_parentGrid (display_),
+      m_averageBuffer (avgBuffer),
+      waitingForWindowToClose (false),
+      m_channelName (channelName),
+      m_sampleRate (sampleRate),
+      channelIndexInAverageBuffer (channelIndexInAverageBuffer_)
+{
+    pre_ms = 0;
+    post_ms = 0;
+    bin_size_ms = 10;
+
+    const auto font12pt = Font { withDefaultMetrics (FontOptions { 12.0f }) };
+
+    channelLabel = std::make_unique<Label> ("channel label");
+    channelLabel->setFont (font12pt);
+    channelLabel->setJustificationType (Justification::topLeft);
+    channelLabel->setColour (Label::textColourId, Colours::white);
+    channelLabel->setText (m_channelName, dontSendNotification);
+    addAndMakeVisible (channelLabel.get());
+
+    conditionLabel = std::make_unique<Label> ("condition label");
+    conditionLabel->setFont (font12pt);
+    conditionLabel->setJustificationType (Justification::topLeft);
+    conditionLabel->setText (m_triggerSource->name + " (N=" + String (numTrials) + ")",
+                             dontSendNotification);
     conditionLabel->setColour (Label::textColourId, baseColour);
     addAndMakeVisible (conditionLabel.get());
 
@@ -986,7 +1028,7 @@ DynamicObject SinglePlotPanel::getInfo() const
 {
     DynamicObject info;
 
-    info.setProperty (Identifier ("channel"), var (contChannel->getName()));
+    info.setProperty (Identifier ("channel"), var (m_channelName));
     info.setProperty (Identifier ("condition"), var (m_triggerSource->name));
     info.setProperty (Identifier ("color"), var (m_triggerSource->colour.toString()));
     info.setProperty (Identifier ("trial_count"), var (int (numTrials)));
