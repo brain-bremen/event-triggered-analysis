@@ -179,8 +179,12 @@ private:
     float pre_ms;
     float post_ms;
     int bin_size_ms;
-    int panelWidthPx;
-    int panelHeightPx;
+    // Zero until the first resized(). Left uninitialised, they were whatever was
+    // on the stack: every plotting path divides the sample count by panelWidthPx,
+    // and a panel that had data before it had a size divided by garbage -- by
+    // zero if that is what the stack held.
+    int panelWidthPx = 0;
+    int panelHeightPx = 0;
     bool shouldDrawBackground = true;
     int overlayIndex = 0;
     bool overlayMode = false;

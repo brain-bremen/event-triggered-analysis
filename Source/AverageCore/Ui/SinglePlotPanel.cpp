@@ -131,7 +131,11 @@ void SinglePlotPanel::resized()
     if (cachedPanelWidth != panelWidthPx)
     {
         cachedPanelWidth = panelWidthPx;
+
+        // Both caches hold paths in panel pixels, so both are stale after a width
+        // change -- the trial paths were being left at the old width.
         updateCachedAveragPath();
+        updateCachedTrialPaths();
     }
 
     channelLabel->setBounds (labelOffset, 10, 150, 20);
@@ -427,6 +431,10 @@ void SinglePlotPanel::plotWithDirectMapping (const float* channelData,
                                              const DataRange& dataRange)
 {
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0 || numSamples <= 1)
+        return;
+
     const int samplesPerPixel = std::max (1, numSamples / numPixels);
 
     if (samplesPerPixel <= 1)
@@ -524,6 +532,10 @@ void SinglePlotPanel::plotWithCustomXLimits (const float* channelData,
         return;
 
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0)
+        return;
+
     int numVisibleSamples = lastVisibleSample - firstVisibleSample + 1;
     int samplesPerPixel = std::max (1, numVisibleSamples / numPixels);
     bool pathStarted = false;
@@ -614,6 +626,9 @@ void SinglePlotPanel::plotTrialToPath (Path& path,
                                        const TimeRange& timeRange)
 {
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0 || numSamples <= 1)
+        return;
 
     if (! useCustomXLimits)
     {
@@ -797,6 +812,14 @@ void SinglePlotPanel::plotTrialToPath (Path& path,
 
 bool SinglePlotPanel::updateCachedTrialPaths()
 {
+    // Nothing to plot into yet: the panel is given its data by addContChannel()
+    // and its size by the grid's resized() afterwards, and with data already in
+    // the buffer -- demo mode, or a canvas rebuilt over full accumulators -- the
+    // first path is built before the panel has a width. resized() invalidates
+    // the cache once the width arrives.
+    if (panelWidthPx <= 0 || panelHeightPx <= 0)
+        return false;
+
     if (! m_trialBuffer || ! plotAllTraces)
         return false;
 
@@ -873,6 +896,14 @@ bool SinglePlotPanel::updateCachedTrialPaths()
 
 bool SinglePlotPanel::updateCachedAveragPath()
 {
+    // Nothing to plot into yet: the panel is given its data by addContChannel()
+    // and its size by the grid's resized() afterwards, and with data already in
+    // the buffer -- demo mode, or a canvas rebuilt over full accumulators -- the
+    // first path is built before the panel has a width. resized() invalidates
+    // the cache once the width arrives.
+    if (panelWidthPx <= 0 || panelHeightPx <= 0)
+        return false;
+
     if (! m_averageBuffer)
         return false;
 
