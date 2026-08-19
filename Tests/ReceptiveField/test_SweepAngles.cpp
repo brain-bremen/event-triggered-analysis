@@ -330,3 +330,44 @@ TEST (ArmPattern, MatchingIsCaseInsensitiveLikeEveryOtherPattern)
     const auto source = sourceWithArmPattern (armPatternForTrialType (5));
     EXPECT_TRUE (armsOn (*source, trialStartMessage (1, 5).toLowerCase()));
 }
+
+// --- Direction colours -----------------------------------------------------
+
+TEST (DirectionColour, EveryDirectionOfAnEightWayShapeGetsItsOwnColour)
+{
+    // The complaint this answers: all eight sweeps are armed on the same TTL
+    // line, the shared palette colours by line, so every overlaid trace was
+    // drawn in one colour.
+    std::vector<juce::Colour> colours;
+
+    for (const auto& direction : generateDirections (8))
+        colours.push_back (colourForDirection (direction.angleDeg));
+
+    for (std::size_t i = 0; i < colours.size(); ++i)
+        for (std::size_t j = i + 1; j < colours.size(); ++j)
+            EXPECT_NE (colours[i].toString(), colours[j].toString())
+                << "directions " << i << " and " << j;
+}
+
+TEST (DirectionColour, OppositeSweepsAreOppositeHues)
+{
+    const float left = colourForDirection (180.0).getHue();
+    const float right = colourForDirection (0.0).getHue();
+
+    EXPECT_NEAR (std::abs (left - right), 0.5f, 1e-4f);
+}
+
+TEST (DirectionColour, TheSameDirectionIsAlwaysTheSameColour)
+{
+    // Wrapping, so a table holding 370 or -350 degrees still lines up with the
+    // session that held 10.
+    EXPECT_EQ (colourForDirection (10.0).toString(), colourForDirection (370.0).toString());
+    EXPECT_EQ (colourForDirection (10.0).toString(), colourForDirection (-350.0).toString());
+}
+
+TEST (DirectionColour, StaysVisibleAgainstTheDarkPanelBackground)
+{
+    for (int angle = 0; angle < 360; angle += 15)
+        EXPECT_GT (colourForDirection (angle).getPerceivedBrightness(), 0.3f)
+            << "angle " << angle;
+}

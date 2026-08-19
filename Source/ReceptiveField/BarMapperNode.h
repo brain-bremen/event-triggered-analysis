@@ -221,6 +221,10 @@ private:
 
     DataStore m_dataStore;
     SweepAngles m_angles;
+    /** Gives a source the colour of the direction it stands for, unless it is
+     *  wearing a colour the user chose. */
+    void applyDirectionColour (TriggerSource* source, double angleDeg);
+
     RfCanvas* m_canvas = nullptr;
 
     /** Hands a finished set of maps to the canvas on the message thread.

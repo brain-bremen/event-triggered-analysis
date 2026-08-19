@@ -93,4 +93,13 @@ std::vector<GeneratedDirection> generateDirections (int count, int firstTrialTyp
     return directions;
 }
 
+juce::Colour colourForDirection (double canonicalAngleDeg)
+{
+    const float hue = static_cast<float> (Rf::wrap360 (canonicalAngleDeg) / 360.0);
+
+    // Saturated but not fully: at full saturation the blues go nearly black
+    // against the dark panel background, and these are thin lines.
+    return juce::Colour::fromHSV (hue, 0.72f, 1.0f, 1.0f);
+}
+
 } // namespace EventTriggered

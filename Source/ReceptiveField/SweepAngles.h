@@ -110,4 +110,17 @@ std::vector<GeneratedDirection> generateDirections (int count,
     real message strings, and so the editor can show it. */
 juce::String armPatternForTrialType (int trialType);
 
+/** A colour standing for a sweep direction.
+ *
+ *  The shared palette colours a source by its TTL line, which is exactly right
+ *  everywhere else and useless here: every direction is armed on the same line by
+ *  the trial-type message, so a whole set of them came out in one colour and the
+ *  overlaid traces were indistinguishable. Hue follows the canonical angle
+ *  instead, so the colour means the direction -- opposite sweeps are opposite
+ *  hues, and the same direction is the same colour in every session.
+ *
+ *  @param canonicalAngleDeg  direction in the canonical convention (0 = right,
+ *                            counterclockwise), not the user's. */
+juce::Colour colourForDirection (double canonicalAngleDeg);
+
 } // namespace EventTriggered

@@ -352,7 +352,23 @@ std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
 void BarMapperNode::setAngleForSource (TriggerSource* source, double angleDeg)
 {
     m_angles.setAngleDeg (source, angleDeg);
+    applyDirectionColour (source, angleDeg);
     m_compute.requestRecompute();
+}
+
+void BarMapperNode::applyDirectionColour (TriggerSource* source, double angleDeg)
+{
+    if (source == nullptr)
+        return;
+
+    // Only while the source still wears the palette colour for its line. All the
+    // directions share one line, so that colour is the same for all of them and
+    // is worth replacing; a colour the user picked in the trigger table is not.
+    if (source->colour != TriggerSource::getColourForLine (source->line))
+        return;
+
+    m_triggerSources.setTriggerSourceColour (
+        source, colourForDirection (Rf::toCanonicalDeg (angleDeg, getAngleConvention())));
 }
 
 std::vector<Rf::AngleSetWarning> BarMapperNode::checkAngles() const
@@ -389,6 +405,7 @@ void BarMapperNode::generateDirectionSources (int count,
         source->name = direction.name;
         m_triggerSources.setArmPattern (source, direction.armPattern);
         m_angles.setAngleDeg (source, direction.angleDeg);
+        applyDirectionColour (source, direction.angleDeg);
     }
 
     m_compute.requestRecompute();
@@ -687,6 +704,7 @@ void BarMapperNode::populateDemoData()
                            + juce::String::charToString (static_cast<juce::juce_wchar> (0x00B0));
             m_triggerSources.setArmPattern (source, armPatternForTrialType (direction.trialType));
             m_angles.setAngleDeg (source, direction.angleDeg);
+            applyDirectionColour (source, direction.angleDeg);
         }
 
         m_demoOwnsSources = true;
