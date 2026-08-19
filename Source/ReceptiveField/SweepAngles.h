@@ -112,12 +112,15 @@ juce::String armPatternForTrialType (int trialType);
 
 /** A colour standing for a sweep direction.
  *
- *  The shared palette colours a source by its TTL line, which is exactly right
- *  everywhere else and useless here: every direction is armed on the same line by
- *  the trial-type message, so a whole set of them came out in one colour and the
- *  overlaid traces were indistinguishable. Hue follows the canonical angle
- *  instead, so the colour means the direction -- opposite sweeps are opposite
- *  hues, and the same direction is the same colour in every session.
+ *  Used to give a *newly created* set of directions distinct colours. Sources are
+ *  born with the palette entry for their TTL line, and every direction is armed
+ *  on the same line by its trial-type message, so a generated set arrived as eight
+ *  identical colours and the overlaid traces could not be told apart. Hue follows
+ *  the canonical angle, so the colour also means something: opposite sweeps are
+ *  opposite hues, and a direction keeps its colour across sessions.
+ *
+ *  Per-condition colours are otherwise the user's, and nothing here repaints a
+ *  source after it exists.
  *
  *  @param canonicalAngleDeg  direction in the canonical convention (0 = right,
  *                            counterclockwise), not the user's. */

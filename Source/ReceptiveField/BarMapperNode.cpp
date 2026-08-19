@@ -352,7 +352,6 @@ std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
 void BarMapperNode::setAngleForSource (TriggerSource* source, double angleDeg)
 {
     m_angles.setAngleDeg (source, angleDeg);
-    applyDirectionColour (source, angleDeg);
     m_compute.requestRecompute();
 }
 
@@ -361,11 +360,11 @@ void BarMapperNode::applyDirectionColour (TriggerSource* source, double angleDeg
     if (source == nullptr)
         return;
 
-    // Only while the source still wears the palette colour for its line. All the
-    // directions share one line, so that colour is the same for all of them and
-    // is worth replacing; a colour the user picked in the trigger table is not.
-    if (source->colour != TriggerSource::getColourForLine (source->line))
-        return;
+    // Called only where this plugin creates a whole set of sources itself. A
+    // condition's colour is the user's to choose and works exactly as it should
+    // -- the problem is only that a set generated on one TTL line starts out with
+    // every member wearing that line's palette entry, all eight the same yellow.
+    // Typing an angle into a source the user made does not repaint it.
 
     m_triggerSources.setTriggerSourceColour (
         source, colourForDirection (Rf::toCanonicalDeg (angleDeg, getAngleConvention())));

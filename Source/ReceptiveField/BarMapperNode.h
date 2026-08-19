@@ -221,8 +221,9 @@ private:
 
     DataStore m_dataStore;
     SweepAngles m_angles;
-    /** Gives a source the colour of the direction it stands for, unless it is
-     *  wearing a colour the user chose. */
+    /** Gives a source the colour of the direction it stands for. Used where this
+     *  plugin creates the sources -- the demo and the direction generator -- so a
+     *  fresh set does not arrive as eight identical line colours. */
     void applyDirectionColour (TriggerSource* source, double angleDeg);
 
     RfCanvas* m_canvas = nullptr;
