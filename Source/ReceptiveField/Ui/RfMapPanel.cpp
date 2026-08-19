@@ -343,13 +343,24 @@ void RfMapGrid::resized()
     if (m_panels.isEmpty())
         return;
 
-    const int width = jmax (1, getWidth() / m_columns);
+    // Cells are square, not "the viewport divided by the column count". A map is
+    // square and is centred in whatever cell it gets, so a stretched cell shows
+    // up purely as blank space between the columns -- three 220 px maps spread
+    // across a 1800 px window sat with 300 px of black between each of them.
+    // Sizing the cell from the panel height instead keeps the maps adjacent and
+    // makes the Size control mean what it says.
+    const int cell = jmax (40, m_panelHeight);
+    const int used = cell * m_columns;
+
+    // Left-aligned once the row is wider than the viewport (the horizontal
+    // scrollbar is off, so a negative offset would hide the first column).
+    const int xOffset = jmax (0, (getWidth() - used) / 2);
 
     for (int i = 0; i < m_panels.size(); ++i)
     {
         const int row = i / m_columns;
         const int col = i % m_columns;
-        m_panels[i]->setBounds (col * width, row * m_panelHeight, width, m_panelHeight);
+        m_panels[i]->setBounds (xOffset + col * cell, row * m_panelHeight, cell, m_panelHeight);
     }
 }
 

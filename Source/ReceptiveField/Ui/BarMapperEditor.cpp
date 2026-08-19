@@ -38,7 +38,7 @@ namespace EventTriggered
 {
 
 BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "RF BARS", EditorLayout::totalWidth)
+    : VisualizerEditor (parentNode, "RF BARS", editorWidth)
 {
     const auto makeButton = [this] (const String& text) {
         auto button = std::make_unique<UtilityButton> (text);
@@ -51,7 +51,8 @@ BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
     m_triggersButton = makeButton ("TRIGGERS");
     m_monitorButton = makeButton ("MONITOR");
     m_analysisButton = makeButton ("ANALYSIS");
-    m_stimulusButton = makeButton ("STIMULUS");
+    m_stimulusButton = makeButton ("SWEEPS");
+    m_stimulusButton->setTooltip ("Map each trigger condition to the direction its bar swept in.");
 
     m_demoButton = makeButton ("DEMO");
     m_demoButton->setClickingTogglesState (true);
@@ -62,9 +63,6 @@ BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
 
     m_channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
     addAndMakeVisible (m_channelsLabel.get());
-
-    m_stimulusLabel = EditorLayout::makeCaptionLabel ("Sweeps");
-    addAndMakeVisible (m_stimulusLabel.get());
 
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::pre_ms, 15, 95);
     addBoundedValueParameterEditor (Parameter::PROCESSOR_SCOPE, ParameterNames::post_ms, 115, 95);
@@ -84,19 +82,22 @@ void BarMapperEditor::resized()
 {
     VisualizerEditor::resized();
 
+    // SWEEPS sits on the button row with its siblings -- it opens a popup, like
+    // they do -- and DEMO takes the spare slot on the channel row, where
+    // TriggeredCoherence keeps CH PAIRS. The earlier arrangement put SWEEPS in
+    // that slot, where it was left with 38 px and rendered as "STIM.", and
+    // dropped DEMO at a hand-computed bottom-right corner that landed on top of
+    // the Post value box.
     EditorLayout::layoutCommonContents (
         *this,
-        { m_triggersButton.get(), m_monitorButton.get(), m_analysisButton.get() },
+        { m_triggersButton.get(),
+          m_monitorButton.get(),
+          m_analysisButton.get(),
+          m_stimulusButton.get() },
         m_channelsLabel.get(),
         m_preLabel.get(),
         m_postLabel.get(),
-        m_stimulusButton.get(),
-        m_stimulusLabel.get());
-
-    // Tucked into the bottom-right corner rather than given a row of its own:
-    // the three shared rows are what makes this editor look like its siblings,
-    // and DEMO is not part of the shape they share.
-    m_demoButton->setBounds (getWidth() - 60, getHeight() - 24, 48, 18);
+        m_demoButton.get());
 }
 
 void BarMapperEditor::demoModeChanged()
@@ -132,15 +133,15 @@ void BarMapperEditor::setTriggerCount (int count)
 {
     m_triggersButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
 
-    // The stimulus button carries the count of directions that actually have an
+    // The sweeps button carries the count of directions that actually have an
     // angle, which is not the same number: a source with no angle contributes
-    // nothing to the map. "TRIGGERS (8)" beside "STIMULUS (6)" is the fastest way
+    // nothing to the map. "TRIGGERS (8)" beside "SWEEPS (6)" is the fastest way
     // to see that two directions were never filled in.
     if (auto* node = getNode())
     {
         const auto configured = static_cast<int> (node->getSweepAngles().size());
-        m_stimulusButton->setLabel (configured > 0 ? "STIMULUS (" + String (configured) + ")"
-                                                   : "STIMULUS");
+        m_stimulusButton->setLabel (configured > 0 ? "SWEEPS (" + String (configured) + ")"
+                                                   : "SWEEPS");
     }
 }
 

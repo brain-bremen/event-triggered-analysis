@@ -532,6 +532,20 @@ once before trusting the plugin in an experiment.
 2. **Export.** Do you want the maps written to disk (CSV/NPY per channel) for
    offline analysis, and if so on what trigger — a button, or every N trials?
 
+**Wanted, not yet built:**
+
+- **Switchable units: degrees, millimetres, screen pixels.** Everything the
+  plugin shows and takes is currently in degrees of visual angle — sweep start
+  and speed, degrees per map pixel, map centre, the RF diameter printed on each
+  panel, the axis of the compass preview. Screen millimetres and screen pixels
+  are the units people actually measure a stimulus in, and the conversion needs
+  the viewing distance and the screen's pixel pitch, so this is a small settings
+  group (viewing distance in mm, pixels per mm) plus one display-unit selector,
+  not just a relabelling. Degrees stays the internal unit throughout `rf_math`;
+  the conversion belongs at the edges, in the parameter controls and in the
+  panel/compass labels, so that a change of display unit can never change a
+  computed map.
+
 **Also:** `fiorani2014.pdf` is currently untracked in the working tree. Say
 whether it should be committed under `Resources/` or added to `.gitignore`.
 

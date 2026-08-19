@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerCountDisplay.h"
 
 #include <EditorHeaders.h>
@@ -44,11 +45,15 @@ class TriggerSource;
  *  laid its editor out differently would look like a different piece of software
  *  sitting in the same signal chain.
  *
- *  The one addition is STIMULUS, on the channel row under ANALYSIS — the same
- *  slot TriggeredCoherence puts CH PAIRS in, and for the same reason: it is this
- *  plugin's own configuration, and it does not belong on a row the other plugins
- *  share.
+ *  The one addition to the button row is SWEEPS, which opens the angle table;
+ *  DEMO takes the spare slot on the channel row, the same one TriggeredCoherence
+ *  puts CH PAIRS in. The editor is wider than its siblings by exactly the fourth
+ *  button — three buttons' worth of width could not hold four labels, and every
+ *  attempt to fit them ended in truncation ("STIM.") or overlap.
  */
+/** Wider than EditorLayout::totalWidth by one button, for SWEEPS. */
+constexpr int editorWidth = EditorLayout::totalWidth + 90;
+
 class BarMapperEditor : public VisualizerEditor,
                  public Button::Listener,
                  public TriggerCountDisplay
@@ -95,7 +100,6 @@ private:
     std::unique_ptr<UtilityButton> m_demoButton;
 
     std::unique_ptr<Label> m_channelsLabel;
-    std::unique_ptr<Label> m_stimulusLabel;
     std::unique_ptr<Label> m_preLabel;
     std::unique_ptr<Label> m_postLabel;
 
