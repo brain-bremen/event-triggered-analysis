@@ -50,7 +50,7 @@ BarMapperNode::BarMapperNode()
           return gatherTraces (traces, channels, settings);
       })
 {
-    m_compute.onResultsReady = [this] { triggerAsyncUpdate(); };
+    m_compute.onResultsReady = [this] { m_resultsPublisher.triggerAsyncUpdate(); };
     m_compute.start();
 }
 
@@ -457,6 +457,12 @@ void BarMapperNode::clearAllData()
 void BarMapperNode::refreshDisplay()
 {
     m_compute.requestRecompute();
+}
+
+void BarMapperNode::publishResults()
+{
+    if (m_canvas != nullptr)
+        m_canvas->refresh();
 }
 
 // --- Gathering -------------------------------------------------------------

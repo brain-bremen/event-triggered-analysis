@@ -156,6 +156,10 @@ Visualizer* BarMapperEditor::createNewCanvas()
 
     updateSettings();
 
+    // The maps reach the canvas when a compute finishes; a canvas opened after
+    // the data was already there would otherwise wait for the next change.
+    node->requestRecompute();
+
     return m_canvas;
 }
 

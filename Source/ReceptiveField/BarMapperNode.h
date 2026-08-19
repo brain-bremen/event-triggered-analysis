@@ -222,6 +222,28 @@ private:
     DataStore m_dataStore;
     SweepAngles m_angles;
     RfCanvas* m_canvas = nullptr;
+
+    /** Hands a finished set of maps to the canvas on the message thread.
+     *
+     *  Its own AsyncUpdater rather than the node's: the node's handler ends in
+     *  refreshDisplay(), which asks for a recompute. Routing finished results
+     *  through it made every completed map immediately ask for the next one, so
+     *  the compute thread never went back to sleep -- and the canvas was still
+     *  never told, because the only thing that pushed results into it was the
+     *  Visualizer's animation timer, which runs during acquisition only. That is
+     *  why the demo showed traces but no maps while the GUI was idle. */
+    struct ResultsPublisher : public juce::AsyncUpdater
+    {
+        explicit ResultsPublisher (BarMapperNode& owner) : m_owner (owner) {}
+        void handleAsyncUpdate() override { m_owner.publishResults(); }
+
+        BarMapperNode& m_owner;
+    };
+
+    ResultsPublisher m_resultsPublisher { *this };
+
+    void publishResults();
+
     RfComputeJob m_compute;
 
     /** The captured window narrowed to the selected channels. Worker thread only,

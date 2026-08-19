@@ -168,7 +168,14 @@ RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
     m_traceGrid->setConditionOverlay (true);
 }
 
-RfCanvas::~RfCanvas() = default;
+RfCanvas::~RfCanvas()
+{
+    // The node keeps a raw pointer here and now publishes finished maps through
+    // it from outside the animation timer, so it has to be told when this goes
+    // away -- the editor can be rebuilt while the node lives on.
+    if (m_node != nullptr)
+        m_node->setCanvas (nullptr);
+}
 
 void RfCanvas::setDisplayMode (RfDisplayMode mode)
 {
@@ -225,11 +232,12 @@ void RfCanvas::refresh()
     if (m_node == nullptr)
         return;
 
+    // The trace panels redraw only when they are the visible view; the maps are
+    // kept up to date either way, so switching from Traces back to Map shows the
+    // current result rather than waiting for the next one. Both paths are cheap
+    // when nothing has changed -- the generation check below does the rest.
     if (m_mode == RfDisplayMode::Traces)
-    {
         m_traceGrid->refresh();
-        return;
-    }
 
     const RfResults results = m_node->getResults();
 
