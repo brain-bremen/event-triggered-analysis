@@ -222,26 +222,9 @@ void TriggerSourceConfigWindow::Model::paintCell (juce::Graphics& g,
                                                   int height,
                                                   bool /*selected*/)
 {
-    if (row < 0 || row >= sources.size())
-        return;
-
-    // Only the columns without a custom component paint here.
-    if (column == lineColumn)
-    {
-        g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions (13.0f));
-
-        const int line = sources[row]->line;
-
-        // Displayed 1-based, matching the LFP viewer's TTL line numbering, even
-        // though the source stores the 0-based line event->getLine() reports.
-        g.drawText (line < 0 ? juce::String ("--") : juce::String (line + 1),
-                    2,
-                    0,
-                    width - 4,
-                    height,
-                    juce::Justification::centred);
-    }
+    // Every column now has a custom component (see refreshComponentForCell),
+    // so there is nothing left for this to draw.
+    juce::ignoreUnused (g, row, column, width, height);
 }
 
 juce::Component*
@@ -278,6 +261,34 @@ juce::Component*
                                   [this] (TriggerSource& s, const juce::String& text)
                                   { performUndoable (new RenameTriggerSource (m_node, &s, text)); },
                                   editable);
+            }
+
+            cell->setSource (source);
+            return cell;
+        }
+
+        case lineColumn:
+        {
+            auto* cell = dynamic_cast<TextCell*> (existing);
+
+            if (cell == nullptr)
+            {
+                delete existing;
+
+                // Displayed 1-based, matching the LFP viewer's TTL line numbering,
+                // even though the source stores the 0-based line event->getLine()
+                // reports. Clamped the same way as the add-row line box.
+                auto* node = m_node;
+                cell = new TextCell (
+                    [] (TriggerSource& s)
+                    { return s.line < 0 ? juce::String ("--") : juce::String (s.line + 1); },
+                    [node] (TriggerSource& s, const juce::String& t)
+                    {
+                        const int newLine = juce::jlimit (1, 256, t.getIntValue()) - 1;
+                        performUndoable (new ChangeTriggerTTLLine (node, &s, newLine));
+                    },
+                    editable);
+                cell->setJustificationType (juce::Justification::centred);
             }
 
             cell->setSource (source);
