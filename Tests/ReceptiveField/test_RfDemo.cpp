@@ -29,6 +29,7 @@
 
 #include <cmath>
 #include <set>
+#include <algorithm>
 
 using namespace EventTriggered;
 
