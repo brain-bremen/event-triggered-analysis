@@ -147,30 +147,43 @@ namespace
         bool m_enabled = false;
     };
 
-    /** Row delete button. */
-    class DeleteCell : public juce::Component, public juce::Button::Listener
+    /** Row duplicate + delete buttons, side by side. */
+    class RowActionsCell : public juce::Component, public juce::Button::Listener
     {
     public:
-        DeleteCell (TriggerSourceConfigWindow& owner, TriggeredCaptureNode* node, bool enabled)
+        RowActionsCell (TriggerSourceConfigWindow& owner, TriggeredCaptureNode* node, bool enabled)
             : m_owner (owner),
               m_node (node),
-              m_button ("X")
+              m_duplicateButton ("Dup"),
+              m_deleteButton ("X")
         {
-            m_button.setEnabled (enabled);
-            m_button.addListener (this);
-            addAndMakeVisible (m_button);
+            m_duplicateButton.setEnabled (enabled);
+            m_deleteButton.setEnabled (enabled);
+            m_duplicateButton.addListener (this);
+            m_deleteButton.addListener (this);
+            addAndMakeVisible (m_duplicateButton);
+            addAndMakeVisible (m_deleteButton);
         }
 
         void setSource (TriggerSource* source) { m_source = source; }
 
-        void resized() override { m_button.setBounds (getLocalBounds().reduced (5)); }
+        void resized() override
+        {
+            auto bounds = getLocalBounds().reduced (3, 5);
+            m_duplicateButton.setBounds (bounds.removeFromLeft (bounds.getWidth() / 2).reduced (2, 0));
+            m_deleteButton.setBounds (bounds.reduced (2, 0));
+        }
 
-        void buttonClicked (juce::Button*) override
+        void buttonClicked (juce::Button* button) override
         {
             if (m_source == nullptr || m_node == nullptr)
                 return;
 
-            performUndoable (new RemoveTriggerConditions (m_node, { m_source }));
+            if (button == &m_duplicateButton)
+                performUndoable (new DuplicateTriggerSource (m_node, m_source));
+            else if (button == &m_deleteButton)
+                performUndoable (new RemoveTriggerConditions (m_node, { m_source }));
+
             m_owner.update();
         }
 
@@ -178,7 +191,8 @@ namespace
         TriggerSourceConfigWindow& m_owner;
         TriggeredCaptureNode* m_node = nullptr;
         TriggerSource* m_source = nullptr;
-        juce::TextButton m_button;
+        juce::TextButton m_duplicateButton;
+        juce::TextButton m_deleteButton;
     };
 
 } // namespace
@@ -374,12 +388,12 @@ juce::Component*
 
         case deleteColumn:
         {
-            auto* cell = dynamic_cast<DeleteCell*> (existing);
+            auto* cell = dynamic_cast<RowActionsCell*> (existing);
 
             if (cell == nullptr)
             {
                 delete existing;
-                cell = new DeleteCell (m_owner, m_node, editable);
+                cell = new RowActionsCell (m_owner, m_node, editable);
             }
 
             cell->setSource (source);
@@ -421,11 +435,18 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
         "Commit msg", commitColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn (
         "Timeout", timeoutColumn, 60, 50, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("", deleteColumn, 34, 30, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn ("", deleteColumn, 66, 60, -1, juce::TableHeaderComponent::notSortable);
 
     addAndMakeVisible (m_table.get());
 
     // --- Add row ---------------------------------------------------------
+    m_ttlCaptionLabel = std::make_unique<juce::Label> ("ttlCaption", "TTL:");
+    m_ttlCaptionLabel->setColour (juce::Label::textColourId,
+                                  juce::Colours::white.withAlpha (0.7f));
+    m_ttlCaptionLabel->setFont (juce::FontOptions (12.0f));
+    m_ttlCaptionLabel->setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (m_ttlCaptionLabel.get());
+
     m_newLineLabel = std::make_unique<juce::Label> ("line", "1");
     m_newLineLabel->setEditable (true);
     m_newLineLabel->setColour (juce::Label::backgroundColourId,
@@ -434,10 +455,19 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     m_newLineLabel->setJustificationType (juce::Justification::centred);
     addAndMakeVisible (m_newLineLabel.get());
 
-    m_addButton = std::make_unique<UtilityButton> ("+ ADD CONDITION");
+    m_addButton = std::make_unique<UtilityButton> ("ADD");
     m_addButton->addListener (this);
     m_addButton->setEnabled (! acquisitionIsActive);
     addAndMakeVisible (m_addButton.get());
+
+    m_clearAllButton = std::make_unique<UtilityButton> ("CLEAR ALL");
+    m_clearAllButton->addListener (this);
+    m_clearAllButton->setEnabled (! acquisitionIsActive);
+    addAndMakeVisible (m_clearAllButton.get());
+
+    m_recolourButton = std::make_unique<UtilityButton> ("RECOLOUR ALL");
+    m_recolourButton->addListener (this);
+    addAndMakeVisible (m_recolourButton.get());
 
     update();
 }
@@ -461,19 +491,49 @@ void TriggerSourceConfigWindow::updatePopup() { update(); }
 
 void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
 {
-    if (button != m_addButton.get() || m_node == nullptr)
+    if (m_node == nullptr)
         return;
 
-    // The label reads 1-based, matching the LFP viewer; sources store the
-    // 0-based line event->getLine() reports.
-    const int line = juce::jlimit (1, 256, m_newLineLabel->getText().getIntValue()) - 1;
-    // Only TTL sources can be created: message-only triggering is not implemented
-    // (see TriggerType::MSG_TRIGGER), so a chooser would offer one working entry.
-    constexpr auto type = TriggerType::TTL_TRIGGER;
+    if (button == m_addButton.get())
+    {
+        // The label reads 1-based, matching the LFP viewer; sources store the
+        // 0-based line event->getLine() reports.
+        const int line = juce::jlimit (1, 256, m_newLineLabel->getText().getIntValue()) - 1;
+        // Only TTL sources can be created: message-only triggering is not implemented
+        // (see TriggerType::MSG_TRIGGER), so a chooser would offer one working entry.
+        constexpr auto type = TriggerType::TTL_TRIGGER;
 
-    performUndoable (new AddTriggerConditions (m_node, { line }, type));
+        performUndoable (new AddTriggerConditions (m_node, { line }, type));
+    }
+    else if (button == m_clearAllButton.get())
+    {
+        auto allSources = m_node->getTriggerSources().getAll();
+
+        if (! allSources.isEmpty())
+            performUndoable (new RemoveTriggerConditions (m_node, allSources));
+    }
+    else if (button == m_recolourButton.get())
+    {
+        recolourAllFromPalette();
+    }
+    else
+    {
+        return;
+    }
 
     update();
+}
+
+void TriggerSourceConfigWindow::recolourAllFromPalette()
+{
+    if (m_node == nullptr)
+        return;
+
+    auto& triggerSources = m_node->getTriggerSources();
+
+    auto allSources = triggerSources.getAll();
+    for (int i = 0; i < allSources.size(); ++i)
+        triggerSources.setTriggerSourceColour (allSources[i], TriggerSource::paletteColour (i));
 }
 
 void TriggerSourceConfigWindow::resized()
@@ -486,17 +546,32 @@ void TriggerSourceConfigWindow::resized()
 
     addRow = addRow.reduced (0, 4);
 
+    if (m_ttlCaptionLabel != nullptr)
+    {
+        addRow.removeFromLeft (6);
+        m_ttlCaptionLabel->setBounds (addRow.removeFromLeft (28));
+    }
+
     if (m_newLineLabel != nullptr)
     {
         addRow.removeFromLeft (4);
         m_newLineLabel->setBounds (addRow.removeFromLeft (44));
     }
 
-
     addRow.removeFromLeft (10);
 
     if (m_addButton != nullptr)
-        m_addButton->setBounds (addRow.removeFromLeft (150));
+        m_addButton->setBounds (addRow.removeFromLeft (70));
+
+    addRow.removeFromLeft (8);
+
+    if (m_clearAllButton != nullptr)
+        m_clearAllButton->setBounds (addRow.removeFromLeft (100));
+
+    addRow.removeFromLeft (8);
+
+    if (m_recolourButton != nullptr)
+        m_recolourButton->setBounds (addRow.removeFromLeft (140));
 }
 
 void TriggerSourceConfigWindow::paint (juce::Graphics& g)
@@ -512,11 +587,19 @@ void TriggerSourceConfigWindow::paint (juce::Graphics& g)
                     juce::Justification::centred);
     }
 
-    // Label the add row so the line box is not a mystery number.
-    g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.6f));
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawText (
-        "TTL line / type", 6, getHeight() - addRowHeight - 2, 200, 12, juce::Justification::left);
+    // The add row gets its own solid backing rather than the plain window
+    // background, so it reads as a toolbar strip instead of a floating,
+    // washed-out row of controls.
+    auto addRowArea = getLocalBounds().removeFromBottom (addRowHeight + 12);
+    g.setColour (findColour (ThemeColours::componentBackground).brighter (0.08f));
+    g.fillRect (addRowArea);
+
+    g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.15f));
+    g.drawLine (static_cast<float> (addRowArea.getX()),
+               static_cast<float> (addRowArea.getY()),
+               static_cast<float> (addRowArea.getRight()),
+               static_cast<float> (addRowArea.getY()),
+               1.0f);
 }
 
 } // namespace EventTriggered

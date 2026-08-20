@@ -42,6 +42,7 @@ set(TRIGGER_CORE_TEST_SOURCES
     TriggerCore/test_CaptureWorker.cpp
     TriggerCore/test_TriggerMessaging.cpp
     TriggerCore/test_BroadcastMessageLog.cpp
+    TriggerCore/test_TriggerSources.cpp
 )
 
 # The frequency-domain half.

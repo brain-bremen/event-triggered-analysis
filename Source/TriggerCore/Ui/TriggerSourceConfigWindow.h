@@ -73,6 +73,12 @@ public:
     void buttonClicked (juce::Button* button) override;
 
 private:
+    /** Reassigns every source's colour to its palette entry, indexed by its
+        current position in the list. The user's escape hatch for conditions that
+        lost their visual spread -- e.g. after duplicating one repeatedly, which
+        carries the source colour over verbatim. */
+    void recolourAllFromPalette();
+
     /** Table model kept inline: it needs the same node pointer and lifetime, and
         splitting it out would only add indirection. */
     class Model : public juce::TableListBoxModel
@@ -129,7 +135,10 @@ private:
     std::unique_ptr<Model> m_model;
     std::unique_ptr<juce::TableListBox> m_table;
     std::unique_ptr<UtilityButton> m_addButton;
+    std::unique_ptr<UtilityButton> m_clearAllButton;
+    std::unique_ptr<UtilityButton> m_recolourButton;
     std::unique_ptr<juce::Label> m_newLineLabel;
+    std::unique_ptr<juce::Label> m_ttlCaptionLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggerSourceConfigWindow)
 };
