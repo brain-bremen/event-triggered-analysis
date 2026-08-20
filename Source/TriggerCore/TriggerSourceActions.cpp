@@ -251,8 +251,8 @@ bool ChangeTriggerTTLLine::perform()
         processorNode->getEditor()->updateSettings();
 
         processorNode->registerUndoableAction (processorNode->getNodeId(), this);
-        CoreServices::sendStatusMessage ("Changed trigger condition line from " + String (oldLine)
-                                         + " to " + String (newLine));
+        CoreServices::sendStatusMessage ("Changed trigger condition line from "
+                                         + String (oldLine + 1) + " to " + String (newLine + 1));
     }
 
     return true;
@@ -264,8 +264,8 @@ bool ChangeTriggerTTLLine::undo()
     if (source != nullptr)
     {
         processorNode->getTriggerSources().setTriggerSourceLine (source, oldLine);
-        CoreServices::sendStatusMessage ("Changed trigger condition line from " + String (newLine)
-                                         + " to " + String (oldLine));
+        CoreServices::sendStatusMessage ("Changed trigger condition line from "
+                                         + String (newLine + 1) + " to " + String (oldLine + 1));
     }
 
     return true;

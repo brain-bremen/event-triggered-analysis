@@ -233,7 +233,9 @@ void TriggerSourceConfigWindow::Model::paintCell (juce::Graphics& g,
 
         const int line = sources[row]->line;
 
-        g.drawText (line < 0 ? juce::String ("--") : juce::String (line),
+        // Displayed 1-based, matching the LFP viewer's TTL line numbering, even
+        // though the source stores the 0-based line event->getLine() reports.
+        g.drawText (line < 0 ? juce::String ("--") : juce::String (line + 1),
                     2,
                     0,
                     width - 4,
@@ -413,7 +415,7 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     addAndMakeVisible (m_table.get());
 
     // --- Add row ---------------------------------------------------------
-    m_newLineLabel = std::make_unique<juce::Label> ("line", "0");
+    m_newLineLabel = std::make_unique<juce::Label> ("line", "1");
     m_newLineLabel->setEditable (true);
     m_newLineLabel->setColour (juce::Label::backgroundColourId,
                                juce::Colours::white.withAlpha (0.1f));
@@ -451,7 +453,9 @@ void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
     if (button != m_addButton.get() || m_node == nullptr)
         return;
 
-    const int line = juce::jlimit (-1, 255, m_newLineLabel->getText().getIntValue());
+    // The label reads 1-based, matching the LFP viewer; sources store the
+    // 0-based line event->getLine() reports.
+    const int line = juce::jlimit (1, 256, m_newLineLabel->getText().getIntValue()) - 1;
     // Only TTL sources can be created: message-only triggering is not implemented
     // (see TriggerType::MSG_TRIGGER), so a chooser would offer one working entry.
     constexpr auto type = TriggerType::TTL_TRIGGER;
