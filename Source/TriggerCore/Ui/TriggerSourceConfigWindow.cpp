@@ -154,7 +154,7 @@ namespace
         RowActionsCell (TriggerSourceConfigWindow& owner, TriggeredCaptureNode* node, bool enabled)
             : m_owner (owner),
               m_node (node),
-              m_duplicateButton ("Dup"),
+              m_duplicateButton ("Copy"),
               m_deleteButton ("X")
         {
             m_duplicateButton.setEnabled (enabled);
@@ -170,8 +170,8 @@ namespace
         void resized() override
         {
             auto bounds = getLocalBounds().reduced (3, 5);
-            m_duplicateButton.setBounds (bounds.removeFromLeft (bounds.getWidth() / 2).reduced (2, 0));
-            m_deleteButton.setBounds (bounds.reduced (2, 0));
+            m_deleteButton.setBounds (bounds.removeFromRight (24).reduced (2, 0));
+            m_duplicateButton.setBounds (bounds.reduced (2, 0));
         }
 
         void buttonClicked (juce::Button* button) override
@@ -427,15 +427,15 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     auto& header = m_table->getHeader();
     header.addColumn ("Name", nameColumn, 130, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn ("TTL", lineColumn, 44, 40, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Colour", colourColumn, 56, 40, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("Arm msg", armColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn ("Color", colourColumn, 56, 40, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn ("Arm MSG", armColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn (
-        "Cancel msg", cancelColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
+        "Cancel MSG", cancelColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn (
-        "Commit msg", commitColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
+        "Commit MSG", commitColumn, 100, 60, -1, juce::TableHeaderComponent::notSortable);
     header.addColumn (
         "Timeout", timeoutColumn, 60, 50, -1, juce::TableHeaderComponent::notSortable);
-    header.addColumn ("", deleteColumn, 66, 60, -1, juce::TableHeaderComponent::notSortable);
+    header.addColumn ("", deleteColumn, 84, 78, -1, juce::TableHeaderComponent::notSortable);
 
     addAndMakeVisible (m_table.get());
 
@@ -533,7 +533,8 @@ void TriggerSourceConfigWindow::recolourAllFromPalette()
 
     auto allSources = triggerSources.getAll();
     for (int i = 0; i < allSources.size(); ++i)
-        triggerSources.setTriggerSourceColour (allSources[i], TriggerSource::paletteColour (i));
+        triggerSources.setTriggerSourceColour (allSources[i],
+                                               m_node->paletteColourForRecolour (i, allSources[i]));
 }
 
 void TriggerSourceConfigWindow::resized()

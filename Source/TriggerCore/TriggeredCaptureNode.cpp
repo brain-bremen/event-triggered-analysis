@@ -524,6 +524,12 @@ TriggerSource* TriggeredCaptureNode::addTriggerSource (int line, TriggerType typ
     return m_triggerSources.addTriggerSource (line, type, index);
 }
 
+juce::Colour TriggeredCaptureNode::paletteColourForRecolour (int index,
+                                                              const TriggerSource* /*source*/) const
+{
+    return TriggerSource::paletteColour (index);
+}
+
 void TriggeredCaptureNode::triggerSourceAdded (TriggerSource* /*source*/)
 {
     // Skipped while a saved chain is being restored: sources arrive one at a time,

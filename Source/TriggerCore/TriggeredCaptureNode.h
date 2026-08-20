@@ -117,6 +117,16 @@ public:
     /** Adds a source and allocates whatever per-source storage the subclass keeps. */
     TriggerSource* addTriggerSource (int line, TriggerType type, int index = -1);
 
+    /** Colour the config popup's RECOLOUR ALL assigns to the `index`-th source in
+     *  the list (0-based).
+     *
+     *  Defaults to TriggerSource::paletteColour(), spread by creation order. A
+     *  subclass that draws some sources from a physical quantity of its own --
+     *  the receptive-field mapper's sweep angle is the only one so far -- should
+     *  override this so recolouring reproduces the same colour that quantity
+     *  would have produced, rather than a spread that ignores it. */
+    virtual juce::Colour paletteColourForRecolour (int index, const TriggerSource* source) const;
+
     /** Discards all accumulated data, keeping the trigger sources themselves. */
     virtual void clearAllData() = 0;
 

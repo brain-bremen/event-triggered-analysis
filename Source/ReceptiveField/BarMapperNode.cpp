@@ -375,6 +375,14 @@ std::vector<Rf::AngleSetWarning> BarMapperNode::checkAngles() const
     return m_angles.check (m_triggerSources.getAll(), getAngleConvention());
 }
 
+juce::Colour BarMapperNode::paletteColourForRecolour (int index, const TriggerSource* source) const
+{
+    if (const auto angle = m_angles.getAngleDeg (source))
+        return colourForDirection (Rf::toCanonicalDeg (*angle, getAngleConvention()));
+
+    return TriggeredCaptureNode::paletteColourForRecolour (index, source);
+}
+
 void BarMapperNode::generateDirectionSources (int count,
                                                    int line,
                                                    int firstTrialType,

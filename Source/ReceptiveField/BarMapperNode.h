@@ -126,6 +126,12 @@ public:
 
     std::vector<Rf::AngleSetWarning> checkAngles() const;
 
+    /** Overridden so RECOLOUR ALL in the trigger config popup reproduces the same
+     *  colour the direction generator would have given a source with a known
+     *  angle, instead of a colour that ignores the angle entirely. Sources with no
+     *  angle yet fall back to the base palette. */
+    juce::Colour paletteColourForRecolour (int index, const TriggerSource* source) const override;
+
     // --- Settings -----------------------------------------------------------
 
     Rf::AngleConvention getAngleConvention() const;
