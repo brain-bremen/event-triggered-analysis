@@ -149,8 +149,15 @@ public:
     TriggerSource (const TriggerSource& other);
     TriggerSource& operator= (const TriggerSource& other);
 
-    /** Default palette entry for a TTL line, matching the GUI's event colours. */
-    static juce::Colour getColourForLine (int line);
+    /** Palette entry for the `index`-th trigger source ever created (0-based).
+     *
+     *  Hues step by the golden angle rather than evenly, so any prefix of the
+     *  sequence -- not just the full 36-plus set -- stays visually spread out,
+     *  however many conditions get added. Same saturation/value as the
+     *  receptive-field mapper's per-direction hue (see
+     *  SweepAngles::colourForDirection), so a condition's colour reads as the
+     *  same family of colour in every plugin. */
+    static juce::Colour paletteColour (int index);
 
     juce::String name;
     int line = -1;

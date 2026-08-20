@@ -24,6 +24,8 @@
 */
 #include "TriggerSource.h"
 
+#include <cmath>
+
 namespace EventTriggered
 {
 
@@ -33,7 +35,10 @@ TriggerSource::TriggerSource (const juce::String& name_, int line_, TriggerType 
     // Live until an arm pattern makes it gated. A new source has no patterns yet,
     // so it starts live; setArmPattern() disarms it when one is entered.
     canTrigger = true;
-    colour = getColourForLine (line);
+
+    // Colour is assigned by TriggerSources::addTriggerSource(), which knows this
+    // source's place in the creation order; a fresh source built directly (as the
+    // tests do) is simply uncoloured until something sets it.
 }
 
 TriggerSource::TriggerSource (const TriggerSource& other)
@@ -68,20 +73,23 @@ TriggerSource& TriggerSource::operator= (const TriggerSource& other)
     return *this;
 }
 
-juce::Colour TriggerSource::getColourForLine (int line)
+juce::Colour TriggerSource::paletteColour (int index)
 {
-    static const juce::Colour eventColours[] = {
-        juce::Colour (224, 185, 36),  juce::Colour (243, 119, 33),
-        juce::Colour (237, 37, 36),   juce::Colour (217, 46, 171),
-        juce::Colour (101, 31, 255),  juce::Colour (48, 117, 255),
-        juce::Colour (116, 227, 156), juce::Colour (82, 173, 0)
-    };
+    // Saturated but not fully: at full saturation the blues go nearly black
+    // against the dark panel background, and these colour thin lines and small
+    // swatches. Matches SweepAngles::colourForDirection's parameters exactly.
+    constexpr float saturation = 0.72f;
+    constexpr float value = 1.0f;
 
-    constexpr int numColours = static_cast<int> (std::size (eventColours));
+    // The golden angle in degrees: stepping a hue wheel by it never re-visits a
+    // prior hue for any number of steps a real session will ever reach, and it
+    // spreads *any* prefix of the sequence evenly, not just a fixed-size table.
+    constexpr float goldenAngleDeg = 137.50776405f;
 
-    // line is -1 for an unconfigured source, so bring it back into range first.
-    const int index = ((line % numColours) + numColours) % numColours;
-    return eventColours[index];
+    const float hueDeg = std::fmod (static_cast<float> (juce::jmax (0, index)) * goldenAngleDeg,
+                                    360.0f);
+
+    return juce::Colour::fromHSV (hueDeg / 360.0f, saturation, value, 1.0f);
 }
 
 // --- TriggerSources --------------------------------------------------------
@@ -107,10 +115,16 @@ TriggerSource* TriggerSources::getByIndex (int index) const
 
 TriggerSource* TriggerSources::addTriggerSource (int line, TriggerType type, int index)
 {
-    const juce::String name =
-        ensureUniqueName ("Condition " + juce::String (m_nextConditionIndex++));
+    // The condition number, not the TTL line, drives the palette: several
+    // conditions armed on the same line are common (see the receptive-field
+    // mapper's direction generator) and must not all come out the same colour.
+    // Taken from the same counter as the default name, so it keeps climbing
+    // across deletions and never repeats within a session.
+    const int conditionNumber = m_nextConditionIndex++;
+    const juce::String name = ensureUniqueName ("Condition " + juce::String (conditionNumber));
 
     auto* source = new TriggerSource (name, line, type);
+    source->colour = TriggerSource::paletteColour (conditionNumber - 1);
 
     if (index < 0)
         m_sources.add (source);
@@ -199,8 +213,10 @@ void TriggerSources::setTriggerSourceLine (TriggerSource* source, int line, bool
     if (source == nullptr)
         return;
 
+    // Colour is assigned once, at creation, and is otherwise the user's to
+    // change from the colour swatch; retargeting a condition to a different TTL
+    // line must not repaint it out from under them.
     source->line = line;
-    source->colour = TriggerSource::getColourForLine (line);
 
     if (notify && m_listener != nullptr)
         m_listener->triggerSourceLineChanged (source);
