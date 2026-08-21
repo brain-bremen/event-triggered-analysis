@@ -23,7 +23,6 @@
 #pragma once
 
 #include "RfComputeJob.h"
-#include "RfDemo.h"
 #include "SweepAngles.h"
 
 #include "AverageCore/DataCollector.h"
@@ -155,31 +154,6 @@ public:
 
     void requestRecompute() { m_compute.requestRecompute(); }
 
-    // --- Demo mode ----------------------------------------------------------
-    //
-    // Fills the accumulators with the paper's own simulation so the whole
-    // plugin can be exercised with the GUI idle -- no rig, no acquisition, no
-    // signal chain beyond this node. It goes through the *real* DataStore and
-    // the real compute path rather than injecting finished maps, because a demo
-    // that bypassed the pipeline would keep working on the day the pipeline
-    // broke, which is precisely when it would be believed.
-    //
-    // Deliberately not an Open Ephys Parameter: parameters are saved with the
-    // signal chain, and a chain that reloads full of synthetic receptive fields
-    // is a trap. It is runtime state, reset on load and on acquisition.
-
-    bool isDemoMode() const { return m_demoMode; }
-
-    /** Turns demo mode on or off. Refused while acquiring — the accumulators
-     *  belong to the recording then, and demo data would be written straight
-     *  into it. Returns what the mode actually is afterwards. */
-    bool setDemoMode (bool shouldBeOn);
-
-    RfDemoSettings getDemoSettings() const { return m_demoSettings; }
-    void setDemoSettings (const RfDemoSettings& settings);
-
-    bool startAcquisition() override;
-
 protected:
     /** The per-direction accumulators, plus the finished maps.
      *
@@ -194,10 +168,6 @@ protected:
      *  state: loading ignores them and recomputes. */
     bool saveSessionPayload (SessionWriter& writer) override;
     bool loadSessionPayload (const SessionReader& reader) override;
-
-    /** Demo data is convincing, and this flag is the only thing distinguishing a
-     *  synthetic session from a recorded one after the fact. */
-    bool isSessionDemoData() const override { return m_demoMode; }
 
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
@@ -225,29 +195,11 @@ private:
 
     double getDoubleParameter (const char* name, double fallback) const;
 
-    /** Builds the synthetic dataset and folds it into the accumulators. */
-    void populateDemoData();
-
-    /** Demo mode created these, so leaving demo mode removes them. Kept as a
-     *  flag rather than inferred from the source names, which the user can
-     *  edit. */
-    bool m_demoOwnsSources = false;
-
-    /** Set while populateDemoData() is running. Adding a trigger source calls
-     *  back into analysisConfigurationChanged(), which in demo mode repopulates
-     *  -- so building the demo's own sources re-entered the build that was
-     *  creating them, and the inner pass drew panels against buffers the outer
-     *  pass had not sized yet. */
-    bool m_populatingDemo = false;
-
-    bool m_demoMode = false;
-    RfDemoSettings m_demoSettings;
-
     DataStore m_dataStore;
     SweepAngles m_angles;
     /** Gives a source the colour of the direction it stands for. Used where this
-     *  plugin creates the sources -- the demo and the direction generator -- so a
-     *  fresh set does not arrive as eight identical line colours. */
+     *  plugin creates the sources -- the direction generator -- so a fresh set
+     *  does not arrive as eight identical line colours. */
     void applyDirectionColour (TriggerSource* source, double angleDeg);
 
     RfCanvas* m_canvas = nullptr;
@@ -259,8 +211,8 @@ private:
      *  through it made every completed map immediately ask for the next one, so
      *  the compute thread never went back to sleep -- and the canvas was still
      *  never told, because the only thing that pushed results into it was the
-     *  Visualizer's animation timer, which runs during acquisition only. That is
-     *  why the demo showed traces but no maps while the GUI was idle. */
+     *  Visualizer's animation timer, which runs during acquisition only -- so
+     *  with the GUI idle, traces appeared and maps never did. */
     struct ResultsPublisher : public juce::AsyncUpdater
     {
         explicit ResultsPublisher (BarMapperNode& owner) : m_owner (owner) {}

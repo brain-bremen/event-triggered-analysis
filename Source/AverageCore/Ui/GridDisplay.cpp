@@ -122,27 +122,6 @@ void EventTriggered::GridDisplay::addContChannel (const ContinuousChannel* chann
     addAndMakeVisible (h);
 }
 
-void EventTriggered::GridDisplay::addNamedChannel (const String& channelName,
-                                                   double sampleRate,
-                                                   const TriggerSource* source,
-                                                   int channelIndexInAverageBuffer,
-                                                   const MultiChannelAverageBuffer* avgBuffer)
-{
-    auto* h = new SinglePlotPanel (
-        this, channelName, sampleRate, source, channelIndexInAverageBuffer, avgBuffer);
-    h->setPlotType (plotType);
-
-    panels.add (h);
-    triggerSourceToPanelMap[source].add (h);
-    contChannelToPanelMap[nullptr].add (h);
-
-    int numRows = panels.size() / numColumns + 1;
-
-    totalHeight = (numRows + 1) * (panelHeightPx + 10);
-
-    addAndMakeVisible (h);
-}
-
 void EventTriggered::GridDisplay::updateColourForSource (const TriggerSource* source)
 {
     Array<SinglePlotPanel*> plotPanels = triggerSourceToPanelMap[source];

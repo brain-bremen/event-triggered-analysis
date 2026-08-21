@@ -78,28 +78,6 @@ void BarMapperNode::rebuildDisplayPanels()
 
     m_canvas->prepareToUpdate();
 
-    // Demo mode has no stream, so getSelectedChannels() is empty and
-    // getContinuousChannel() has nothing to return -- the loop below would build
-    // no panels at all and the Traces view would sit blank while the Map view
-    // beside it was full. The demo's own channels are named here instead.
-    if (m_demoMode)
-    {
-        for (int row = 0; row < m_demoSettings.channels; ++row)
-            for (auto* source : getTriggerSources().items())
-                m_canvas->addNamedChannel (
-                    "CH" + juce::String (row + 1),
-                    m_demoSettings.sampleRateHz,
-                    source,
-                    row,
-                    m_dataStore.getRefToAverageBufferForTriggerSource (source));
-
-        m_canvas->setWindowSizeMs (
-            static_cast<float> (m_demoSettings.preSamples / m_demoSettings.sampleRateHz * 1000.0),
-            static_cast<float> (m_demoSettings.postSamples / m_demoSettings.sampleRateHz * 1000.0));
-        m_canvas->resized();
-        return;
-    }
-
     const auto& selected = getSelectedChannels();
 
     // Grouped by channel so the per-direction traces for one channel overlay each
@@ -269,16 +247,6 @@ Rf::MappingSettings BarMapperNode::getMappingSettings() const
 {
     Rf::MappingSettings settings;
 
-    // Demo mode has no stream to ask, so it supplies its own geometry. Without
-    // this the sample rate is zero with the GUI idle and every map comes out
-    // empty -- which would make the demo useless in exactly the situation it
-    // exists for.
-    if (m_demoMode)
-    {
-        settings.sampleRateHz = m_demoSettings.sampleRateHz;
-        settings.preSamples = m_demoSettings.preSamples;
-    }
-    else
     {
         settings.sampleRateHz = getTrialGeometry().sampleRate;
         settings.preSamples = getTrialGeometry().preSamples;
@@ -425,18 +393,6 @@ void BarMapperNode::analysisConfigurationChanged()
 {
     const auto lock = m_dataStore.GetLock();
 
-    // In demo mode the buffers belong to the demo, not to a stream. Resizing
-    // them from the (empty) channel selection below would throw the simulated
-    // data away and leave the display blank, which is exactly what happened on
-    // the first change of Pre or Post with the demo showing. Rebuild the demo at
-    // the new window instead, so the two controls do what they say.
-    if (m_demoMode)
-    {
-        populateDemoData();
-        m_compute.requestRecompute();
-        return;
-    }
-
     const int numChannels = getSelectedChannels().size();
     const int numSamples = getTrialGeometry().totalDisplayedSamples();
 
@@ -500,20 +456,7 @@ bool BarMapperNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& 
 
     settings = getMappingSettings();
 
-    // Demo mode addresses the accumulators it filled itself, which exist
-    // whether or not a stream does. Reading the real selection here would find
-    // it empty with the GUI idle and produce nothing.
-    juce::Array<int> channels;
-
-    if (m_demoMode)
-    {
-        for (int i = 0; i < m_demoSettings.channels; ++i)
-            channels.add (i);
-    }
-    else
-    {
-        channels = getSelectedChannels();
-    }
+    const juce::Array<int> channels = getSelectedChannels();
 
     const juce::Array<TriggerSource*> sources = m_triggerSources.getAll();
 
@@ -604,164 +547,6 @@ std::vector<Rf::DirectionTrace> BarMapperNode::gatherTracesForChannel (int chann
 Rf::LatencyScanResult BarMapperNode::estimateLatencyForChannel (int channelIndex)
 {
     return Rf::estimateLatency (gatherTracesForChannel (channelIndex), getMappingSettings());
-}
-
-// --- Demo mode -------------------------------------------------------------
-
-bool BarMapperNode::setDemoMode (bool shouldBeOn)
-{
-    if (shouldBeOn == m_demoMode)
-        return m_demoMode;
-
-    // Refused during acquisition rather than deferred. The accumulators belong
-    // to the recording then, and there is no version of "write synthetic trials
-    // into a live session" that is a good idea.
-    if (shouldBeOn && CoreServices::getAcquisitionStatus())
-        return false;
-
-    m_demoMode = shouldBeOn;
-
-    if (m_demoMode)
-    {
-        populateDemoData();
-    }
-    else
-    {
-        const auto lock = m_dataStore.GetLock();
-        m_dataStore.ResetAllBuffers();
-
-        // Only the sources demo mode created itself. A user who configured
-        // their own conditions and then looked at the demo gets them back.
-        if (m_demoOwnsSources)
-        {
-            m_triggerSources.clear();
-            m_angles.clear();
-            m_demoOwnsSources = false;
-        }
-
-        // The trace panels still name the demo's channels, and nothing else is
-        // going to rebuild them: leaving the demo is not a signal-chain update.
-        rebuildDisplayPanels();
-    }
-
-    m_compute.requestRecompute();
-
-    if (auto* rfEditor = dynamic_cast<BarMapperEditor*> (getEditor()))
-        rfEditor->demoModeChanged();
-
-    return m_demoMode;
-}
-
-void BarMapperNode::setDemoSettings (const RfDemoSettings& settings)
-{
-    m_demoSettings = settings;
-
-    if (m_demoMode)
-        populateDemoData();
-}
-
-void BarMapperNode::populateDemoData()
-{
-    // Re-entered from analysisConfigurationChanged() by way of addTriggerSource()
-    // below. The outer call finishes the job; the inner one must not run against
-    // half-built state.
-    if (m_populatingDemo)
-        return;
-
-    const juce::ScopedValueSetter<bool> populating (m_populatingDemo, true);
-
-    // The demo follows Pre and Post, so those two controls mean the same thing
-    // here as they do on real data -- with a floor. The bar has to have time to
-    // cross the map at all: a post window shorter than the sweep takes would
-    // produce traces in which nothing ever happens, and a blank demo reads as a
-    // broken plugin rather than as a window set too short.
-    const double rate = m_demoSettings.sampleRateHz;
-    const double sweepSeconds =
-        m_demoSettings.speedDegPerSec > 0.0
-            ? 2.0 * std::abs (m_demoSettings.sweepStartDeg) / m_demoSettings.speedDegPerSec
-            : 0.0;
-
-    m_demoSettings.preSamples =
-        std::max (10, juce::roundToInt (getPreWindowMs() / 1000.0 * rate));
-    m_demoSettings.postSamples = std::max (juce::roundToInt (sweepSeconds * rate),
-                                           juce::roundToInt (getPostWindowMs() / 1000.0 * rate));
-
-    const std::vector<RfDemoDirection> dataset = buildDemoDataset (m_demoSettings);
-
-    if (dataset.empty())
-        return;
-
-    const auto lock = m_dataStore.GetLock();
-
-    // Take over the condition list only if there is nothing to lose. A user who
-    // already configured eight directions sees the demo through *their*
-    // conditions, which is the more useful thing anyway: it shows what their
-    // configuration would produce.
-    juce::Array<TriggerSource*> sources = m_triggerSources.getAll();
-
-    if (sources.isEmpty())
-    {
-        for (const RfDemoDirection& direction : dataset)
-        {
-            TriggerSource* source = addTriggerSource (0, TriggerType::TTL_TRIGGER);
-
-            if (source == nullptr)
-                continue;
-
-            source->name = juce::String (juce::roundToInt (direction.angleDeg))
-                           + juce::String::charToString (static_cast<juce::juce_wchar> (0x00B0));
-            m_triggerSources.setArmPattern (source, armPatternForTrialType (direction.trialType));
-            m_angles.setAngleDeg (source, direction.angleDeg);
-            applyDirectionColour (source, direction.angleDeg);
-        }
-
-        m_demoOwnsSources = true;
-        sources = m_triggerSources.getAll();
-    }
-
-    const int channels = m_demoSettings.channels;
-    const int samples = m_demoSettings.preSamples + m_demoSettings.postSamples;
-
-    m_dataStore.ResizeAllAverageBuffers (channels, samples, true);
-
-    for (TriggerSource* source : sources)
-        m_dataStore.ResetAndResizeBuffersForTriggerSource (source, channels, samples);
-
-    // One "trial" per direction, already averaged. The accumulators divide by
-    // the trial count, so folding in a single pre-averaged window reproduces it
-    // exactly -- and the alternative, replaying every simulated trial, would
-    // burn ten times the work to arrive at the same numbers.
-    juce::AudioBuffer<float> buffer (channels, samples);
-
-    for (int i = 0; i < sources.size() && i < static_cast<int> (dataset.size()); ++i)
-    {
-        const RfDemoDirection& direction = dataset[static_cast<std::size_t> (i)];
-
-        for (int channel = 0; channel < channels; ++channel)
-        {
-            const std::vector<float>& trace =
-                direction.tracesByChannel[static_cast<std::size_t> (channel)];
-
-            const int count = std::min (samples, static_cast<int> (trace.size()));
-            buffer.clear (channel, 0, samples);
-            buffer.copyFrom (channel, 0, trace.data(), count);
-        }
-
-        m_dataStore.addTrialForTriggerSource (sources[i], buffer);
-    }
-
-    rebuildDisplayPanels();
-}
-
-bool BarMapperNode::startAcquisition()
-{
-    // Starting a recording is the moment demo data stops being harmless. It is
-    // cleared rather than merely hidden, so nothing synthetic can survive into
-    // a session and be mistaken for a result later.
-    if (m_demoMode)
-        setDemoMode (false);
-
-    return TriggeredCaptureNode::startAcquisition();
 }
 
 // --- Capture ---------------------------------------------------------------
@@ -916,13 +701,6 @@ bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
 
 bool BarMapperNode::loadSessionPayload (const SessionReader& reader)
 {
-    // A session never restores demo mode, for the same reason the signal chain
-    // never does: synthetic receptive fields are convincing, and a plugin that
-    // came back full of them without saying so is a trap. Loading real data into
-    // a node currently showing demo data therefore leaves demo mode first.
-    if (m_demoMode)
-        setDemoMode (false);
-
     if (! AverageSession::apply (m_dataStore, getTriggerSources().getAll(), reader))
         return false;
 
@@ -960,13 +738,6 @@ void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
 
 void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
 {
-    // Demo state is deliberately never written, so nothing here restores it. A
-    // chain that reloaded full of synthetic receptive fields would be a trap:
-    // they are convincing, and the only thing distinguishing them is a badge
-    // that a saved-and-reopened chain would not have earned.
-    m_demoMode = false;
-    m_demoOwnsSources = false;
-
     m_angles.clear();
 
     TriggeredCaptureNode::loadCustomParametersFromXml (xml);

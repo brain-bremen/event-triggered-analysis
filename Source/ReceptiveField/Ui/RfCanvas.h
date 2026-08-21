@@ -112,12 +112,6 @@ public:
                          int rowInAverageBuffer,
                          const MultiChannelAverageBuffer* buffer);
 
-    /** As addContChannel, for demo mode, which has no stream behind its traces. */
-    void addNamedChannel (const juce::String& channelName,
-                          double sampleRate,
-                          const TriggerSource* source,
-                          int rowInAverageBuffer,
-                          const MultiChannelAverageBuffer* buffer);
     void setWindowSizeMs (float preMs, float postMs);
     void updateColourForSource (const TriggerSource* source);
     void updateConditionName (const TriggerSource* source);

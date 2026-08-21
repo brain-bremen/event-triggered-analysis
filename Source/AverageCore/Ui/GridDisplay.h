@@ -52,14 +52,6 @@ public:
                          int channelIndexInAverageBuffer,
                          const MultiChannelAverageBuffer*);
 
-    /** As addContChannel, for a trace with no ContinuousChannel behind it --
-        simulated data held in an average buffer while the GUI is idle. */
-    void addNamedChannel (const String& channelName,
-                          double sampleRate,
-                          const TriggerSource*,
-                          int channelIndexInAverageBuffer,
-                          const MultiChannelAverageBuffer*);
-
     void updateColourForSource (const TriggerSource* source);
     void updateConditionName (const TriggerSource* source);
     void setNumColumns (int numColumns);

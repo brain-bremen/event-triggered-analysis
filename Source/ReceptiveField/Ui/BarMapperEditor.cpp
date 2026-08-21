@@ -54,11 +54,6 @@ BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
     m_stimulusButton = makeButton ("SWEEPS");
     m_stimulusButton->setTooltip ("Map each trigger condition to the direction its bar swept in.");
 
-    m_demoButton = makeButton ("DEMO");
-    m_demoButton->setClickingTogglesState (true);
-    m_demoButton->setTooltip ("Fill the plugin with simulated receptive fields, with no "
-                              "acquisition. Cleared when acquisition starts.");
-
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
     m_channelsLabel = EditorLayout::makeCaptionLabel ("Channels");
@@ -82,12 +77,9 @@ void BarMapperEditor::resized()
 {
     VisualizerEditor::resized();
 
-    // SWEEPS sits on the button row with its siblings -- it opens a popup, like
-    // they do -- and DEMO takes the spare slot on the channel row, where
-    // TriggeredCoherence keeps CH PAIRS. The earlier arrangement put SWEEPS in
-    // that slot, where it was left with 38 px and rendered as "STIM.", and
-    // dropped DEMO at a hand-computed bottom-right corner that landed on top of
-    // the Post value box.
+    // SWEEPS sits on the button row with its siblings, because it opens a popup
+    // exactly as they do. An earlier arrangement put it in the spare slot on the
+    // channel row, where it was left with 38 px and rendered as "STIM.".
     EditorLayout::layoutCommonContents (
         *this,
         { m_triggersButton.get(),
@@ -96,37 +88,7 @@ void BarMapperEditor::resized()
           m_stimulusButton.get() },
         m_channelsLabel.get(),
         m_preLabel.get(),
-        m_postLabel.get(),
-        m_demoButton.get());
-}
-
-void BarMapperEditor::demoModeChanged()
-{
-    if (auto* node = getNode())
-        m_demoButton->setToggleState (node->isDemoMode(), dontSendNotification);
-
-    repaint();
-}
-
-void BarMapperEditor::paintOverChildren (Graphics& g)
-{
-    auto* node = getNode();
-
-    if (node == nullptr || ! node->isDemoMode())
-        return;
-
-    // Drawn over the editor rather than beside it, and in a colour nothing else
-    // in this GUI uses. The point is not decoration: everything on screen in
-    // demo mode is a plausible receptive-field map computed from data that does
-    // not exist, and the only thing separating it from a result is this badge.
-    const Rectangle<int> badge (getWidth() - 128, 4, 62, 16);
-
-    g.setColour (Colours::red.withAlpha (0.85f));
-    g.fillRoundedRectangle (badge.toFloat(), 3.0f);
-
-    g.setColour (Colours::white);
-    g.setFont (FontOptions (11.0f, Font::bold));
-    g.drawText ("DEMO", badge, Justification::centred);
+        m_postLabel.get());
 }
 
 void BarMapperEditor::setTriggerCount (int count)
@@ -152,7 +114,6 @@ Visualizer* BarMapperEditor::createNewCanvas()
 
     m_canvas = new RfCanvas (node);
     node->setCanvas (m_canvas);
-    m_demoButton->setToggleState (node->isDemoMode(), dontSendNotification);
 
     updateSettings();
 
@@ -209,18 +170,6 @@ void BarMapperEditor::buttonClicked (Button* button)
     {
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<StimulusConfigWindow> (node, acquisitionIsActive, button), button);
-    }
-    else if (button == m_demoButton.get())
-    {
-        // The node has the last word: it refuses during acquisition, so the
-        // button follows what actually happened rather than what was clicked.
-        const bool actual = node->setDemoMode (m_demoButton->getToggleState());
-        m_demoButton->setToggleState (actual, dontSendNotification);
-
-        if (! actual && m_demoButton->getToggleState() != actual)
-            CoreServices::sendStatusMessage ("Stop acquisition before enabling demo mode.");
-
-        repaint();
     }
 }
 

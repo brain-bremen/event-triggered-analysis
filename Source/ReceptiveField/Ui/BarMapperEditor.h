@@ -71,12 +71,6 @@ public:
 
     void updateColours (TriggerSource* source);
 
-    /** Repaints the DEMO badge after the node changed the mode itself — on
-        acquisition start, or on loading a signal chain. */
-    void demoModeChanged();
-
-    /** Draws the DEMO badge over the editor when synthetic data is showing. */
-    void paintOverChildren (juce::Graphics& g) override;
     void updateConditionName (TriggerSource* source);
 
     void buttonClicked (Button* button) override;
@@ -97,7 +91,6 @@ private:
      *  always accompanied by the badge — a simulated receptive-field map is
      *  entirely convincing, and it must be impossible to screenshot one and
      *  later mistake it for a recording. */
-    std::unique_ptr<UtilityButton> m_demoButton;
 
     std::unique_ptr<Label> m_channelsLabel;
     std::unique_ptr<Label> m_preLabel;

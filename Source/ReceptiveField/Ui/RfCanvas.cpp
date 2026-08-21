@@ -339,16 +339,6 @@ void RfCanvas::addContChannel (const ContinuousChannel* channel,
     m_traceGrid->addContChannel (channel, source, rowInAverageBuffer, buffer);
 }
 
-void RfCanvas::addNamedChannel (const juce::String& channelName,
-                                double sampleRate,
-                                const TriggerSource* source,
-                                int rowInAverageBuffer,
-                                const MultiChannelAverageBuffer* buffer)
-{
-    m_traceGrid->addNamedChannel (
-        channelName, sampleRate, source, rowInAverageBuffer, buffer);
-}
-
 void RfCanvas::setWindowSizeMs (float preMs, float postMs)
 {
     m_traceGrid->setWindowSizeMs (preMs, postMs);

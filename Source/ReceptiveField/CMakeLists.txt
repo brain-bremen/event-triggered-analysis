@@ -38,8 +38,6 @@ oe_add_plugin(ReceptiveFieldBarMapper average_core
     ${CMAKE_CURRENT_SOURCE_DIR}/RfComputeJob.h
     ${CMAKE_CURRENT_SOURCE_DIR}/SweepAngles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SweepAngles.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/RfDemo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/RfDemo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfDisplayMode.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfCanvas.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfCanvas.h
