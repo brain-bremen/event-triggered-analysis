@@ -70,7 +70,7 @@ TEST (SessionBundle, WritesTheDocumentedLayout)
     const auto target = scratch.child ("session");
 
     SessionWriter writer;
-    writer.manifest().setProperty ("plugin", "TriggeredAverage");
+    writer.metadata().setAttribute ("plugin", "TriggeredAverage");
 
     const std::vector<float> values (6, 1.0f);
     const auto s = shape ({ 2, 3 });
@@ -78,49 +78,59 @@ TEST (SessionBundle, WritesTheDocumentedLayout)
 
     ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
 
-    EXPECT_TRUE (target.getChildFile ("manifest.json").existsAsFile());
+    EXPECT_TRUE (target.getChildFile ("session.xml").existsAsFile());
     EXPECT_TRUE (target.getChildFile ("arrays/sums.npy").existsAsFile());
+
+    // One text file, not two: the whole reason the manifest is XML rather than
+    // JSON beside an XML settings file.
+    EXPECT_FALSE (target.getChildFile ("manifest.json").exists());
+    EXPECT_FALSE (target.getChildFile ("settings.xml").exists());
 }
 
-TEST (SessionBundle, ManifestCarriesCallerKeysTheFormatVersionAndTheArrayIndex)
+TEST (SessionBundle, SessionXmlCarriesCallerAttributesTheVersionAndTheArrayIndex)
 {
     ScratchDirectory scratch;
     const auto target = scratch.child ("session");
 
     SessionWriter writer;
-    writer.manifest().setProperty ("plugin", "ReceptiveFieldBarMapper");
-    writer.manifest().setProperty ("sample_rate_hz", 30000.0);
+    writer.metadata().setAttribute ("plugin", "ReceptiveFieldBarMapper");
+    writer.metadata().setAttribute ("sample_rate_hz", 30000.0);
 
     const std::vector<float> values (4, 0.0f);
     const auto s = shape ({ 2, 2 });
     ASSERT_TRUE (writer.addArray ("maps", std::span (values), std::span (s)));
     ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
 
-    const auto parsed = juce::JSON::parse (target.getChildFile ("manifest.json"));
+    juce::XmlDocument document (target.getChildFile ("session.xml").loadFileAsString());
+    const auto root = document.getDocumentElement();
 
-    ASSERT_TRUE (parsed.isObject());
-    EXPECT_EQ (parsed.getProperty ("plugin", {}).toString(), "ReceptiveFieldBarMapper");
-    EXPECT_DOUBLE_EQ ((double) parsed.getProperty ("sample_rate_hz", {}), 30000.0);
-    EXPECT_EQ ((int) parsed.getProperty ("format_version", {}), 1);
+    ASSERT_NE (root, nullptr);
+    EXPECT_TRUE (root->hasTagName ("EVENT_TRIGGERED_SESSION"));
+    EXPECT_EQ (root->getStringAttribute ("plugin"), "ReceptiveFieldBarMapper");
+    EXPECT_DOUBLE_EQ (root->getDoubleAttribute ("sample_rate_hz"), 30000.0);
+    EXPECT_EQ (root->getIntAttribute ("format_version"), 1);
 
-    const auto index = parsed.getProperty ("arrays", {});
-    ASSERT_TRUE (index.isObject());
+    const auto* arraysXml = root->getChildByName ("ARRAYS");
+    ASSERT_NE (arraysXml, nullptr);
 
-    const auto entry = index.getProperty ("maps", {});
-    ASSERT_TRUE (entry.isObject());
-    EXPECT_EQ (entry.getProperty ("dtype", {}).toString(), "<f4");
-    EXPECT_EQ (entry.getProperty ("file", {}).toString(), "arrays/maps.npy");
+    const auto* entry = arraysXml->getFirstChildElement();
+    ASSERT_NE (entry, nullptr);
+    EXPECT_EQ (entry->getStringAttribute ("name"), "maps");
+    EXPECT_EQ (entry->getStringAttribute ("dtype"), "<f4");
+    EXPECT_EQ (entry->getStringAttribute ("shape"), "2,2");
+    EXPECT_EQ (entry->getStringAttribute ("file"), "arrays/maps.npy");
 }
 
-/** A caller setting a key called "arrays" must not be able to destroy the index
- *  that makes the session readable. */
-TEST (SessionBundle, ArrayIndexSurvivesACallerKeyOfTheSameName)
+/** The index and the configuration are child elements, so a caller setting an
+ *  attribute of the same name cannot destroy either. */
+TEST (SessionBundle, ArrayIndexSurvivesACallerAttributeOfTheSameName)
 {
     ScratchDirectory scratch;
     const auto target = scratch.child ("session");
 
     SessionWriter writer;
-    writer.manifest().setProperty ("arrays", "something the caller wrote");
+    writer.metadata().setAttribute ("ARRAYS", "something the caller wrote");
+    writer.metadata().setAttribute ("arrays", "and this too");
 
     const std::vector<float> values (2, 0.0f);
     const auto s = shape ({ 2 });
@@ -288,7 +298,7 @@ TEST (SessionBundle, ReaderRejectsADirectoryThatIsNotASession)
 
     SessionReader noManifest (empty);
     EXPECT_FALSE (noManifest.isValid());
-    EXPECT_TRUE (noManifest.getError().contains ("manifest.json"));
+    EXPECT_TRUE (noManifest.getError().contains ("session.xml"));
 }
 
 TEST (SessionBundle, ReaderRejectsAFormatVersionFromTheFuture)
@@ -297,8 +307,8 @@ TEST (SessionBundle, ReaderRejectsAFormatVersionFromTheFuture)
     const auto target = scratch.child ("session");
     target.createDirectory();
 
-    target.getChildFile ("manifest.json")
-        .replaceWithText ("{\"format_version\": 99, \"plugin\": \"Whatever\"}");
+    target.getChildFile ("session.xml")
+        .replaceWithText ("<EVENT_TRIGGERED_SESSION format_version=\"99\" plugin=\"Whatever\"/>");
 
     SessionReader reader (target);
     EXPECT_FALSE (reader.isValid());

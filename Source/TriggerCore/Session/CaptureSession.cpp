@@ -30,46 +30,40 @@ namespace EventTriggered
 
 namespace
 {
-    juce::var toVar (const juce::StringArray& strings)
+    /** Channels as a <CHANNELS> element with one <CHANNEL> child each.
+     *
+     *  Elements rather than a packed attribute because the index and the name
+     *  belong together, and a reader in any language gets them paired without
+     *  having to split two parallel lists and trust they are the same length. */
+    void writeChannels (juce::XmlElement& parent, const SessionGeometry& geometry)
     {
-        juce::Array<juce::var> values;
+        auto* channelsXml = parent.createNewChildElement (SessionKeys::channelsTag);
 
-        for (const auto& string : strings)
-            values.add (string);
+        for (std::size_t i = 0; i < geometry.channelIndices.size(); ++i)
+        {
+            auto* channelXml = channelsXml->createNewChildElement (SessionKeys::channelTag);
+            channelXml->setAttribute ("index", geometry.channelIndices[i]);
 
-        return juce::var (values);
+            if (i < static_cast<std::size_t> (geometry.channelNames.size()))
+                channelXml->setAttribute ("name", geometry.channelNames[static_cast<int> (i)]);
+        }
     }
 
-    juce::var toVar (const std::vector<int>& numbers)
+    void readChannels (const juce::XmlElement& parent, SessionGeometry& geometry)
     {
-        juce::Array<juce::var> values;
+        const auto* channelsXml = parent.getChildByName (SessionKeys::channelsTag);
 
-        for (const auto number : numbers)
-            values.add (number);
+        if (channelsXml == nullptr)
+            return;
 
-        return juce::var (values);
-    }
+        for (const auto* channelXml : channelsXml->getChildIterator())
+        {
+            if (! channelXml->hasTagName (SessionKeys::channelTag))
+                continue;
 
-    std::vector<int> intsFromVar (const juce::var& value)
-    {
-        std::vector<int> numbers;
-
-        if (const auto* array = value.getArray())
-            for (const auto& entry : *array)
-                numbers.push_back (static_cast<int> (entry));
-
-        return numbers;
-    }
-
-    juce::StringArray stringsFromVar (const juce::var& value)
-    {
-        juce::StringArray strings;
-
-        if (const auto* array = value.getArray())
-            for (const auto& entry : *array)
-                strings.add (entry.toString());
-
-        return strings;
+            geometry.channelIndices.push_back (channelXml->getIntAttribute ("index", -1));
+            geometry.channelNames.add (channelXml->getStringAttribute ("name"));
+        }
     }
 } // namespace
 
@@ -77,23 +71,23 @@ namespace
 
 void writeIdentity (SessionWriter& writer, const SessionIdentity& identity)
 {
-    auto& manifest = writer.manifest();
+    auto& metadata = writer.metadata();
 
-    manifest.setProperty (SessionKeys::plugin, identity.pluginName);
-    manifest.setProperty (SessionKeys::pluginVersion, identity.pluginVersion);
-    manifest.setProperty (SessionKeys::savedAt, identity.savedAt);
-    manifest.setProperty (SessionKeys::demoData, identity.fromDemoData);
+    metadata.setAttribute (SessionKeys::plugin, identity.pluginName);
+    metadata.setAttribute (SessionKeys::pluginVersion, identity.pluginVersion);
+    metadata.setAttribute (SessionKeys::savedAt, identity.savedAt);
+    metadata.setAttribute (SessionKeys::demoData, identity.fromDemoData ? 1 : 0);
 }
 
 void writeGeometry (SessionWriter& writer, const SessionGeometry& geometry)
 {
-    auto& manifest = writer.manifest();
+    auto& metadata = writer.metadata();
 
-    manifest.setProperty (SessionKeys::sampleRate, geometry.sampleRateHz);
-    manifest.setProperty (SessionKeys::preSamples, geometry.preSamples);
-    manifest.setProperty (SessionKeys::postSamples, geometry.postSamples);
-    manifest.setProperty (SessionKeys::channelIndices, toVar (geometry.channelIndices));
-    manifest.setProperty (SessionKeys::channelNames, toVar (geometry.channelNames));
+    metadata.setAttribute (SessionKeys::sampleRate, geometry.sampleRateHz);
+    metadata.setAttribute (SessionKeys::preSamples, geometry.preSamples);
+    metadata.setAttribute (SessionKeys::postSamples, geometry.postSamples);
+
+    writeChannels (metadata, geometry);
 }
 
 std::vector<SessionSourceEntry> sourcesFromSettingsXml (const juce::XmlElement& settings)
@@ -133,10 +127,10 @@ std::optional<SessionIdentity> readIdentity (const SessionReader& reader)
         return std::nullopt;
 
     SessionIdentity identity;
-    identity.pluginName = reader.property (SessionKeys::plugin).toString();
-    identity.pluginVersion = reader.property (SessionKeys::pluginVersion).toString();
-    identity.savedAt = reader.property (SessionKeys::savedAt).toString();
-    identity.fromDemoData = reader.property (SessionKeys::demoData, false);
+    identity.pluginName = reader.stringProperty (SessionKeys::plugin);
+    identity.pluginVersion = reader.stringProperty (SessionKeys::pluginVersion);
+    identity.savedAt = reader.stringProperty (SessionKeys::savedAt);
+    identity.fromDemoData = reader.intProperty (SessionKeys::demoData, 0) != 0;
 
     if (identity.pluginName.isEmpty())
         return std::nullopt;
@@ -150,11 +144,10 @@ std::optional<SessionGeometry> readGeometry (const SessionReader& reader)
         return std::nullopt;
 
     SessionGeometry geometry;
-    geometry.sampleRateHz = reader.property (SessionKeys::sampleRate, 0.0);
-    geometry.preSamples = reader.property (SessionKeys::preSamples, 0);
-    geometry.postSamples = reader.property (SessionKeys::postSamples, 0);
-    geometry.channelIndices = intsFromVar (reader.property (SessionKeys::channelIndices));
-    geometry.channelNames = stringsFromVar (reader.property (SessionKeys::channelNames));
+    geometry.sampleRateHz = reader.doubleProperty (SessionKeys::sampleRate, 0.0);
+    geometry.preSamples = reader.intProperty (SessionKeys::preSamples, 0);
+    geometry.postSamples = reader.intProperty (SessionKeys::postSamples, 0);
+    readChannels (*reader.metadata(), geometry);
 
     if (geometry.sampleRateHz <= 0.0 || geometry.numSamples() <= 0
         || geometry.channelIndices.empty())

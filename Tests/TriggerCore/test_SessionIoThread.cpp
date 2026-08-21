@@ -76,7 +76,7 @@ bool pumpUntil (Predicate predicate, int timeoutMs = 5000)
 std::unique_ptr<SessionWriter> aWriter (int elements = 64)
 {
     auto writer = std::make_unique<SessionWriter>();
-    writer->manifest().setProperty ("plugin", "Triggered Average");
+    writer->metadata().setAttribute ("plugin", "Triggered Average");
 
     std::vector<float> values (static_cast<std::size_t> (elements));
     std::iota (values.begin(), values.end(), 1.0f);
@@ -117,7 +117,7 @@ TEST (SessionIoThread, SavesOnABackgroundThreadAndReportsBack)
     EXPECT_TRUE (received.result.wasOk()) << received.result.getErrorMessage();
     EXPECT_EQ (received.directory, target);
     EXPECT_GT (received.bytesWritten, 0);
-    EXPECT_TRUE (target.getChildFile ("manifest.json").existsAsFile());
+    EXPECT_TRUE (target.getChildFile ("session.xml").existsAsFile());
 
     // The completion is marshalled back, so the callback runs where the caller
     // is, not on the worker.
@@ -237,7 +237,7 @@ TEST (SessionIoThread, RefusesASecondJobWhileOneIsRunning)
 
     ASSERT_TRUE (pumpUntil ([&] { return completions.load() >= 1; }));
 
-    EXPECT_TRUE (scratch.child ("first").getChildFile ("manifest.json").existsAsFile());
+    EXPECT_TRUE (scratch.child ("first").getChildFile ("session.xml").existsAsFile());
 }
 
 /** After a job completes the thread must accept the next one, including one
@@ -263,8 +263,8 @@ TEST (SessionIoThread, AcceptsAnotherJobAfterOneFinishes)
     ASSERT_TRUE (pumpUntil ([&] { return completions.load() >= 2; }));
 
     EXPECT_TRUE (secondAccepted);
-    EXPECT_TRUE (scratch.child ("first").getChildFile ("manifest.json").existsAsFile());
-    EXPECT_TRUE (scratch.child ("second").getChildFile ("manifest.json").existsAsFile());
+    EXPECT_TRUE (scratch.child ("first").getChildFile ("session.xml").existsAsFile());
+    EXPECT_TRUE (scratch.child ("second").getChildFile ("session.xml").existsAsFile());
 }
 
 /** Destroying the thread with a job in flight must not crash or leave a staging

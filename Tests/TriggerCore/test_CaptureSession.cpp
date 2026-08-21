@@ -169,10 +169,10 @@ TEST (CaptureSession, RoundTripsIdentityGeometryAndSources)
     }
 }
 
-/** The session stores the configuration as the GUI's own XML rather than as a
- *  second copy in the manifest, so that there is exactly one serialiser for the
- *  trigger source table. */
-TEST (CaptureSession, StoresTheConfigurationAsXmlNotAsManifestKeys)
+/** The configuration is carried verbatim as the element the signal chain stores,
+ *  inside the one session file — not translated into a second representation
+ *  alongside it. That is what keeps a single serialiser for the source table. */
+TEST (CaptureSession, CarriesTheConfigurationVerbatimInsideSessionXml)
 {
     ScratchDirectory scratch;
     const auto target = scratch.child ("session");
@@ -185,19 +185,27 @@ TEST (CaptureSession, StoresTheConfigurationAsXmlNotAsManifestKeys)
         ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
     }
 
-    EXPECT_TRUE (target.getChildFile ("settings.xml").existsAsFile());
+    // One text file for the whole session.
+    EXPECT_TRUE (target.getChildFile ("session.xml").existsAsFile());
+    EXPECT_FALSE (target.getChildFile ("manifest.json").exists());
+    EXPECT_FALSE (target.getChildFile ("settings.xml").exists());
 
-    const auto manifest = juce::JSON::parse (target.getChildFile ("manifest.json"));
-    ASSERT_TRUE (manifest.isObject());
-    EXPECT_FALSE (manifest.hasProperty ("sources"))
-        << "the source table must not be duplicated into the manifest";
+    juce::XmlDocument document (target.getChildFile ("session.xml").loadFileAsString());
+    const auto root = document.getDocumentElement();
+    ASSERT_NE (root, nullptr);
 
-    // ...and it is the same XML a signal chain would carry.
-    juce::XmlDocument document (target.getChildFile ("settings.xml").loadFileAsString());
-    const auto settings = document.getDocumentElement();
-    ASSERT_NE (settings, nullptr);
+    const auto* settings = root->getChildByName ("CUSTOM_PARAMETERS");
+    ASSERT_NE (settings, nullptr)
+        << "the configuration must be present as the chain's own element";
     EXPECT_EQ (settings->getNumChildElements(), 2);
     EXPECT_TRUE (settings->getFirstChildElement()->hasTagName ("TRIGGERSOURCE"));
+
+    // And the reader hands that same element straight back, for
+    // loadCustomParametersFromXml().
+    SessionReader reader (target);
+    ASSERT_TRUE (reader.isValid()) << reader.getError();
+    ASSERT_NE (reader.getSettingsXml(), nullptr);
+    EXPECT_TRUE (reader.getSettingsXml()->hasTagName ("CUSTOM_PARAMETERS"));
 }
 
 TEST (CaptureSession, RefusesToReadSourcesWhenThereIsNoSettingsXml)
@@ -218,7 +226,7 @@ TEST (CaptureSession, RefusesToReadSourcesWhenThereIsNoSettingsXml)
     EXPECT_FALSE (readSources (reader).has_value());
 }
 
-TEST (CaptureSession, RejectsASessionWhoseSettingsXmlIsMalformed)
+TEST (CaptureSession, RejectsASessionFileThatIsMalformed)
 {
     ScratchDirectory scratch;
     const auto target = scratch.child ("session");
@@ -229,11 +237,27 @@ TEST (CaptureSession, RejectsASessionWhoseSettingsXmlIsMalformed)
         ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
     }
 
-    target.getChildFile ("settings.xml").replaceWithText ("<CUSTOM_PARAMETERS><broken");
+    target.getChildFile ("session.xml").replaceWithText ("<EVENT_TRIGGERED_SESSION><broken");
 
     SessionReader reader (target);
     EXPECT_FALSE (reader.isValid());
-    EXPECT_TRUE (reader.getError().contains ("settings.xml")) << reader.getError();
+    EXPECT_TRUE (reader.getError().contains ("session.xml")) << reader.getError();
+}
+
+/** A well-formed XML file that is not one of ours must be refused rather than
+ *  read as an empty session. */
+TEST (CaptureSession, RejectsAnXmlFileThatIsNotASession)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+    target.createDirectory();
+
+    target.getChildFile ("session.xml")
+        .replaceWithText ("<SETTINGS format_version=\"1\"><PROCESSOR/></SETTINGS>");
+
+    SessionReader reader (target);
+    EXPECT_FALSE (reader.isValid());
+    EXPECT_TRUE (reader.getError().contains ("SETTINGS")) << reader.getError();
 }
 
 /** Demo data must be identifiable after the fact — it is convincing, and the
@@ -266,7 +290,7 @@ TEST (CaptureSession, RejectsAManifestMissingWhatItNeeds)
 
     {
         SessionWriter writer;
-        writer.manifest().setProperty ("something_else", 1);
+        writer.metadata().setAttribute ("something_else", 1);
         ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
     }
 

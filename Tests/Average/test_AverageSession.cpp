@@ -362,7 +362,7 @@ TEST (AverageSessionIo, RefusesASessionThatHoldsNoAccumulators)
 
     {
         SessionWriter writer;
-        writer.manifest().setProperty ("plugin", "SomethingElse");
+        writer.metadata().setAttribute ("plugin", "SomethingElse");
         ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
     }
 

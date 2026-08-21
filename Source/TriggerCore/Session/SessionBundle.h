@@ -34,22 +34,38 @@
 namespace EventTriggered
 {
 
-/** A saved analysis session: a directory holding a JSON manifest, one .npy per
+/** A saved analysis session: a directory holding one XML file, one .npy per
  *  array, and any figures exported alongside them.
  *
  *      session/
- *        manifest.json          provenance, trial geometry, channels, sources,
- *                               plugin-specific settings, and the array index
- *        arrays/<name>.npy      one file per array named in the manifest
+ *        session.xml            provenance, trial geometry, channels, the array
+ *                               index, and the processor's own configuration
+ *        arrays/<name>.npy      one file per array named in session.xml
  *        figures/<name>.png     optional
  *
- *  This is the Open Ephys binary record format's own convention — `structure.oebin`
- *  plus .npy sidecars — rather than something invented here, so a saved session
- *  sits next to the recording it came from and is opened by the same tooling.
+ *  ### Why one XML rather than XML plus a JSON manifest
  *
- *  Why a directory and not one file: the figures are the point of the figures.
- *  A container the user has to unpack before they can look at a PNG is a container
- *  that gets unpacked once and left lying around in two states.
+ *  Because a session is one thing, and reading it should need one parser. The
+ *  configuration has to be XML — it is produced by saveCustomParametersToXml(),
+ *  the GUI's own serialiser, and duplicating it into a second format is exactly
+ *  the drift this design already refuses elsewhere. Given that, putting the
+ *  provenance in JSON beside it would mean every consumer, in every language,
+ *  needed an XML parser *and* a JSON parser to understand one directory.
+ *
+ *  So: everything textual is XML, and everything numeric is .npy. Both halves are
+ *  native in Python (`xml.etree`, `numpy.load`) and in MATLAB (`readstruct`, or
+ *  `xmlread` before R2020b; plus the .npy reader in Tools/matlab).
+ *
+ *  The arrays stay .npy rather than being inlined as text for the obvious reason:
+ *  a 201x201 map per channel is not something to base64 into an attribute, and
+ *  .npy is self-describing, so dtype and shape survive even if this file does
+ *  not.
+ *
+ *  ### Why a directory and not one file
+ *
+ *  The figures are the point of the figures. A container the user has to unpack
+ *  before they can look at a PNG is a container that gets unpacked once and left
+ *  lying around in two states.
  *
  *  ### Writing is separated from touching the disk
  *
@@ -67,19 +83,22 @@ namespace EventTriggered
 class SessionWriter
 {
 public:
-    SessionWriter() = default;
+    SessionWriter();
 
-    /** The manifest under construction. Callers add their own keys to it; the
-     *  array index is added by the writer itself at flush time, so a caller that
-     *  overwrites "arrays" loses only its own entry. */
-    juce::DynamicObject& manifest() { return *m_manifest; }
+    /** The session element under construction.
+     *
+     *  Callers set their own attributes on it — sample rate, map geometry,
+     *  whatever the plugin wants recorded. The array index and the configuration
+     *  are added as *child elements* at flush time, so a caller cannot destroy
+     *  either by setting an attribute of the same name. */
+    juce::XmlElement& metadata() { return *m_metadata; }
 
     /** Adds an array, encoding it immediately.
      *
-     *  `name` becomes `arrays/<name>.npy` and the manifest key under which the
-     *  shape and dtype are recorded, so it must be a plain identifier — slashes,
-     *  dots and separators are rejected rather than silently sanitised, because a
-     *  name that changes on write cannot be found on read.
+     *  `name` becomes `arrays/<name>.npy` and the name it is indexed under, so it
+     *  must be a plain identifier — slashes, dots and separators are rejected
+     *  rather than silently sanitised, because a name that changes on write
+     *  cannot be found on read.
      *
      *  Returns false if the name is malformed, is already taken, or if the values
      *  do not fill the shape. */
@@ -103,25 +122,18 @@ public:
      *  and the write happen here, and here can be anywhere. */
     bool addFigure (const juce::String& name, const juce::Image& image);
 
-    /** Stores the processor's own configuration XML, verbatim.
+    /** Stores the processor's own configuration, verbatim.
      *
      *  This is what `saveCustomParametersToXml()` produces — the same element the
      *  signal chain stores — and it is kept as XML rather than translated into
-     *  the manifest on purpose. The trigger source table, the arm patterns and
+     *  attributes on purpose. The trigger source table, the arm patterns and
      *  whatever else a plugin persists already have exactly one serialiser; a
-     *  second one that wrote the same fields into JSON would be free to drift
+     *  second one that wrote the same fields differently would be free to drift
      *  from it, and the drift would show up as a session that restores subtly
-     *  different conditions from the ones the chain restores.
-     *
-     *  So the split is: settings.xml is *configuration*, and belongs to the GUI's
-     *  serialiser; the manifest is *provenance* — sample rate, resolved sample
-     *  counts, channel identities, who wrote it and when — which are facts about
-     *  the recording rather than settings, and which are what the resume check
-     *  compares. */
+     *  different conditions from the ones the chain restores. */
     void setSettingsXml (const juce::XmlElement& settings);
 
     bool hasSettingsXml() const { return m_settings != nullptr; }
-
     bool hasArray (const juce::String& name) const { return m_arrays.count (name) > 0; }
     int getNumArrays() const { return static_cast<int> (m_arrays.size()); }
     int getNumFigures() const { return static_cast<int> (m_figures.size()); }
@@ -147,29 +159,36 @@ private:
                      const char* dtype,
                      std::span<const std::int64_t> shape);
 
-    juce::DynamicObject::Ptr m_manifest { new juce::DynamicObject() };
+    std::unique_ptr<juce::XmlElement> m_metadata;
+    std::unique_ptr<juce::XmlElement> m_settings;
 
     /** Ordered, so a bundle written twice from the same state is byte-identical
         and can be diffed. */
     std::map<juce::String, std::vector<char>> m_arrays;
     std::map<juce::String, std::vector<char>> m_figures;
 
-    std::unique_ptr<juce::XmlElement> m_settings;
+    /** Name -> dtype and shape, for the index written at flush time. */
+    struct ArrayEntry
+    {
+        juce::String dtype;
+        std::vector<std::int64_t> shape;
+    };
 
-    juce::DynamicObject::Ptr m_arrayIndex { new juce::DynamicObject() };
+    std::map<juce::String, ArrayEntry> m_index;
 };
 
 /** Reads back what SessionWriter wrote.
  *
- *  Loads the manifest eagerly — it is small, and every compatibility decision is
+ *  Parses session.xml eagerly — it is small, and every compatibility decision is
  *  made from it — and the arrays lazily, so a session can be rejected as
  *  incompatible without paying for the accumulators it holds.
  */
 class SessionReader
 {
 public:
-    /** Opens a session directory and parses its manifest. Check isValid(). */
+    /** Opens a session directory and parses session.xml. Check isValid(). */
     explicit SessionReader (const juce::File& directory);
+    ~SessionReader();
 
     bool isValid() const { return m_valid; }
 
@@ -178,23 +197,26 @@ public:
 
     const juce::File& getDirectory() const { return m_directory; }
 
-    /** The parsed manifest. A void var when invalid. */
-    const juce::var& manifest() const { return m_manifest; }
+    /** The session element, or null when invalid. */
+    const juce::XmlElement* metadata() const { return m_metadata.get(); }
 
-    /** A top-level manifest property. */
-    juce::var property (const juce::String& key,
-                        const juce::var& fallback = juce::var()) const;
+    /** An attribute of the session element. */
+    juce::String stringProperty (const juce::String& key,
+                                 const juce::String& fallback = {}) const;
+    double doubleProperty (const juce::String& key, double fallback = 0.0) const;
+    int intProperty (const juce::String& key, int fallback = 0) const;
+    bool boolProperty (const juce::String& key, bool fallback = false) const;
 
-    /** The processor's configuration XML, or null if the session has none.
+    /** The processor's configuration, or null if the session has none.
      *
      *  Feed it straight to `loadCustomParametersFromXml()`: that is the same call
      *  the signal chain makes, so a rebuilt set of trigger sources is rebuilt by
      *  the code that already does it rather than by a second implementation. */
-    const juce::XmlElement* getSettingsXml() const { return m_settings.get(); }
+    const juce::XmlElement* getSettingsXml() const { return m_settings; }
 
     bool hasArray (const juce::String& name) const;
 
-    /** Reads every array in the manifest into memory.
+    /** Reads every array in the index into memory.
      *
      *  Exists so that the disk work can be done somewhere other than where the
      *  data is used. Restoring accumulators has to happen on the message thread
@@ -232,10 +254,15 @@ public:
 private:
     juce::File arrayFile (const juce::String& name) const;
     std::optional<std::vector<char>> readArrayBytes (const juce::String& name) const;
+    const juce::XmlElement* arrayEntry (const juce::String& name) const;
 
     juce::File m_directory;
-    juce::var m_manifest;
-    std::unique_ptr<juce::XmlElement> m_settings;
+    std::unique_ptr<juce::XmlElement> m_metadata;
+
+    /** Owned by m_metadata; a borrowed pointer, so callers can hand it to
+        loadCustomParametersFromXml() without a copy. */
+    const juce::XmlElement* m_settings = nullptr;
+
     bool m_valid = false;
     juce::String m_error;
 
@@ -243,18 +270,27 @@ private:
     std::map<juce::String, std::vector<char>> m_preloaded;
 };
 
-/** The manifest key and file name for the array index, exposed so the readers in
-    Tools/ and the tests agree with the writer about where to look. */
+/** The layout a session directory has, shared with the readers in Tools/ and the
+    tests so they cannot disagree with the writer about where things live. */
 namespace SessionLayout
 {
-    inline constexpr auto manifestFileName = "manifest.json";
-    inline constexpr auto settingsFileName = "settings.xml";
+    inline constexpr auto sessionFileName = "session.xml";
     inline constexpr auto arraysDirectoryName = "arrays";
     inline constexpr auto figuresDirectoryName = "figures";
-    inline constexpr auto arrayIndexKey = "arrays";
 
-    /** Bumped when the layout changes in a way an older reader cannot cope with.
-        Recorded in every manifest as "format_version". */
+    /** Root tag of session.xml. */
+    inline constexpr auto rootTag = "EVENT_TRIGGERED_SESSION";
+
+    /** Wraps the array index; one ARRAY child per array. */
+    inline constexpr auto arraysTag = "ARRAYS";
+    inline constexpr auto arrayTag = "ARRAY";
+
+    /** The processor's configuration, exactly as the signal chain stores it. */
+    inline constexpr auto settingsTag = "CUSTOM_PARAMETERS";
+
+    inline constexpr auto formatVersionAttribute = "format_version";
+
+    /** Bumped when the layout changes in a way an older reader cannot cope with. */
     inline constexpr int formatVersion = 1;
 
     /** True for a name that can be used as an array or figure file name. */

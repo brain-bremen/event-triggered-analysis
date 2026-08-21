@@ -226,8 +226,11 @@ namespace SessionKeys
     inline constexpr auto sampleRate = "sample_rate_hz";
     inline constexpr auto preSamples = "pre_samples";
     inline constexpr auto postSamples = "post_samples";
-    inline constexpr auto channelIndices = "channel_indices";
-    inline constexpr auto channelNames = "channel_names";
+
+    /** Channels are an element rather than two parallel attributes, so a reader
+        gets each index paired with its name instead of two lists to zip. */
+    inline constexpr auto channelsTag = "CHANNELS";
+    inline constexpr auto channelTag = "CHANNEL";
 } // namespace SessionKeys
 
 } // namespace EventTriggered

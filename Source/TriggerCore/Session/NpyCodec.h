@@ -35,10 +35,10 @@ namespace EventTriggered
 
 /** Read and write NumPy .npy arrays.
  *
- *  The Open Ephys binary record format is a JSON manifest plus .npy sidecars, so
- *  a session saved this way is readable by the same tooling as the recording it
- *  came from, and `np.load` needs no manifest to interpret it: dtype and shape
- *  live in the file.
+ *  .npy because it is self-describing and because the Open Ephys binary record
+ *  format already uses it for every array it writes: dtype and shape live in the
+ *  file, so an array survives its index being lost or edited, and `np.load` opens
+ *  one with no other knowledge of the session at all.
  *
  *  The GUI ships its own writer (RecordNode/BinaryFormat/NpyFile.h, exported as
  *  PLUGIN_API), and this is deliberately not it. That one is a *streaming* writer

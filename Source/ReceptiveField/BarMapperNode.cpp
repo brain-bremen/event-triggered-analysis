@@ -894,15 +894,18 @@ bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
     const std::vector<std::int64_t> channelShape { channelCount };
 
     const auto geometry = firstMap.geometry();
-    writer.manifest().setProperty ("map_pixels", geometry.pixels);
-    writer.manifest().setProperty ("map_degrees_per_pixel", geometry.degreesPerPixel);
-    writer.manifest().setProperty ("map_centre_x_deg", geometry.centreXDeg);
-    writer.manifest().setProperty ("map_centre_y_deg", geometry.centreYDeg);
-    writer.manifest().setProperty (
-        "map_estimate_fields",
-        juce::var (juce::Array<juce::var> { "peak", "centre_x_deg", "centre_y_deg", "area_pixels",
-                                            "equivalent_diameter_deg", "width_deg",
-                                            "height_deg" }));
+    auto& metadata = writer.metadata();
+
+    metadata.setAttribute ("map_pixels", geometry.pixels);
+    metadata.setAttribute ("map_degrees_per_pixel", geometry.degreesPerPixel);
+    metadata.setAttribute ("map_centre_x_deg", geometry.centreXDeg);
+    metadata.setAttribute ("map_centre_y_deg", geometry.centreYDeg);
+
+    // Names the columns of map_estimates, so a reader does not have to count
+    // along a row of seven doubles and hope.
+    metadata.setAttribute ("map_estimate_fields",
+                           "peak,centre_x_deg,centre_y_deg,area_pixels,"
+                           "equivalent_diameter_deg,width_deg,height_deg");
 
     return writer.addArray ("maps", std::span (maps), std::span (mapShape))
            && writer.addArray ("map_estimates", std::span (estimates), std::span (estimateShape))

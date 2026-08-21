@@ -54,23 +54,36 @@ namespace SessionLayout
 
 namespace
 {
-    juce::var shapeToVar (std::span<const std::int64_t> shape)
+    /** A shape as an attribute: "4,3,16". Empty for a zero-dimensional array.
+     *
+     *  Flat rather than one child element per dimension, because it is a
+     *  cross-check on the .npy header rather than the authoritative copy — .npy
+     *  is self-describing, so the shape survives this file being lost or edited.
+     *  A string that a human can read at a glance is worth more here than a
+     *  structure a parser prefers. */
+    juce::String shapeToString (std::span<const std::int64_t> shape)
     {
-        juce::Array<juce::var> dimensions;
+        juce::StringArray parts;
 
         for (const auto dimension : shape)
-            dimensions.add (juce::var (static_cast<juce::int64> (dimension)));
+            parts.add (juce::String (static_cast<juce::int64> (dimension)));
 
-        return juce::var (dimensions);
+        return parts.joinIntoString (",");
     }
 
-    std::vector<std::int64_t> shapeFromVar (const juce::var& value)
+    std::vector<std::int64_t> shapeFromString (const juce::String& text)
     {
         std::vector<std::int64_t> shape;
 
-        if (const auto* array = value.getArray())
-            for (const auto& dimension : *array)
-                shape.push_back (static_cast<std::int64_t> (static_cast<juce::int64> (dimension)));
+        if (text.isEmpty())
+            return shape;
+
+        juce::StringArray parts;
+        parts.addTokens (text, ",", "");
+
+        for (const auto& part : parts)
+            if (part.trim().isNotEmpty())
+                shape.push_back (static_cast<std::int64_t> (part.trim().getLargeIntValue()));
 
         return shape;
     }
@@ -80,6 +93,11 @@ namespace
 // SessionWriter
 // ===========================================================================
 
+SessionWriter::SessionWriter()
+    : m_metadata (std::make_unique<juce::XmlElement> (SessionLayout::rootTag))
+{
+}
+
 bool SessionWriter::addEncoded (const juce::String& name,
                                 std::optional<std::vector<char>> encoded,
                                 const char* dtype,
@@ -88,13 +106,11 @@ bool SessionWriter::addEncoded (const juce::String& name,
     if (! SessionLayout::isValidName (name) || m_arrays.count (name) > 0 || ! encoded)
         return false;
 
-    auto* entry = new juce::DynamicObject();
-    entry->setProperty ("dtype", juce::String (dtype));
-    entry->setProperty ("shape", shapeToVar (shape));
-    entry->setProperty ("file",
-                        juce::String (SessionLayout::arraysDirectoryName) + "/" + name + ".npy");
+    ArrayEntry entry;
+    entry.dtype = dtype;
+    entry.shape.assign (shape.begin(), shape.end());
 
-    m_arrayIndex->setProperty (name, juce::var (entry));
+    m_index.emplace (name, std::move (entry));
     m_arrays.emplace (name, std::move (*encoded));
     return true;
 }
@@ -195,17 +211,6 @@ juce::Result SessionWriter::flushToDirectory (const juce::File& directory) const
     if (auto result = staging.createDirectory(); result.failed())
         return result;
 
-    // Assembled here rather than in addArray() so that the caller's own manifest
-    // keys are already in place, and so a caller cannot lose the index by setting
-    // a property with the same name earlier.
-    juce::DynamicObject::Ptr root (new juce::DynamicObject());
-
-    for (const auto& property : m_manifest->getProperties())
-        root->setProperty (property.name, property.value);
-
-    root->setProperty ("format_version", SessionLayout::formatVersion);
-    root->setProperty (SessionLayout::arrayIndexKey, juce::var (m_arrayIndex.get()));
-
     const auto writeFile = [] (const juce::File& file, const std::vector<char>& bytes) -> juce::Result
     {
         juce::TemporaryFile temporary (file);
@@ -254,28 +259,35 @@ juce::Result SessionWriter::flushToDirectory (const juce::File& directory) const
                 return result;
     }
 
-    if (m_settings != nullptr)
-    {
-        const auto settingsText = m_settings->toString();
-        const std::vector<char> settingsBytes (settingsText.toRawUTF8(),
-                                               settingsText.toRawUTF8()
-                                                   + settingsText.getNumBytesAsUTF8());
+    // Assembled here rather than as the caller goes, so that the caller's own
+    // attributes are already in place and cannot displace the index or the
+    // configuration — both of which are child elements, not attributes, and so
+    // occupy a namespace the caller does not write into at all.
+    juce::XmlElement root (*m_metadata);
+    root.setAttribute (SessionLayout::formatVersionAttribute, SessionLayout::formatVersion);
 
-        if (auto result = writeFile (staging.getChildFile (SessionLayout::settingsFileName),
-                                     settingsBytes);
-            result.failed())
-            return result;
+    auto* arraysXml = root.createNewChildElement (SessionLayout::arraysTag);
+
+    for (const auto& [name, entry] : m_index)
+    {
+        auto* arrayXml = arraysXml->createNewChildElement (SessionLayout::arrayTag);
+        arrayXml->setAttribute ("name", name);
+        arrayXml->setAttribute ("dtype", entry.dtype);
+        arrayXml->setAttribute ("shape", shapeToString (entry.shape));
+        arrayXml->setAttribute (
+            "file", juce::String (SessionLayout::arraysDirectoryName) + "/" + name + ".npy");
     }
 
-    // The manifest is written last, so a staging directory that somehow survives
-    // an interrupted save is missing the one file a reader opens first.
-    const auto manifestText = juce::JSON::toString (juce::var (root.get()), false);
-    const std::vector<char> manifestBytes (manifestText.toRawUTF8(),
-                                           manifestText.toRawUTF8()
-                                               + manifestText.getNumBytesAsUTF8());
+    if (m_settings != nullptr)
+        root.addChildElement (new juce::XmlElement (*m_settings));
 
-    if (auto result = writeFile (staging.getChildFile (SessionLayout::manifestFileName),
-                                 manifestBytes);
+    // Written last, so a staging directory that somehow survives an interrupted
+    // save is missing the one file a reader opens first.
+    const auto text = root.toString();
+    const std::vector<char> bytes (text.toRawUTF8(),
+                                   text.toRawUTF8() + text.getNumBytesAsUTF8());
+
+    if (auto result = writeFile (staging.getChildFile (SessionLayout::sessionFileName), bytes);
         result.failed())
         return result;
 
@@ -307,66 +319,92 @@ SessionReader::SessionReader (const juce::File& directory) : m_directory (direct
         return;
     }
 
-    const auto manifestFile = directory.getChildFile (SessionLayout::manifestFileName);
+    const auto sessionFile = directory.getChildFile (SessionLayout::sessionFileName);
 
-    if (! manifestFile.existsAsFile())
+    if (! sessionFile.existsAsFile())
     {
-        m_error = "No " + juce::String (SessionLayout::manifestFileName) + " in "
+        m_error = "No " + juce::String (SessionLayout::sessionFileName) + " in "
                   + directory.getFileName();
         return;
     }
 
-    const auto text = manifestFile.loadFileAsString();
-    const auto parsed = juce::JSON::parse (text);
+    // XmlDocument rather than the juce::parseXML() free function: only the former
+    // is exported from the Open Ephys shared library, and a plugin linking the
+    // latter fails at link time rather than at compile time.
+    juce::XmlDocument document (sessionFile.loadFileAsString());
+    m_metadata = document.getDocumentElement();
 
-    if (! parsed.isObject())
+    if (m_metadata == nullptr)
     {
-        m_error = "Could not parse " + juce::String (SessionLayout::manifestFileName);
+        m_error = "Could not parse " + juce::String (SessionLayout::sessionFileName);
         return;
     }
 
-    const int version = parsed.getProperty ("format_version", 0);
+    if (! m_metadata->hasTagName (SessionLayout::rootTag))
+    {
+        m_error = juce::String (SessionLayout::sessionFileName) + " is a <"
+                  + m_metadata->getTagName() + ">, not a session";
+        m_metadata.reset();
+        return;
+    }
+
+    const int version = m_metadata->getIntAttribute (SessionLayout::formatVersionAttribute, 0);
 
     if (version <= 0 || version > SessionLayout::formatVersion)
     {
         m_error = "Session format version " + juce::String (version)
                   + " cannot be read by this build (understands up to "
                   + juce::String (SessionLayout::formatVersion) + ")";
+        m_metadata.reset();
         return;
     }
 
-    m_manifest = parsed;
-
-    // Optional: a session written by a plugin with nothing to persist beyond its
-    // parameters has no settings.xml, and that is not an error. A malformed one
-    // is, because the alternative is rebuilding trigger sources from a file we
-    // could only partly read.
-    const auto settingsFile = directory.getChildFile (SessionLayout::settingsFileName);
-
-    if (settingsFile.existsAsFile())
-    {
-        // XmlDocument rather than the juce::parseXML() free function: only the
-        // former is exported from the Open Ephys shared library, and a plugin
-        // linking the latter fails at link time rather than at compile time.
-        juce::XmlDocument document (settingsFile.loadFileAsString());
-        m_settings = document.getDocumentElement();
-
-        if (m_settings == nullptr)
-        {
-            m_error = "Could not parse " + juce::String (SessionLayout::settingsFileName);
-            return;
-        }
-    }
+    // Borrowed, not copied: the caller hands it straight to
+    // loadCustomParametersFromXml(), and it lives as long as m_metadata does.
+    m_settings = m_metadata->getChildByName (SessionLayout::settingsTag);
 
     m_valid = true;
 }
 
-juce::var SessionReader::property (const juce::String& key, const juce::var& fallback) const
-{
-    if (! m_valid)
-        return fallback;
+SessionReader::~SessionReader() = default;
 
-    return m_manifest.getProperty (key, fallback);
+juce::String SessionReader::stringProperty (const juce::String& key,
+                                            const juce::String& fallback) const
+{
+    return m_valid ? m_metadata->getStringAttribute (key, fallback) : fallback;
+}
+
+double SessionReader::doubleProperty (const juce::String& key, double fallback) const
+{
+    return m_valid ? m_metadata->getDoubleAttribute (key, fallback) : fallback;
+}
+
+int SessionReader::intProperty (const juce::String& key, int fallback) const
+{
+    return m_valid ? m_metadata->getIntAttribute (key, fallback) : fallback;
+}
+
+bool SessionReader::boolProperty (const juce::String& key, bool fallback) const
+{
+    return m_valid ? m_metadata->getBoolAttribute (key, fallback) : fallback;
+}
+
+const juce::XmlElement* SessionReader::arrayEntry (const juce::String& name) const
+{
+    if (! m_valid || ! SessionLayout::isValidName (name))
+        return nullptr;
+
+    const auto* arraysXml = m_metadata->getChildByName (SessionLayout::arraysTag);
+
+    if (arraysXml == nullptr)
+        return nullptr;
+
+    for (const auto* arrayXml : arraysXml->getChildIterator())
+        if (arrayXml->hasTagName (SessionLayout::arrayTag)
+            && arrayXml->getStringAttribute ("name") == name)
+            return arrayXml;
+
+    return nullptr;
 }
 
 juce::File SessionReader::arrayFile (const juce::String& name) const
@@ -377,12 +415,7 @@ juce::File SessionReader::arrayFile (const juce::String& name) const
 
 bool SessionReader::hasArray (const juce::String& name) const
 {
-    if (! m_valid || ! SessionLayout::isValidName (name))
-        return false;
-
-    const auto index = m_manifest.getProperty (SessionLayout::arrayIndexKey, juce::var());
-
-    if (! index.isObject() || ! index.hasProperty (name))
+    if (arrayEntry (name) == nullptr)
         return false;
 
     // A preloaded array is present whether or not the file still is. Checking
@@ -400,10 +433,7 @@ std::vector<std::int64_t> SessionReader::arrayShape (const juce::String& name) c
     if (! hasArray (name))
         return {};
 
-    const auto index = m_manifest.getProperty (SessionLayout::arrayIndexKey, juce::var());
-    const auto entry = index.getProperty (name, juce::var());
-
-    return shapeFromVar (entry.getProperty ("shape", juce::var()));
+    return shapeFromString (arrayEntry (name)->getStringAttribute ("shape"));
 }
 
 std::optional<std::vector<char>> SessionReader::readArrayBytes (const juce::String& name) const
@@ -428,17 +458,20 @@ bool SessionReader::preloadArrays()
     if (! m_valid)
         return false;
 
-    const auto index = m_manifest.getProperty (SessionLayout::arrayIndexKey, juce::var());
+    const auto* arraysXml = m_metadata->getChildByName (SessionLayout::arraysTag);
 
-    if (! index.isObject())
+    if (arraysXml == nullptr)
         return true; // a session with no arrays is preloaded by definition
 
     m_preloaded.clear();
     bool allRead = true;
 
-    for (const auto& property : index.getDynamicObject()->getProperties())
+    for (const auto* arrayXml : arraysXml->getChildIterator())
     {
-        const juce::String name = property.name.toString();
+        if (! arrayXml->hasTagName (SessionLayout::arrayTag))
+            continue;
+
+        const auto name = arrayXml->getStringAttribute ("name");
 
         if (! hasArray (name))
         {
@@ -465,16 +498,16 @@ namespace
 {
     /** The shape check every read shares.
      *
-     *  The manifest's shape and the .npy header's shape are compared against each
+     *  The index's shape and the .npy header's shape are compared against each
      *  other as well as against the caller's expectation. They are written from
      *  the same value, so a disagreement means the directory has been edited or
      *  half-replaced, and reading it is not recoverable. */
     bool shapeIsAcceptable (const Npy::Header& header,
-                            const std::vector<std::int64_t>& fromManifest,
+                            const std::vector<std::int64_t>& fromIndex,
                             std::span<const std::int64_t> expected)
     {
-        if (! fromManifest.empty() || ! header.shape.empty())
-            if (header.shape != fromManifest)
+        if (! fromIndex.empty() || ! header.shape.empty())
+            if (header.shape != fromIndex)
                 return false;
 
         if (! expected.empty())
