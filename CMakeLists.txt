@@ -1,14 +1,19 @@
 cmake_minimum_required(VERSION 3.23.0)
 
 # ---------------------------------------------------------------------------
-# Event-Triggered Analysis: three Open Ephys plugins (TriggeredPower,
-# TriggeredCoherence, TriggeredAverage) over two statically-linked cores.
+# Event-Triggered Analysis: four Open Ephys plugins (TriggeredPower,
+# TriggeredCoherence, TriggeredAverage, ReceptiveFieldBarMapper) over four
+# statically-linked cores.
 #
 #   trigger_core   ring buffer, trigger sources, work queue, capture worker,
 #                  broadcast-message path, trigger config + monitor windows.
 #                  No FFTW, no DSP.
+#   average_core   single-trial ring, running mean/SD accumulator and the
+#                  per-source DataStore. Layered on trigger_core, no FFTW.
 #   spectra_core   FFTW, DPSS, Morlet, accumulators, spectral display widgets.
 #                  Layered on trigger_core; used by the two spectral plugins.
+#   rf_math        receptive-field back-projection. Layered on nothing at all:
+#                  no JUCE, no Open Ephys, no FFTW.
 # ---------------------------------------------------------------------------
 
 set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
@@ -25,7 +30,7 @@ set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
 # reports it through getLibInfo(), and the Windows resource stamps it. Nothing
 # should hardcode a version string.
 set(PLUGIN_VERSION_MAJOR 0)
-set(PLUGIN_VERSION_MINOR 3)
+set(PLUGIN_VERSION_MINOR 4)
 set(PLUGIN_VERSION_PATCH 0)
 set(PLUGIN_VERSION "${PLUGIN_VERSION_MAJOR}.${PLUGIN_VERSION_MINOR}.${PLUGIN_VERSION_PATCH}")
 
@@ -204,10 +209,14 @@ endfunction()
 
 # ---------------------------------------------------------------------------
 add_subdirectory(Source/TriggerCore)
+add_subdirectory(Source/AverageCore)
+add_subdirectory(Source/ReceptiveField/RfMath)
 add_subdirectory(Source/Spectral)
 add_subdirectory(Source/Power)
 add_subdirectory(Source/Coherence)
 add_subdirectory(Source/Average)
+add_subdirectory(Source/ReceptiveField)
+add_subdirectory(Tools)
 
 # --- clang-format ----------------------------------------------------------
 if(CLANG_FORMAT_EXE)

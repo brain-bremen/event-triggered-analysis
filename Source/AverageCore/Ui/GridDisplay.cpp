@@ -22,10 +22,9 @@
 
 */
 #include "GridDisplay.h"
-#include "../DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "SinglePlotPanel.h"
 #include "TriggerCore/TriggerSource.h"
-#include "../TriggeredAvgNode.h"
 
 EventTriggered::GridDisplay::GridDisplay() = default;
 
@@ -59,15 +58,19 @@ void EventTriggered::GridDisplay::resized()
     int col = 0;
     bool drawBackground = true;
 
-    ContinuousChannel* latestChannel = nullptr;
+    // Grouped by the panel's row in the average buffer rather than by its
+    // ContinuousChannel pointer. The two are the same grouping -- one row per
+    // selected channel, all its conditions consecutive -- but the row is also
+    // defined for a panel added by addNamedChannel(), which has no channel.
+    int latestChannelRow = -1;
 
     for (auto panel : panels)
     {
         if (overlayConditions)
         {
-            if (panel->contChannel != latestChannel)
+            if (panel->getChannelRow() != latestChannelRow)
             {
-                latestChannel = const_cast<ContinuousChannel*> (panel->contChannel);
+                latestChannelRow = panel->getChannelRow();
                 drawBackground = true;
                 index++;
                 overlayIndex = 0;

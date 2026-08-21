@@ -263,6 +263,38 @@ AudioBuffer<float> MultiChannelAverageBuffer::getStandardDeviation() const
     return outputBuffer;
 }
 
+bool MultiChannelAverageBuffer::restoreAccumulation (const juce::AudioBuffer<float>& sums,
+                                                     const juce::AudioBuffer<float>& sumSquares,
+                                                     int numTrials)
+{
+    // Checked against the configured geometry rather than resized to fit it. A
+    // session recorded with a different window or channel count is a session that
+    // cannot be resumed, and quietly reshaping it here would produce an
+    // accumulator whose samples no longer line up with the trigger.
+    if (numTrials < 0
+        || sums.getNumChannels() != m_numChannels
+        || sums.getNumSamples() != m_numSamples
+        || sumSquares.getNumChannels() != m_numChannels
+        || sumSquares.getNumSamples() != m_numSamples)
+        return false;
+
+    if (numTrials == 0)
+    {
+        resetTrials();
+        return true;
+    }
+
+    for (int channel = 0; channel < m_numChannels; ++channel)
+    {
+        m_sumBuffer.copyFrom (channel, 0, sums, channel, 0, m_numSamples);
+        m_sumSquaresBuffer.copyFrom (channel, 0, sumSquares, channel, 0, m_numSamples);
+    }
+
+    m_numTrials = numTrials;
+    updateRunningAverage();
+    return true;
+}
+
 void MultiChannelAverageBuffer::resetTrials()
 {
     m_sumBuffer.clear();

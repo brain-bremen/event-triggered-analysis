@@ -67,6 +67,10 @@ public:
 
     void updatePopup() override;
 
+    /** Suppressed while a nested call-out (the colour picker) is open, so that
+        the picker keeps the keyboard focus. See NestedCallOut.h. */
+    void focusOfChildComponentChanged (juce::Component::FocusChangeType cause) override;
+
     void resized() override;
     void paint (juce::Graphics& g) override;
 

@@ -27,13 +27,17 @@
 #include "BroadcastMessageLog.h"
 #include "CaptureWorker.h"
 #include "MultiChannelRingBuffer.h"
+#include "Session/CaptureSession.h"
+#include "Session/SessionIoThread.h"
 #include "TriggerSource.h"
 #include "WorkQueue.h"
 
 #include <JuceHeader.h>
 #include <ProcessorHeaders.h>
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <vector>
 
 namespace EventTriggered
 {
@@ -117,6 +121,16 @@ public:
     /** Adds a source and allocates whatever per-source storage the subclass keeps. */
     TriggerSource* addTriggerSource (int line, TriggerType type, int index = -1);
 
+    /** Colour the config popup's RECOLOUR ALL assigns to the `index`-th source in
+     *  the list (0-based).
+     *
+     *  Defaults to TriggerSource::paletteColour(), spread by creation order. A
+     *  subclass that draws some sources from a physical quantity of its own --
+     *  the receptive-field mapper's sweep angle is the only one so far -- should
+     *  override this so recolouring reproduces the same colour that quantity
+     *  would have produced, rather than a spread that ignores it. */
+    virtual juce::Colour paletteColourForRecolour (int index, const TriggerSource* source) const;
+
     /** Discards all accumulated data, keeping the trigger sources themselves. */
     virtual void clearAllData() = 0;
 
@@ -181,7 +195,86 @@ public:
     void setLogBroadcastMessages (bool shouldLog);
     bool isLoggingBroadcastMessages() const { return m_messageLog.isEnabled(); }
 
+    // --- Sessions -----------------------------------------------------------
+    //
+    // Saving what has been accumulated so far, and picking a run back up after a
+    // break. Common to all four plugins because everything except the payload is:
+    // the trial geometry, the channel selection and the trigger source table are
+    // this class's, and so is the decision about whether a file can be resumed
+    // into the configuration currently loaded.
+    //
+    // Neither call touches the disk on the thread it is called from. The state is
+    // gathered here, on the message thread, under whatever lock the payload needs;
+    // the file work happens on SessionIoThread; the result comes back through the
+    // callbacks below, on the message thread again. The audio thread is never
+    // involved beyond contending briefly for the accumulator lock while the
+    // gather copies.
+
+    /** Writes the current state to `directory`, replacing whatever is there.
+     *
+     *  Returns false if a session job is already running or there is nothing to
+     *  save, in which case no callback fires. Allowed during acquisition: the
+     *  gather takes a copy and the writing happens elsewhere. */
+    bool saveSession (const juce::File& directory);
+
+    /** Loads a session, matching it against the current configuration.
+     *
+     *  Refused while acquiring — restoring accumulators replaces the buffers the
+     *  capture worker is writing into. Returns false if it could not even be
+     *  started; anything decided after reading the file arrives through
+     *  onSessionLoaded, including a refusal and its reasons. */
+    bool loadSession (const juce::File& directory);
+
+    bool isSessionIoBusy() const { return m_sessionIo.isBusy(); }
+
+    /** Called on the message thread when a save finishes, successfully or not. */
+    std::function<void (juce::Result)> onSessionSaved;
+
+    /** Called on the message thread when a load finishes.
+     *
+     *  The compatibility report says what was decided and why; `applied` is false
+     *  when the session was refused, or when it was accepted and the payload
+     *  still would not restore. */
+    std::function<void (SessionCompatibility report, bool applied)> onSessionLoaded;
+
 protected:
+    // --- Session hooks for subclasses --------------------------------------
+
+    /** Adds this plugin's own arrays and manifest keys.
+     *
+     *  Called on the message thread after the base class has written the
+     *  identity, geometry and source table. Take whatever lock the payload needs
+     *  *inside* this call and release it before returning: nothing here writes to
+     *  disk, so the lock is held only for the copy.
+     *
+     *  Return false to abandon the save — a configuration in flux should do that
+     *  rather than write a bundle assembled from half-resized buffers. */
+    virtual bool saveSessionPayload (SessionWriter& writer) = 0;
+
+    /** Restores this plugin's own payload.
+     *
+     *  Called on the message thread with acquisition stopped, after the trigger
+     *  sources have been matched or rebuilt, and with every array already in
+     *  memory — so this does no file I/O however large the session is.
+     *
+     *  Return false if the payload could not be restored; the load is then
+     *  reported as failed. */
+    virtual bool loadSessionPayload (const SessionReader& reader) = 0;
+
+    /** True when what is accumulated is simulated rather than recorded.
+     *
+     *  Recorded in the manifest so demo data can never be mistaken for a
+     *  recording afterwards. Only the receptive-field mapper has a demo mode; for
+     *  everything else this stays false. */
+    virtual bool isSessionDemoData() const { return false; }
+
+    /** The trial geometry and channel selection as a session records them. */
+    SessionGeometry getSessionGeometry() const;
+
+    /** The current trigger sources as a session records them. */
+    std::vector<SessionSourceEntry> getSessionSources() const;
+
+
     // --- Hooks for subclasses ----------------------------------------------
 
     /** Registers the parameters this plugin has and the base class does not.
@@ -301,6 +394,18 @@ private:
     /** True while loadCustomParametersFromXml() is restoring trigger sources, so
         the per-source rebuilds can be collapsed into one. */
     bool m_isLoadingState = false;
+
+    /** Applies a loaded session on the message thread. Split out of the callback
+        because it is the half that has to run with acquisition stopped. */
+    void applyLoadedSession (SessionIoThread::LoadResult result);
+
+    /** Restores the stored configuration. Used for the Rebuild verdict, i.e. when
+     *  nothing is configured yet. */
+    void rebuildSourcesFromSession (const juce::XmlElement& settings);
+
+    /** Owns the only thread in this class that touches the filesystem. Declared
+     *  last so it is destroyed first, before the state its jobs refer to. */
+    SessionIoThread m_sessionIo;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCaptureNode)
 };

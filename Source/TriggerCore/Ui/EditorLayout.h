@@ -109,9 +109,10 @@ inline std::unique_ptr<juce::Label> makeCaptionLabel (const juce::String& text)
  *    at in row two), both computed from the same triggersWidth/otherWidth/
  *    channelsCaptionWidth row one and two use.
  *
- *  Both grids assume exactly three buttons (TRIGGERS, MONITOR, ANALYSIS), true
- *  of every plugin that calls this — TriggeredAverage, TriggeredPower and
- *  TriggeredCoherence all pass exactly that triple.
+ *  Any number of buttons is accepted, sharing one column template; three
+ *  (TRIGGERS, MONITOR, ANALYSIS) for TriggeredAverage, TriggeredPower and
+ *  TriggeredCoherence, four for ReceptiveFieldBarMapper, whose SWEEPS button
+ *  belongs beside its siblings rather than squeezed onto another row.
  *
  *  Placement is by named `grid-template-areas` string, not by numeric
  *  row/column line (`GridItem::withArea(1, 2)` and friends): this GUI's
@@ -134,7 +135,8 @@ inline std::unique_ptr<juce::Label> makeCaptionLabel (const juce::String& text)
  *  usually slack left over below row three, and top-anchoring left the whole
  *  block looking stranded near the title instead of settled in the panel.
  *
- *  @param buttons        exactly {TRIGGERS, MONITOR, ANALYSIS}, in that order.
+ *  @param buttons        {TRIGGERS, MONITOR, ANALYSIS, ...}, in that order; the
+ *                        first one is given the extra width for its count badge.
  *  @param channelsLabel  caption for Channels, from makeCaptionLabel().
  *  @param preLabel       caption for Pre, from makeCaptionLabel(). Null skips it,
  *                        leaving just the value box.
@@ -144,7 +146,8 @@ inline std::unique_ptr<juce::Label> makeCaptionLabel (const juce::String& text)
  *                        just the count. Null for plugins that don't have one.
  *  @param secondRowExtraLabel  caption for secondRowExtra ("Pairs"), same
  *                        pattern as channelsLabel. Ignored if secondRowExtra
- *                        is null.
+ *                        is null; passing null with a non-null secondRowExtra
+ *                        gives that control the whole column instead.
  */
 inline void layoutCommonContents (GenericEditor& editor,
                                   std::initializer_list<juce::Component*> buttons,
@@ -179,7 +182,7 @@ inline void layoutCommonContents (GenericEditor& editor,
         if (button != nullptr)
             present.add (button);
 
-    // --- Row 1: TRIGGERS / MONITOR / ANALYSIS -----------------------------------
+    // --- Row 1: TRIGGERS / MONITOR / ANALYSIS [/ SWEEPS] ------------------------
     int triggersWidth = width;
     int otherWidth = width;
 
@@ -204,14 +207,17 @@ inline void layoutCommonContents (GenericEditor& editor,
         for (int i = 0; i < count; ++i)
             grid.templateColumns.add (Track (Px (i == 0 ? triggersWidth : otherWidth)));
 
-        grid.templateAreas = { "trig mon ana" };
+        // Area names are generated rather than written out, so a fourth button
+        // (ReceptiveFieldBarMapper's SWEEPS) needs no second copy of this block.
+        juce::StringArray areaNames;
 
-        if (count > 0)
-            grid.items.add (juce::GridItem (present[0]).withArea ("trig"));
-        if (count > 1)
-            grid.items.add (juce::GridItem (present[1]).withArea ("mon"));
-        if (count > 2)
-            grid.items.add (juce::GridItem (present[2]).withArea ("ana"));
+        for (int i = 0; i < count; ++i)
+            areaNames.add ("btn" + juce::String (i));
+
+        grid.templateAreas = { areaNames.joinIntoString (" ") };
+
+        for (int i = 0; i < count; ++i)
+            grid.items.add (juce::GridItem (present[i]).withArea (areaNames[i]));
 
         grid.performLayout ({ left, y, width, rowHeight });
     }
@@ -230,7 +236,12 @@ inline void layoutCommonContents (GenericEditor& editor,
     // aligns Pre/Post's value boxes to, so they are declared at this scope
     // rather than nested inside the block that lays row two out.
     constexpr int channelsCaptionWidth = 60;
-    const int channelsSpan = triggersWidth + gap + otherWidth;
+
+    // Everything on row one except its last button. Written as "the row minus
+    // the last column" rather than "TRIGGERS plus MONITOR" so it stays correct
+    // when there are four buttons instead of three -- the extra control on row
+    // two always sits under whichever button is last.
+    const int channelsSpan = width - gap - otherWidth;
     const int channelsValueWidth = channelsSpan - gap - channelsCaptionWidth;
 
     {
@@ -240,7 +251,7 @@ inline void layoutCommonContents (GenericEditor& editor,
         channelsGrid.templateRows = { Track (Px (rowHeight)) };
         channelsGrid.columnGap = Px (gap);
 
-        if (secondRowExtra != nullptr)
+        if (secondRowExtra != nullptr && secondRowExtraLabel != nullptr)
         {
             const int pairsValueWidth = otherWidth - gap - pairsCaptionWidth;
 
@@ -249,6 +260,16 @@ inline void layoutCommonContents (GenericEditor& editor,
                                              Track (Px (pairsCaptionWidth)),
                                              Track (Px (pairsValueWidth)) };
             channelsGrid.templateAreas = { "chanCap chanVal pairsCap pairsVal" };
+        }
+        else if (secondRowExtra != nullptr)
+        {
+            // No caption: the control is a button that says what it is (DEMO),
+            // so it gets the whole last column instead of the leftovers after a
+            // word that would only repeat its label.
+            channelsGrid.templateColumns = { Track (Px (channelsCaptionWidth)),
+                                             Track (Px (channelsValueWidth)),
+                                             Track (Px (otherWidth)) };
+            channelsGrid.templateAreas = { "chanCap chanVal pairsVal" };
         }
         else
         {

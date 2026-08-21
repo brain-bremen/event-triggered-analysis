@@ -3,8 +3,15 @@ name: Build and Test
 on:
   push:
     branches: [main, master, develop]
+  # No branch filter here, deliberately. A stacked pull request targets its
+  # parent branch rather than main, so a filtered trigger reports no checks at
+  # all on every PR in a stack but the bottom one -- which reads as "CI has not
+  # run yet" and is indistinguishable from a queue backlog.
+  #
+  # Runs are still bounded: this fires once per PR that exists, not per branch
+  # pushed, and the push trigger above stays filtered so ordinary branch pushes
+  # do not build.
   pull_request:
-    branches: [main, master, develop]
   workflow_dispatch:
 
 env:

@@ -23,8 +23,8 @@
 */
 #pragma once
 #include "../TriggeredAvgNode.h"
-#include "GridDisplay.h"
-#include "TimeAxis.h"
+#include "AverageCore/Ui/GridDisplay.h"
+#include "AverageCore/Ui/TimeAxis.h"
 #include <VisualizerWindowHeaders.h>
 
 namespace EventTriggered

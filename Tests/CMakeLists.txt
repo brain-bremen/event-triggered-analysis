@@ -42,6 +42,11 @@ set(TRIGGER_CORE_TEST_SOURCES
     TriggerCore/test_CaptureWorker.cpp
     TriggerCore/test_TriggerMessaging.cpp
     TriggerCore/test_BroadcastMessageLog.cpp
+    TriggerCore/test_TriggerSources.cpp
+    TriggerCore/test_NpyCodec.cpp
+    TriggerCore/test_SessionBundle.cpp
+    TriggerCore/test_CaptureSession.cpp
+    TriggerCore/test_SessionIoThread.cpp
 )
 
 # The frequency-domain half.
@@ -60,17 +65,29 @@ set(SPECTRA_TEST_SOURCES
     Spectral/test_ParameterLayout.cpp
 )
 
-# The averaging plugin's own storage. Links trigger_core, like the plugin does,
-# and compiles the two source files under test directly — everything else in
-# Source/Average is display code these tests do not touch.
+# The trial storage shared by TriggeredAverage and ReceptiveFieldBarMapper. Links
+# average_core rather than compiling its sources directly, which is what makes
+# these tests exercise the same library the plugins link.
 set(AVERAGE_TEST_SOURCES
     Average/test_DataStore.cpp
     Average/test_AverageAccumulation.cpp
     Average/test_PendingCapture.cpp
     Average/test_SingleTrialBuffer.cpp
     Average/test_SingleTrialBuffer_RawPointers.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/Average/DataCollector.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/Average/SingleTrialBuffer.cpp
+    Average/test_AverageSession.cpp
+)
+
+# The receptive-field algorithm. Wired up separately, below, because it links
+# neither the GUI nor any core in this repository.
+set(RF_MATH_TEST_SOURCES
+    ReceptiveField/test_AngleConvention.cpp
+    ReceptiveField/test_StimulusGeometry.cpp
+    ReceptiveField/test_ResponseProfile.cpp
+    ReceptiveField/test_BackProjection.cpp
+    ReceptiveField/test_LatencyScan.cpp
+    ReceptiveField/test_RfMetrics.cpp
+    ReceptiveField/test_Pipeline.cpp
+    ReceptiveField/test_RfPipeline.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -153,6 +170,46 @@ endfunction()
 
 oe_add_test_binary(trigger_core_tests trigger_core OFF ${TRIGGER_CORE_TEST_SOURCES})
 oe_add_test_binary(spectra_tests      spectra_core ON  ${SPECTRA_TEST_SOURCES})
-oe_add_test_binary(average_tests      trigger_core OFF ${AVERAGE_TEST_SOURCES})
+oe_add_test_binary(average_tests      average_core OFF ${AVERAGE_TEST_SOURCES})
+
+# The receptive-field plugin's own glue: the angle table and the arm patterns it
+# generates. Needs JUCE and trigger_core (it matches against real message
+# strings), which is why it cannot live in rf_math_tests.
+set(RF_NODE_TEST_SOURCES
+    ReceptiveField/test_SweepAngles.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Source/ReceptiveField/SweepAngles.cpp
+)
+
+oe_add_test_binary(rf_node_tests      average_core OFF ${RF_NODE_TEST_SOURCES})
+target_link_libraries(rf_node_tests PRIVATE rf_math)
+target_include_directories(rf_node_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../Source)
+
+# rf_math_tests is deliberately *not* built with oe_add_test_binary(): it links
+# rf_math and gtest_main and nothing else — no gui_testable_source, no
+# test_helpers, no JUCE include directories. That is the automatic check that the
+# algorithm stays free of the GUI, in the same way trigger_core_tests is the
+# check that trigger_core stays free of FFTW. It is also why this binary builds
+# in seconds while the others build the Open Ephys GUI first.
+add_executable(rf_math_tests ${RF_MATH_TEST_SOURCES})
+
+target_compile_features(rf_math_tests PRIVATE cxx_std_23)
+target_link_libraries(rf_math_tests PRIVATE rf_math gtest_main)
+target_include_directories(rf_math_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ReceptiveField)
+
+if(MSVC)
+    target_compile_options(rf_math_tests PRIVATE /W4 /bigobj /external:W0 /external:anglebrackets)
+else()
+    target_compile_options(rf_math_tests PRIVATE -Wall -Wextra)
+endif()
+
+set_target_properties(rf_math_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/TestBin/rf_math_tests/$<CONFIG>
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/TestBin/rf_math_tests/Debug
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/TestBin/rf_math_tests/Release)
+
+gtest_discover_tests(rf_math_tests
+    XML_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results"
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES LABELS "unit")
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT spectra_tests)

@@ -25,6 +25,7 @@
 #include "TriggeredCaptureNode.h"
 
 #include "ParameterNames.h"
+#include "PluginVersion.h"
 #include "TriggerMessaging.h"
 #include "Ui/TriggerCountDisplay.h"
 
@@ -46,6 +47,19 @@ TriggeredCaptureNode::TriggeredCaptureNode (const juce::String& name)
     : GenericProcessor (name),
       m_triggerSources (this)
 {
+    // Set once, here, rather than per request: the worker reads these when a job
+    // finishes, and reassigning them while one is in flight would be a data race
+    // on the std::function itself.
+    m_sessionIo.onSaveFinished = [this] (SessionIoThread::SaveResult result)
+    {
+        if (onSessionSaved != nullptr)
+            onSessionSaved (result.result);
+    };
+
+    m_sessionIo.onLoadFinished = [this] (SessionIoThread::LoadResult result)
+    {
+        applyLoadedSession (std::move (result));
+    };
 }
 
 TriggeredCaptureNode::~TriggeredCaptureNode() { stopWorker(); }
@@ -524,6 +538,12 @@ TriggerSource* TriggeredCaptureNode::addTriggerSource (int line, TriggerType typ
     return m_triggerSources.addTriggerSource (line, type, index);
 }
 
+juce::Colour TriggeredCaptureNode::paletteColourForRecolour (int index,
+                                                              const TriggerSource* /*source*/) const
+{
+    return TriggerSource::paletteColour (index);
+}
+
 void TriggeredCaptureNode::triggerSourceAdded (TriggerSource* /*source*/)
 {
     // Skipped while a saved chain is being restored: sources arrive one at a time,
@@ -580,15 +600,17 @@ void TriggeredCaptureNode::saveCustomParametersToXml (XmlElement* xml)
 
     for (auto* source : m_triggerSources.getAll())
     {
-        auto* sourceXml = xml->createNewChildElement ("TRIGGERSOURCE");
-        sourceXml->setAttribute ("name", source->name);
-        sourceXml->setAttribute ("line", source->line);
-        sourceXml->setAttribute ("type", static_cast<int> (source->type));
-        sourceXml->setAttribute ("colour", source->colour.toString());
-        sourceXml->setAttribute ("armPattern", source->armPattern);
-        sourceXml->setAttribute ("cancelPattern", source->cancelPattern);
-        sourceXml->setAttribute ("commitPattern", source->commitPattern);
-        sourceXml->setAttribute ("pendingTimeoutMs", source->pendingTimeoutMs);
+        // Attribute names come from TriggerSourceXml so that this writer, the
+        // loader below and the session's compatibility reader cannot drift apart.
+        auto* sourceXml = xml->createNewChildElement (TriggerSourceXml::tag);
+        sourceXml->setAttribute (TriggerSourceXml::name, source->name);
+        sourceXml->setAttribute (TriggerSourceXml::line, source->line);
+        sourceXml->setAttribute (TriggerSourceXml::type, static_cast<int> (source->type));
+        sourceXml->setAttribute (TriggerSourceXml::colour, source->colour.toString());
+        sourceXml->setAttribute (TriggerSourceXml::armPattern, source->armPattern);
+        sourceXml->setAttribute (TriggerSourceXml::cancelPattern, source->cancelPattern);
+        sourceXml->setAttribute (TriggerSourceXml::commitPattern, source->commitPattern);
+        sourceXml->setAttribute (TriggerSourceXml::pendingTimeoutMs, source->pendingTimeoutMs);
     }
 }
 
@@ -604,13 +626,13 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
 
     for (auto* sourceXml : xml->getChildIterator())
     {
-        if (! sourceXml->hasTagName ("TRIGGERSOURCE"))
+        if (! sourceXml->hasTagName (TriggerSourceXml::tag))
             continue;
 
-        const int line = sourceXml->getIntAttribute ("line", -1);
+        const int line = sourceXml->getIntAttribute (TriggerSourceXml::line, -1);
 
-        const int savedType =
-            sourceXml->getIntAttribute ("type", static_cast<int> (TriggerType::TTL_TRIGGER));
+        const int savedType = sourceXml->getIntAttribute (
+            TriggerSourceXml::type, static_cast<int> (TriggerType::TTL_TRIGGER));
 
         // Anything that is not a value this build knows becomes a plain TTL
         // source. That covers the retired TTL_AND_MSG (3), whose behaviour is now
@@ -625,24 +647,194 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
         if (source == nullptr)
             continue;
 
-        source->name = sourceXml->getStringAttribute ("name", source->name);
-        source->colour = juce::Colour::fromString (
-            sourceXml->getStringAttribute ("colour", source->colour.toString()));
-        source->cancelPattern = sourceXml->getStringAttribute ("cancelPattern");
-        source->commitPattern = sourceXml->getStringAttribute ("commitPattern");
-        source->pendingTimeoutMs = sourceXml->getIntAttribute ("pendingTimeoutMs", 2000);
+        source->name = sourceXml->getStringAttribute (TriggerSourceXml::name, source->name);
+        source->colour = juce::Colour::fromString (sourceXml->getStringAttribute (
+            TriggerSourceXml::colour, source->colour.toString()));
+        source->cancelPattern = sourceXml->getStringAttribute (TriggerSourceXml::cancelPattern);
+        source->commitPattern = sourceXml->getStringAttribute (TriggerSourceXml::commitPattern);
+        source->pendingTimeoutMs =
+            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 2000);
 
         // Through the setter, not the field: it is what leaves a gated source
         // disarmed and an ungated one live. Assigning armPattern directly would
         // restore a gated source with canTrigger still true, so its first TTL
         // edge would fire without ever having been armed.
-        m_triggerSources.setArmPattern (source, sourceXml->getStringAttribute ("armPattern"));
+        m_triggerSources.setArmPattern (
+            source, sourceXml->getStringAttribute (TriggerSourceXml::armPattern));
     }
 
     m_isLoadingState = false;
 
     rebuildConfiguration();
     triggerAsyncUpdate();
+}
+
+// --- Sessions --------------------------------------------------------------
+
+SessionGeometry TriggeredCaptureNode::getSessionGeometry() const
+{
+    SessionGeometry geometry;
+
+    geometry.sampleRateHz = m_geometry.sampleRate;
+    geometry.preSamples = m_geometry.preSamples;
+    geometry.postSamples = m_geometry.postSamples;
+
+    for (const auto index : m_selectedChannels)
+    {
+        geometry.channelIndices.push_back (index);
+
+        // Names are recorded for the reader's benefit and for the mismatch
+        // message; a channel that has gone away since still occupies its slot, so
+        // the two arrays stay the same length as the accumulators' first axis.
+        const auto* channel = getContinuousChannel (index);
+        geometry.channelNames.add (channel != nullptr ? channel->getName()
+                                                      : "CH" + juce::String (index + 1));
+    }
+
+    return geometry;
+}
+
+std::vector<SessionSourceEntry> TriggeredCaptureNode::getSessionSources() const
+{
+    std::vector<SessionSourceEntry> entries;
+
+    for (const auto* source : m_triggerSources.items())
+    {
+        SessionSourceEntry entry;
+
+        entry.name = source->name;
+        entry.line = source->line;
+        entry.type = static_cast<int> (source->type);
+        entry.colourArgb = source->colour.getARGB();
+        entry.armPattern = source->armPattern;
+        entry.cancelPattern = source->cancelPattern;
+        entry.commitPattern = source->commitPattern;
+        entry.pendingTimeoutMs = source->pendingTimeoutMs;
+        entry.trialCount = source->counters.trialsCaptured.load (std::memory_order_relaxed);
+
+        entries.push_back (entry);
+    }
+
+    return entries;
+}
+
+bool TriggeredCaptureNode::saveSession (const juce::File& directory)
+{
+    if (m_sessionIo.isBusy() || directory.getFullPathName().isEmpty())
+        return false;
+
+    if (m_triggerSources.items().isEmpty() || ! m_geometry.isValid())
+        return false;
+
+    auto writer = std::make_unique<SessionWriter>();
+
+    SessionIdentity identity;
+    identity.pluginName = getName();
+    identity.pluginVersion = PLUGIN_VERSION_STRING;
+    identity.savedAt = juce::Time::getCurrentTime().toISO8601 (true);
+    identity.fromDemoData = isSessionDemoData();
+
+    writeIdentity (*writer, identity);
+    writeGeometry (*writer, getSessionGeometry());
+
+    // The configuration goes in as the GUI's own XML, produced by the same call
+    // the signal chain makes. That is the whole reason there is no second
+    // serialiser for the trigger source table — and it means a plugin that
+    // persists extra state of its own, such as the mapper's angle table, gets it
+    // into the session without writing any session code for it.
+    juce::XmlElement settings ("CUSTOM_PARAMETERS");
+    saveCustomParametersToXml (&settings);
+    writer->setSettingsXml (settings);
+
+    // The subclass copies its accumulators here, under its own lock. Everything
+    // after this point is bytes in memory, which is what lets the writing happen
+    // on another thread while acquisition carries on.
+    if (! saveSessionPayload (*writer))
+        return false;
+
+    return m_sessionIo.save (std::move (writer), directory);
+}
+
+bool TriggeredCaptureNode::loadSession (const juce::File& directory)
+{
+    // Restoring accumulators replaces the buffers the capture worker writes into,
+    // so this is refused outright rather than made to work while running. The
+    // editor disables the button too; this is the guarantee behind it.
+    if (CoreServices::getAcquisitionStatus())
+        return false;
+
+    if (m_sessionIo.isBusy() || ! directory.isDirectory())
+        return false;
+
+    return m_sessionIo.load (directory);
+}
+
+void TriggeredCaptureNode::rebuildSourcesFromSession (const juce::XmlElement& settings)
+{
+    // The identical call the signal chain makes when it restores this processor.
+    // Nothing here reimplements it: the trigger sources, their patterns and
+    // whatever a subclass adds on top — the mapper's sweep angles — are all
+    // restored by the code that already owns that job, so a session and a saved
+    // chain cannot disagree about what a restored configuration looks like.
+    loadCustomParametersFromXml (const_cast<juce::XmlElement*> (&settings));
+}
+
+void TriggeredCaptureNode::applyLoadedSession (SessionIoThread::LoadResult result)
+{
+    SessionCompatibility report;
+
+    const auto fail = [&] (const juce::String& problem)
+    {
+        report.verdict = SessionVerdict::Refuse;
+        report.problems.add (problem);
+
+        if (onSessionLoaded != nullptr)
+            onSessionLoaded (report, false);
+    };
+
+    if (! result.wasOk())
+        return fail (result.error);
+
+    const auto& reader = *result.reader;
+
+    const auto identity = readIdentity (reader);
+    const auto geometry = readGeometry (reader);
+    const auto sources = readSources (reader);
+
+    if (! identity || ! geometry || ! sources)
+        return fail ("The manifest is missing something a session needs");
+
+    report = checkCompatibility (
+        *identity, *geometry, *sources, getName(), getSessionGeometry(), getSessionSources());
+
+    if (! report.willLoad())
+    {
+        if (onSessionLoaded != nullptr)
+            onSessionLoaded (report, false);
+
+        return;
+    }
+
+    if (report.verdict == SessionVerdict::Rebuild)
+    {
+        if (const auto* settings = reader.getSettingsXml())
+            rebuildSourcesFromSession (*settings);
+        else
+            return fail ("The session has no settings.xml to rebuild the trigger sources from");
+    }
+
+    // Every array is already in memory — SessionIoThread preloaded them — so the
+    // subclass's restore is a sequence of memcpys rather than a file read on the
+    // message thread.
+    const bool applied = loadSessionPayload (reader);
+
+    if (! applied)
+        report.problems.add ("The session's data could not be restored into this configuration");
+
+    triggerAsyncUpdate();
+
+    if (onSessionLoaded != nullptr)
+        onSessionLoaded (report, applied);
 }
 
 } // namespace EventTriggered
