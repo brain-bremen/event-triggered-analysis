@@ -23,6 +23,7 @@
 set(AVERAGE_CORE_SOURCES
     DataCollector.cpp
     SingleTrialBuffer.cpp
+    Session/AverageSession.cpp
     Ui/GridDisplay.cpp
     Ui/SinglePlotPanel.cpp
     Ui/TimeAxis.cpp
@@ -31,6 +32,7 @@ set(AVERAGE_CORE_SOURCES
 set(AVERAGE_CORE_HEADERS
     DataCollector.h
     SingleTrialBuffer.h
+    Session/AverageSession.h
     Ui/DisplayMode.h
     Ui/GridDisplay.h
     Ui/SinglePlotPanel.h

@@ -193,6 +193,37 @@ public:
     int getNumTrials() const;
     int getNumChannels() const;
     int getNumSamples() const;
+
+    // --- Saving and resuming ------------------------------------------------
+    //
+    // The accumulator's state is the two sums and the trial count; the average
+    // and the SD are both derived from them. A session that saves and restores
+    // *those* can go on folding new trials into the same running mean, which is
+    // what resuming a half-finished mapping run means.
+    //
+    // Saving getAverage() instead would look equivalent and would not be: an
+    // average restored as a single trial gets the weight of one trial, so every
+    // trial recorded before the save would be silently reweighted against every
+    // trial recorded after it. The distinction does not show up as an error, only
+    // as a map that is wrong by an amount nobody can see.
+
+    const juce::AudioBuffer<float>& getSumBuffer() const { return m_sumBuffer; }
+    const juce::AudioBuffer<float>& getSumSquaresBuffer() const { return m_sumSquaresBuffer; }
+
+    /** Replaces the accumulator state wholesale.
+     *
+     *  Both buffers must match the configured geometry and each other; a mismatch
+     *  is refused rather than padded, because a shorter restored window silently
+     *  becomes a window of zeros at the end. `numTrials` must be non-negative,
+     *  and zero clears the accumulator regardless of what the sums hold.
+     *
+     *  Recomputes the cached average, so the display and getAverage() agree with
+     *  the restored sums immediately rather than after the next trial.
+     *
+     *  Returns false and changes nothing if the inputs do not fit. */
+    bool restoreAccumulation (const juce::AudioBuffer<float>& sums,
+                              const juce::AudioBuffer<float>& sumSquares,
+                              int numTrials);
     void setSize (int nChannels, int nSamples, bool clearTrials = true)
     {
         m_numChannels = nChannels;

@@ -19,6 +19,10 @@ set(TRIGGER_CORE_SOURCES
     BroadcastMessageLog.cpp
     TriggerSourceActions.cpp
     TriggeredCaptureNode.cpp
+    Session/NpyCodec.cpp
+    Session/SessionBundle.cpp
+    Session/CaptureSession.cpp
+    Session/SessionIoThread.cpp
     Ui/ParameterControl.cpp
     Ui/TriggerSourceConfigWindow.cpp
     Ui/TriggerMonitorWindow.cpp
@@ -35,6 +39,10 @@ set(TRIGGER_CORE_HEADERS
     BroadcastMessageLog.h
     TriggerSourceActions.h
     TriggeredCaptureNode.h
+    Session/NpyCodec.h
+    Session/SessionBundle.h
+    Session/CaptureSession.h
+    Session/SessionIoThread.h
     Ui/ParameterControl.h
     Ui/TriggerSourceConfigWindow.h
     Ui/TriggerMonitorWindow.h

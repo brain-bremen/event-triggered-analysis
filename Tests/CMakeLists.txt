@@ -43,6 +43,10 @@ set(TRIGGER_CORE_TEST_SOURCES
     TriggerCore/test_TriggerMessaging.cpp
     TriggerCore/test_BroadcastMessageLog.cpp
     TriggerCore/test_TriggerSources.cpp
+    TriggerCore/test_NpyCodec.cpp
+    TriggerCore/test_SessionBundle.cpp
+    TriggerCore/test_CaptureSession.cpp
+    TriggerCore/test_SessionIoThread.cpp
 )
 
 # The frequency-domain half.
@@ -70,6 +74,7 @@ set(AVERAGE_TEST_SOURCES
     Average/test_PendingCapture.cpp
     Average/test_SingleTrialBuffer.cpp
     Average/test_SingleTrialBuffer_RawPointers.cpp
+    Average/test_AverageSession.cpp
 )
 
 # The receptive-field algorithm. Wired up separately, below, because it links
