@@ -38,7 +38,7 @@ namespace EventTriggered
 {
 
 BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "RF BARS", editorWidth)
+    : VisualizerEditor (parentNode, "RF BARMAPPER", editorWidth)
 {
     const auto makeButton = [this] (const String& text) {
         auto button = std::make_unique<UtilityButton> (text);

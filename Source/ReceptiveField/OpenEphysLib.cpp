@@ -49,7 +49,7 @@ extern "C" EXPORT int getPluginInfo (int index, Plugin::PluginInfo* info)
     {
         case 0:
             info->type = Plugin::Type::PROCESSOR;
-            info->processor.name = "Receptive Field Bars";
+            info->processor.name = "RF Barmapper";
             info->processor.type = Plugin::Processor::SINK;
             info->processor.creator = &(Plugin::createProcessor<EventTriggered::BarMapperNode>);
             return 0;

@@ -23,13 +23,11 @@
 #include "BarMapperNode.h"
 
 #include "AverageCore/Session/AverageSession.h"
-#include "TriggerCore/ParameterNames.h"
 
 #include "Ui/RfCanvas.h"
 #include "Ui/BarMapperEditor.h"
 
 #include <algorithm>
-#include <cmath>
 
 namespace EventTriggered
 {
@@ -44,7 +42,7 @@ namespace
 } // namespace
 
 BarMapperNode::BarMapperNode()
-    : TriggeredCaptureNode ("Receptive Field Bars"),
+    : TriggeredCaptureNode ("RF Barmapper"),
       m_compute ([this] (std::vector<std::vector<Rf::DirectionTrace>>& traces,
                          std::vector<int>& channels,
                          Rf::MappingSettings& settings) {

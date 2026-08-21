@@ -29,7 +29,6 @@
 #include "TriggerCore/TriggeredCaptureNode.h"
 
 #include <ProcessorHeaders.h>
-#include <memory>
 
 namespace EventTriggered
 {
