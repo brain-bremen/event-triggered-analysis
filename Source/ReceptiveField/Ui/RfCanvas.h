@@ -28,6 +28,7 @@
 
 #include "AverageCore/Ui/GridDisplay.h"
 #include "AverageCore/Ui/TimeAxis.h"
+#include "TriggerCore/Ui/SessionControls.h"
 
 #include <VisualizerWindowHeaders.h>
 
@@ -66,6 +67,9 @@ private:
     std::unique_ptr<UtilityButton> m_polargramButton;
     std::unique_ptr<UtilityButton> m_sharedScaleButton;
     std::unique_ptr<UtilityButton> m_clearButton;
+
+    /** SAVE and LOAD, shared with the other triggered plugins. */
+    std::unique_ptr<SessionControls> m_sessionControls;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfOptionsBar)
 };

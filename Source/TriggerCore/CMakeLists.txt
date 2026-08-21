@@ -26,6 +26,7 @@ set(TRIGGER_CORE_SOURCES
     Ui/ParameterControl.cpp
     Ui/TriggerSourceConfigWindow.cpp
     Ui/TriggerMonitorWindow.cpp
+    Ui/SessionControls.cpp
 )
 
 set(TRIGGER_CORE_HEADERS
@@ -46,6 +47,7 @@ set(TRIGGER_CORE_HEADERS
     Ui/ParameterControl.h
     Ui/TriggerSourceConfigWindow.h
     Ui/TriggerMonitorWindow.h
+    Ui/SessionControls.h
     Ui/TriggerCountDisplay.h
     Ui/EditorLayout.h
     Ui/NestedCallOut.h

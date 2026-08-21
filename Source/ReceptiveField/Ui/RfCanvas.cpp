@@ -85,8 +85,12 @@ RfOptionsBar::RfOptionsBar (RfCanvas* canvas) : m_canvas (canvas)
     addAndMakeVisible (m_sharedScaleButton.get());
 
     m_clearButton = std::make_unique<UtilityButton> ("CLEAR");
+    m_clearButton->setClickingTogglesState (false);
     m_clearButton->addListener (this);
     addAndMakeVisible (m_clearButton.get());
+
+    m_sessionControls = std::make_unique<SessionControls> (m_canvas->getNode());
+    addAndMakeVisible (m_sessionControls.get());
 }
 
 RfDisplayMode RfOptionsBar::getDisplayMode() const
@@ -123,6 +127,18 @@ void RfOptionsBar::resized()
 {
     auto area = getLocalBounds().reduced (8, 8);
 
+    // The right-hand group is placed first, so that a narrow window costs the
+    // display options their space rather than squeezing the buttons to nothing.
+    // Laying out left to right and taking what was left over meant CLEAR could
+    // end up zero-width -- present, hit-testable nowhere, and indistinguishable
+    // from a button that does not work.
+    m_clearButton->setBounds (area.removeFromRight (60).reduced (2, 0));
+    area.removeFromRight (10);
+
+    m_sessionControls->setBounds (
+        area.removeFromRight (m_sessionControls->getDesiredWidth()).reduced (2, 0));
+    area.removeFromRight (10);
+
     const auto place = [&area] (Component* label, Component* control, int labelWidth, int controlWidth) {
         label->setBounds (area.removeFromLeft (labelWidth));
         control->setBounds (area.removeFromLeft (controlWidth).reduced (2, 0));
@@ -136,8 +152,6 @@ void RfOptionsBar::resized()
     m_polargramButton->setBounds (area.removeFromLeft (60).reduced (2, 0));
     area.removeFromLeft (6);
     m_sharedScaleButton->setBounds (area.removeFromLeft (90).reduced (2, 0));
-
-    m_clearButton->setBounds (area.removeFromRight (60).reduced (2, 0));
 }
 
 // --- Canvas ----------------------------------------------------------------
