@@ -91,6 +91,29 @@ struct SessionGeometry
     int numSamples() const { return preSamples + postSamples; }
 };
 
+/** The XML a trigger source is stored as, in a signal chain and in a session
+ *  alike.
+ *
+ *  Named here, once, and used by all three places that touch the format:
+ *  TriggeredCaptureNode::saveCustomParametersToXml() writes it,
+ *  loadCustomParametersFromXml() restores from it, and sourcesFromSettingsXml()
+ *  reads it for the compatibility check. Sharing the constants is what makes
+ *  drift between them impossible rather than merely unlikely — a renamed
+ *  attribute stops compiling instead of silently reading as its default.
+ */
+namespace TriggerSourceXml
+{
+    inline constexpr auto tag = "TRIGGERSOURCE";
+    inline constexpr auto name = "name";
+    inline constexpr auto line = "line";
+    inline constexpr auto type = "type";
+    inline constexpr auto colour = "colour";
+    inline constexpr auto armPattern = "armPattern";
+    inline constexpr auto cancelPattern = "cancelPattern";
+    inline constexpr auto commitPattern = "commitPattern";
+    inline constexpr auto pendingTimeoutMs = "pendingTimeoutMs";
+} // namespace TriggerSourceXml
+
 /** One trigger source as stored in a session. */
 struct SessionSourceEntry
 {
@@ -113,13 +136,33 @@ struct SessionSourceEntry
 
 void writeIdentity (SessionWriter& writer, const SessionIdentity& identity);
 void writeGeometry (SessionWriter& writer, const SessionGeometry& geometry);
-void writeSources (SessionWriter& writer, const std::vector<SessionSourceEntry>& sources);
+
+// Note there is deliberately no writeSources(). The trigger source table is
+// written by TriggeredCaptureNode::saveCustomParametersToXml() — the same call
+// the signal chain uses — and stored in the bundle verbatim as settings.xml. A
+// second writer for the same fields would be free to drift from the first, and
+// the drift would surface as a session that restores subtly different conditions
+// from the ones a saved chain restores. Reading it back is a different matter:
+// the compatibility check has to inspect the stored sources *before* deciding
+// whether to apply them, which is what the extractor below is for.
 
 // --- Reading ---------------------------------------------------------------
 
 std::optional<SessionIdentity> readIdentity (const SessionReader& reader);
 std::optional<SessionGeometry> readGeometry (const SessionReader& reader);
+
+/** The trigger source table recorded in a session's settings.xml.
+ *
+ *  Read-only, and only for the compatibility check — applying a session's
+ *  configuration goes through loadCustomParametersFromXml(), never through these
+ *  structs. The attribute names are the ones
+ *  TriggeredCaptureNode::saveCustomParametersToXml() writes; a round-trip test
+ *  runs the real writer into this extractor so the two cannot drift apart
+ *  unnoticed. */
 std::optional<std::vector<SessionSourceEntry>> readSources (const SessionReader& reader);
+
+/** As readSources(), for an XML element already in hand. */
+std::vector<SessionSourceEntry> sourcesFromSettingsXml (const juce::XmlElement& settings);
 
 // --- Deciding whether it can be resumed ------------------------------------
 
@@ -185,8 +228,6 @@ namespace SessionKeys
     inline constexpr auto postSamples = "post_samples";
     inline constexpr auto channelIndices = "channel_indices";
     inline constexpr auto channelNames = "channel_names";
-
-    inline constexpr auto sources = "sources";
 } // namespace SessionKeys
 
 } // namespace EventTriggered

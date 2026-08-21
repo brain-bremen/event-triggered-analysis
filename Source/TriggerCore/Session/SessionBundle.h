@@ -103,6 +103,25 @@ public:
      *  and the write happen here, and here can be anywhere. */
     bool addFigure (const juce::String& name, const juce::Image& image);
 
+    /** Stores the processor's own configuration XML, verbatim.
+     *
+     *  This is what `saveCustomParametersToXml()` produces — the same element the
+     *  signal chain stores — and it is kept as XML rather than translated into
+     *  the manifest on purpose. The trigger source table, the arm patterns and
+     *  whatever else a plugin persists already have exactly one serialiser; a
+     *  second one that wrote the same fields into JSON would be free to drift
+     *  from it, and the drift would show up as a session that restores subtly
+     *  different conditions from the ones the chain restores.
+     *
+     *  So the split is: settings.xml is *configuration*, and belongs to the GUI's
+     *  serialiser; the manifest is *provenance* — sample rate, resolved sample
+     *  counts, channel identities, who wrote it and when — which are facts about
+     *  the recording rather than settings, and which are what the resume check
+     *  compares. */
+    void setSettingsXml (const juce::XmlElement& settings);
+
+    bool hasSettingsXml() const { return m_settings != nullptr; }
+
     bool hasArray (const juce::String& name) const { return m_arrays.count (name) > 0; }
     int getNumArrays() const { return static_cast<int> (m_arrays.size()); }
     int getNumFigures() const { return static_cast<int> (m_figures.size()); }
@@ -135,6 +154,8 @@ private:
     std::map<juce::String, std::vector<char>> m_arrays;
     std::map<juce::String, std::vector<char>> m_figures;
 
+    std::unique_ptr<juce::XmlElement> m_settings;
+
     juce::DynamicObject::Ptr m_arrayIndex { new juce::DynamicObject() };
 };
 
@@ -163,6 +184,13 @@ public:
     /** A top-level manifest property. */
     juce::var property (const juce::String& key,
                         const juce::var& fallback = juce::var()) const;
+
+    /** The processor's configuration XML, or null if the session has none.
+     *
+     *  Feed it straight to `loadCustomParametersFromXml()`: that is the same call
+     *  the signal chain makes, so a rebuilt set of trigger sources is rebuilt by
+     *  the code that already does it rather than by a second implementation. */
+    const juce::XmlElement* getSettingsXml() const { return m_settings.get(); }
 
     bool hasArray (const juce::String& name) const;
 
@@ -207,6 +235,7 @@ private:
 
     juce::File m_directory;
     juce::var m_manifest;
+    std::unique_ptr<juce::XmlElement> m_settings;
     bool m_valid = false;
     juce::String m_error;
 
@@ -219,6 +248,7 @@ private:
 namespace SessionLayout
 {
     inline constexpr auto manifestFileName = "manifest.json";
+    inline constexpr auto settingsFileName = "settings.xml";
     inline constexpr auto arraysDirectoryName = "arrays";
     inline constexpr auto figuresDirectoryName = "figures";
     inline constexpr auto arrayIndexKey = "arrays";

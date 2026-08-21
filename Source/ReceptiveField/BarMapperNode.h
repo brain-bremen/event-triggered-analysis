@@ -181,6 +181,24 @@ public:
     bool startAcquisition() override;
 
 protected:
+    /** The per-direction accumulators, plus the finished maps.
+     *
+     *  The sweep angles are *not* written here, and that is the point: they go
+     *  into the session through saveCustomParametersToXml(), the same call the
+     *  signal chain uses, so the angle table has one serialiser rather than two
+     *  that could disagree about what a direction means.
+     *
+     *  The maps and metrics are saved as well as the accumulators even though
+     *  they are derivable from them, so that reading a session in Python or
+     *  MATLAB does not mean reimplementing RfPipeline. They are outputs, not
+     *  state: loading ignores them and recomputes. */
+    bool saveSessionPayload (SessionWriter& writer) override;
+    bool loadSessionPayload (const SessionReader& reader) override;
+
+    /** Demo data is convincing, and this flag is the only thing distinguishing a
+     *  synthetic session from a recorded one after the fact. */
+    bool isSessionDemoData() const override { return m_demoMode; }
+
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
     bool isAnalysisParameter (const juce::String& parameterName) const override;

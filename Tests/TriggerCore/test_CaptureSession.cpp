@@ -84,11 +84,34 @@ std::vector<SessionSourceEntry> someSources (int count = 2)
         source.armPattern = "TRIALTYPE " + juce::String (i) + " TIMESEQUENCE";
         source.commitPattern = "TRIAL_END";
         source.pendingTimeoutMs = 2500;
-        source.trialCount = 10 + i;
         sources.push_back (source);
     }
 
     return sources;
+}
+
+/** The settings element as TriggeredCaptureNode::saveCustomParametersToXml()
+ *  writes it. Duplicated here on purpose: the drift test below runs the *real*
+ *  writer against the extractor, and this one exists so the other tests can build
+ *  a session without constructing a processor. */
+std::unique_ptr<juce::XmlElement> settingsXmlFor (const std::vector<SessionSourceEntry>& sources)
+{
+    auto settings = std::make_unique<juce::XmlElement> ("CUSTOM_PARAMETERS");
+
+    for (const auto& source : sources)
+    {
+        auto* sourceXml = settings->createNewChildElement ("TRIGGERSOURCE");
+        sourceXml->setAttribute ("name", source.name);
+        sourceXml->setAttribute ("line", source.line);
+        sourceXml->setAttribute ("type", source.type);
+        sourceXml->setAttribute ("colour", juce::Colour (source.colourArgb).toString());
+        sourceXml->setAttribute ("armPattern", source.armPattern);
+        sourceXml->setAttribute ("cancelPattern", source.cancelPattern);
+        sourceXml->setAttribute ("commitPattern", source.commitPattern);
+        sourceXml->setAttribute ("pendingTimeoutMs", source.pendingTimeoutMs);
+    }
+
+    return settings;
 }
 
 } // namespace
@@ -108,7 +131,7 @@ TEST (CaptureSession, RoundTripsIdentityGeometryAndSources)
         SessionWriter writer;
         writeIdentity (writer, identity);
         writeGeometry (writer, geometry);
-        writeSources (writer, sources);
+        writer.setSettingsXml (*settingsXmlFor (sources));
         ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
     }
 
@@ -141,10 +164,76 @@ TEST (CaptureSession, RoundTripsIdentityGeometryAndSources)
         EXPECT_EQ ((*readBackSources)[i].armPattern, sources[i].armPattern);
         EXPECT_EQ ((*readBackSources)[i].commitPattern, sources[i].commitPattern);
         EXPECT_EQ ((*readBackSources)[i].pendingTimeoutMs, sources[i].pendingTimeoutMs);
-        EXPECT_EQ ((*readBackSources)[i].trialCount, sources[i].trialCount);
         EXPECT_EQ ((*readBackSources)[i].colourArgb, sources[i].colourArgb)
             << "a colour that does not survive the trip repaints the user's conditions";
     }
+}
+
+/** The session stores the configuration as the GUI's own XML rather than as a
+ *  second copy in the manifest, so that there is exactly one serialiser for the
+ *  trigger source table. */
+TEST (CaptureSession, StoresTheConfigurationAsXmlNotAsManifestKeys)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    {
+        SessionWriter writer;
+        writeIdentity (writer, anIdentity());
+        writeGeometry (writer, aGeometry());
+        writer.setSettingsXml (*settingsXmlFor (someSources (2)));
+        ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
+    }
+
+    EXPECT_TRUE (target.getChildFile ("settings.xml").existsAsFile());
+
+    const auto manifest = juce::JSON::parse (target.getChildFile ("manifest.json"));
+    ASSERT_TRUE (manifest.isObject());
+    EXPECT_FALSE (manifest.hasProperty ("sources"))
+        << "the source table must not be duplicated into the manifest";
+
+    // ...and it is the same XML a signal chain would carry.
+    juce::XmlDocument document (target.getChildFile ("settings.xml").loadFileAsString());
+    const auto settings = document.getDocumentElement();
+    ASSERT_NE (settings, nullptr);
+    EXPECT_EQ (settings->getNumChildElements(), 2);
+    EXPECT_TRUE (settings->getFirstChildElement()->hasTagName ("TRIGGERSOURCE"));
+}
+
+TEST (CaptureSession, RefusesToReadSourcesWhenThereIsNoSettingsXml)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    {
+        SessionWriter writer;
+        writeIdentity (writer, anIdentity());
+        writeGeometry (writer, aGeometry());
+        ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
+    }
+
+    SessionReader reader (target);
+    ASSERT_TRUE (reader.isValid());
+    EXPECT_EQ (reader.getSettingsXml(), nullptr);
+    EXPECT_FALSE (readSources (reader).has_value());
+}
+
+TEST (CaptureSession, RejectsASessionWhoseSettingsXmlIsMalformed)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    {
+        SessionWriter writer;
+        writeIdentity (writer, anIdentity());
+        ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
+    }
+
+    target.getChildFile ("settings.xml").replaceWithText ("<CUSTOM_PARAMETERS><broken");
+
+    SessionReader reader (target);
+    EXPECT_FALSE (reader.isValid());
+    EXPECT_TRUE (reader.getError().contains ("settings.xml")) << reader.getError();
 }
 
 /** Demo data must be identifiable after the fact — it is convincing, and the

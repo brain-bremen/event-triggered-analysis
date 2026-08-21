@@ -231,4 +231,13 @@ int TriggeredSpectraNode::computePadSamples (float sampleRate) const
     return static_cast<int> (std::ceil (paddingSigmas * sigmaSeconds * sampleRate));
 }
 
+// --- Sessions --------------------------------------------------------------
+//
+// See the note in the header: refused, not silently empty, until spectra_core
+// grows the counterpart to average_core's AverageSession.
+
+bool TriggeredSpectraNode::saveSessionPayload (SessionWriter&) { return false; }
+
+bool TriggeredSpectraNode::loadSessionPayload (const SessionReader&) { return false; }
+
 } // namespace EventTriggered

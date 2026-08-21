@@ -22,6 +22,7 @@
 */
 #include "BarMapperNode.h"
 
+#include "AverageCore/Session/AverageSession.h"
 #include "TriggerCore/ParameterNames.h"
 
 #include "Ui/RfCanvas.h"
@@ -822,6 +823,114 @@ void BarMapperNode::discardExpiredCaptures (std::int64_t nowMs)
 }
 
 // --- Persistence -----------------------------------------------------------
+
+// --- Sessions --------------------------------------------------------------
+
+bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
+{
+    // The accumulators: the resumable state, and the same three arrays
+    // TriggeredAverage writes.
+    if (! AverageSession::gather (m_dataStore, getTriggerSources().getAll(), writer))
+        return false;
+
+    // The maps: derived, and saved anyway. An analyst opening this in Python
+    // should not have to reimplement back-projection to see what the plugin saw,
+    // and a map that took a latency scan to find is worth keeping next to the
+    // data that produced it.
+    const auto results = getResults();
+
+    if (results.channels.empty())
+        return true; // accumulators without a finished map is a legitimate state
+
+    const auto& firstMap = results.channels.front().map;
+    const int pixels = firstMap.pixels();
+
+    if (pixels <= 0)
+        return true;
+
+    const auto channelCount = static_cast<std::int64_t> (results.channels.size());
+    const auto perMap = static_cast<std::size_t> (pixels) * pixels;
+
+    std::vector<float> maps (results.channels.size() * perMap, 0.0f);
+    std::vector<std::int32_t> channelIndices;
+    std::vector<double> estimates;   // peak, x, y, area, diameter, width, height
+    std::vector<std::int32_t> valid; // whether each channel's mapping is usable
+
+    constexpr int estimateFields = 7;
+    estimates.reserve (results.channels.size() * estimateFields);
+
+    for (std::size_t i = 0; i < results.channels.size(); ++i)
+    {
+        const auto& mapping = results.channels[i];
+
+        // A channel whose map came out a different size cannot share the array;
+        // rather than writing a ragged set, the whole map export is abandoned.
+        // The accumulators above are the state that matters, and they are safe.
+        if (mapping.map.pixels() != pixels)
+            return true;
+
+        std::copy (mapping.map.values().begin(),
+                   mapping.map.values().end(),
+                   maps.begin() + static_cast<std::ptrdiff_t> (i * perMap));
+
+        const auto& estimate = mapping.estimate;
+        estimates.insert (estimates.end(),
+                          { static_cast<double> (estimate.peak),
+                            estimate.centreXDeg,
+                            estimate.centreYDeg,
+                            static_cast<double> (estimate.areaPixels),
+                            estimate.equivalentDiameterDeg,
+                            estimate.widthDeg,
+                            estimate.heightDeg });
+
+        valid.push_back (mapping.valid && estimate.valid ? 1 : 0);
+    }
+
+    for (const auto index : results.channelIndices)
+        channelIndices.push_back (index);
+
+    const std::vector<std::int64_t> mapShape { channelCount, pixels, pixels };
+    const std::vector<std::int64_t> estimateShape { channelCount, estimateFields };
+    const std::vector<std::int64_t> channelShape { channelCount };
+
+    const auto geometry = firstMap.geometry();
+    writer.manifest().setProperty ("map_pixels", geometry.pixels);
+    writer.manifest().setProperty ("map_degrees_per_pixel", geometry.degreesPerPixel);
+    writer.manifest().setProperty ("map_centre_x_deg", geometry.centreXDeg);
+    writer.manifest().setProperty ("map_centre_y_deg", geometry.centreYDeg);
+    writer.manifest().setProperty (
+        "map_estimate_fields",
+        juce::var (juce::Array<juce::var> { "peak", "centre_x_deg", "centre_y_deg", "area_pixels",
+                                            "equivalent_diameter_deg", "width_deg",
+                                            "height_deg" }));
+
+    return writer.addArray ("maps", std::span (maps), std::span (mapShape))
+           && writer.addArray ("map_estimates", std::span (estimates), std::span (estimateShape))
+           && writer.addArray ("map_valid", std::span (valid), std::span (channelShape))
+           && writer.addArray (
+               "map_channel_indices", std::span (channelIndices), std::span (channelShape));
+}
+
+bool BarMapperNode::loadSessionPayload (const SessionReader& reader)
+{
+    // A session never restores demo mode, for the same reason the signal chain
+    // never does: synthetic receptive fields are convincing, and a plugin that
+    // came back full of them without saying so is a trap. Loading real data into
+    // a node currently showing demo data therefore leaves demo mode first.
+    if (m_demoMode)
+        setDemoMode (false);
+
+    if (! AverageSession::apply (m_dataStore, getTriggerSources().getAll(), reader))
+        return false;
+
+    // The stored maps are deliberately ignored. They are an output, and
+    // recomputing them from the restored accumulators is both cheap and the only
+    // way to guarantee that what is displayed matches the current settings rather
+    // than the ones in force when the file was written.
+    rebuildDisplayPanels();
+    m_compute.requestRecompute();
+    return true;
+}
 
 void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
 {

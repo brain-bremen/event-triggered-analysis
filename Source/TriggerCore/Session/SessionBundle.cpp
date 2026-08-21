@@ -155,6 +155,11 @@ bool SessionWriter::addFigure (const juce::String& name, const juce::Image& imag
     return true;
 }
 
+void SessionWriter::setSettingsXml (const juce::XmlElement& settings)
+{
+    m_settings = std::make_unique<juce::XmlElement> (settings);
+}
+
 std::int64_t SessionWriter::getEncodedSize() const
 {
     std::int64_t total = 0;
@@ -249,6 +254,19 @@ juce::Result SessionWriter::flushToDirectory (const juce::File& directory) const
                 return result;
     }
 
+    if (m_settings != nullptr)
+    {
+        const auto settingsText = m_settings->toString();
+        const std::vector<char> settingsBytes (settingsText.toRawUTF8(),
+                                               settingsText.toRawUTF8()
+                                                   + settingsText.getNumBytesAsUTF8());
+
+        if (auto result = writeFile (staging.getChildFile (SessionLayout::settingsFileName),
+                                     settingsBytes);
+            result.failed())
+            return result;
+    }
+
     // The manifest is written last, so a staging directory that somehow survives
     // an interrupted save is missing the one file a reader opens first.
     const auto manifestText = juce::JSON::toString (juce::var (root.get()), false);
@@ -318,6 +336,28 @@ SessionReader::SessionReader (const juce::File& directory) : m_directory (direct
     }
 
     m_manifest = parsed;
+
+    // Optional: a session written by a plugin with nothing to persist beyond its
+    // parameters has no settings.xml, and that is not an error. A malformed one
+    // is, because the alternative is rebuilding trigger sources from a file we
+    // could only partly read.
+    const auto settingsFile = directory.getChildFile (SessionLayout::settingsFileName);
+
+    if (settingsFile.existsAsFile())
+    {
+        // XmlDocument rather than the juce::parseXML() free function: only the
+        // former is exported from the Open Ephys shared library, and a plugin
+        // linking the latter fails at link time rather than at compile time.
+        juce::XmlDocument document (settingsFile.loadFileAsString());
+        m_settings = document.getDocumentElement();
+
+        if (m_settings == nullptr)
+        {
+            m_error = "Could not parse " + juce::String (SessionLayout::settingsFileName);
+            return;
+        }
+    }
+
     m_valid = true;
 }
 

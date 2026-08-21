@@ -96,29 +96,33 @@ void writeGeometry (SessionWriter& writer, const SessionGeometry& geometry)
     manifest.setProperty (SessionKeys::channelNames, toVar (geometry.channelNames));
 }
 
-void writeSources (SessionWriter& writer, const std::vector<SessionSourceEntry>& sources)
+std::vector<SessionSourceEntry> sourcesFromSettingsXml (const juce::XmlElement& settings)
 {
-    juce::Array<juce::var> entries;
+    std::vector<SessionSourceEntry> sources;
 
-    for (const auto& source : sources)
+    for (const auto* sourceXml : settings.getChildIterator())
     {
-        auto* object = new juce::DynamicObject();
+        if (! sourceXml->hasTagName (TriggerSourceXml::tag))
+            continue;
 
-        object->setProperty ("name", source.name);
-        object->setProperty ("line", source.line);
-        object->setProperty ("type", source.type);
-        object->setProperty ("colour", juce::String::toHexString (
-                                           static_cast<int> (source.colourArgb)));
-        object->setProperty ("arm_pattern", source.armPattern);
-        object->setProperty ("cancel_pattern", source.cancelPattern);
-        object->setProperty ("commit_pattern", source.commitPattern);
-        object->setProperty ("pending_timeout_ms", source.pendingTimeoutMs);
-        object->setProperty ("trial_count", source.trialCount);
+        SessionSourceEntry source;
 
-        entries.add (juce::var (object));
+        source.name = sourceXml->getStringAttribute (TriggerSourceXml::name);
+        source.line = sourceXml->getIntAttribute (TriggerSourceXml::line, -1);
+        source.type = sourceXml->getIntAttribute (TriggerSourceXml::type, 1);
+        source.colourArgb =
+            juce::Colour::fromString (sourceXml->getStringAttribute (TriggerSourceXml::colour))
+                .getARGB();
+        source.armPattern = sourceXml->getStringAttribute (TriggerSourceXml::armPattern);
+        source.cancelPattern = sourceXml->getStringAttribute (TriggerSourceXml::cancelPattern);
+        source.commitPattern = sourceXml->getStringAttribute (TriggerSourceXml::commitPattern);
+        source.pendingTimeoutMs =
+            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 2000);
+
+        sources.push_back (source);
     }
 
-    writer.manifest().setProperty (SessionKeys::sources, juce::var (entries));
+    return sources;
 }
 
 // --- Reading ---------------------------------------------------------------
@@ -164,35 +168,12 @@ std::optional<std::vector<SessionSourceEntry>> readSources (const SessionReader&
     if (! reader.isValid())
         return std::nullopt;
 
-    const auto value = reader.property (SessionKeys::sources);
-    const auto* array = value.getArray();
+    const auto* settings = reader.getSettingsXml();
 
-    if (array == nullptr)
+    if (settings == nullptr)
         return std::nullopt;
 
-    std::vector<SessionSourceEntry> sources;
-
-    for (const auto& entry : *array)
-    {
-        if (! entry.isObject())
-            return std::nullopt;
-
-        SessionSourceEntry source;
-        source.name = entry.getProperty ("name", "").toString();
-        source.line = entry.getProperty ("line", -1);
-        source.type = entry.getProperty ("type", 1);
-        source.colourArgb = static_cast<juce::uint32> (
-            entry.getProperty ("colour", "0").toString().getHexValue64());
-        source.armPattern = entry.getProperty ("arm_pattern", "").toString();
-        source.cancelPattern = entry.getProperty ("cancel_pattern", "").toString();
-        source.commitPattern = entry.getProperty ("commit_pattern", "").toString();
-        source.pendingTimeoutMs = entry.getProperty ("pending_timeout_ms", 2000);
-        source.trialCount = entry.getProperty ("trial_count", 0);
-
-        sources.push_back (source);
-    }
-
-    return sources;
+    return sourcesFromSettingsXml (*settings);
 }
 
 // --- Compatibility ---------------------------------------------------------
