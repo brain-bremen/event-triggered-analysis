@@ -30,7 +30,7 @@ set(PROJECT_SHORT_NAME EventTriggeredAnalysis)
 # reports it through getLibInfo(), and the Windows resource stamps it. Nothing
 # should hardcode a version string.
 set(PLUGIN_VERSION_MAJOR 0)
-set(PLUGIN_VERSION_MINOR 3)
+set(PLUGIN_VERSION_MINOR 4)
 set(PLUGIN_VERSION_PATCH 0)
 set(PLUGIN_VERSION "${PLUGIN_VERSION_MAJOR}.${PLUGIN_VERSION_MINOR}.${PLUGIN_VERSION_PATCH}")
 
