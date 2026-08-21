@@ -48,6 +48,7 @@ set(TRIGGER_CORE_HEADERS
     Ui/TriggerMonitorWindow.h
     Ui/TriggerCountDisplay.h
     Ui/EditorLayout.h
+    Ui/NestedCallOut.h
 )
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})

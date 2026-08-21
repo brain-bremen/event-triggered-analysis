@@ -26,6 +26,7 @@
 
 #include "../TriggerSourceActions.h"
 #include "../TriggeredCaptureNode.h"
+#include "NestedCallOut.h"
 
 namespace EventTriggered
 {
@@ -96,7 +97,9 @@ namespace
     class ColourCell : public juce::Component, public juce::ChangeListener
     {
     public:
-        explicit ColourCell (bool enabled) : m_enabled (enabled) {}
+        ColourCell (TriggeredCaptureNode* node, bool enabled) : m_node (node), m_enabled (enabled)
+        {
+        }
 
         void setSource (TriggerSource* source)
         {
@@ -121,28 +124,25 @@ namespace
             if (! m_enabled || m_source == nullptr)
                 return;
 
-            auto selector = std::make_unique<juce::ColourSelector> (
-                juce::ColourSelector::showColourAtTop | juce::ColourSelector::showColourspace);
-
-            selector->setCurrentColour (m_source->colour);
-            selector->setSize (240, 280);
-            selector->addChangeListener (this);
-
-            juce::CallOutBox::launchAsynchronously (
-                std::move (selector), getScreenBounds(), nullptr);
+            NestedCallOut::showColourPicker (*this, m_source->colour, *this);
         }
 
         void changeListenerCallback (juce::ChangeBroadcaster* broadcaster) override
         {
             if (auto* selector = dynamic_cast<juce::ColourSelector*> (broadcaster);
-                selector != nullptr && m_source != nullptr)
+                selector != nullptr && m_source != nullptr && m_node != nullptr)
             {
-                m_source->colour = selector->getCurrentColour();
+                // Through TriggerSources rather than by assigning source->colour:
+                // that is what notifies the node, so a plot drawn in the old
+                // colour hears about the change.
+                m_node->getTriggerSources().setTriggerSourceColour (
+                    m_source, selector->getCurrentColour());
                 repaint();
             }
         }
 
     private:
+        TriggeredCaptureNode* m_node = nullptr;
         TriggerSource* m_source = nullptr;
         bool m_enabled = false;
     };
@@ -316,7 +316,7 @@ juce::Component*
             if (cell == nullptr)
             {
                 delete existing;
-                cell = new ColourCell (true);
+                cell = new ColourCell (m_node, true);
             }
 
             cell->setSource (source);
@@ -488,6 +488,18 @@ void TriggerSourceConfigWindow::update()
 }
 
 void TriggerSourceConfigWindow::updatePopup() { update(); }
+
+void TriggerSourceConfigWindow::focusOfChildComponentChanged (
+    juce::Component::FocusChangeType cause)
+{
+    // While the colour picker is up it must keep the keyboard focus it took on
+    // opening; the base class would grab it straight back and the picker would
+    // then close itself on the first click. See NestedCallOut.h.
+    if (NestedCallOut::isOpenOver (*this))
+        return;
+
+    PopupComponent::focusOfChildComponentChanged (cause);
+}
 
 void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
 {
