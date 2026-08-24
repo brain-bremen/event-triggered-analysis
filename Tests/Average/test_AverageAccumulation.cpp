@@ -11,7 +11,7 @@
     whether two sources stay independent. That lives in DataStore now, so it is
     tested here against DataStore directly, without a thread or a signal chain.
 */
-#include "Average/DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "TriggerCore/TriggerSource.h"
 
 #include <JuceHeader.h>

@@ -79,6 +79,39 @@ private:
     Array<TriggerSource*> triggerSourcesToRemove;
 };
 
+/**
+    Duplicates a trigger source, inserting the copy immediately after the original
+    with every field -- line, type, colour, patterns, timeout -- carried over
+    verbatim except for the name, which is disambiguated the same way a fresh
+    source's default name is.
+
+    Undo: removes the duplicate.
+*/
+class DuplicateTriggerSource : public ProcessorAction
+{
+public:
+    DuplicateTriggerSource (TriggeredCaptureNode* processor, TriggerSource* sourceToDuplicate);
+    ~DuplicateTriggerSource() override = default;
+
+    void restoreOwner (GenericProcessor* processor) override;
+    bool perform() override;
+    bool undo() override;
+
+private:
+    TriggeredCaptureNode* processorNode;
+    int sourceIndex = -1;
+    int duplicateIndex = -1;
+
+    String name;
+    int line = -1;
+    TriggerType type;
+    Colour colour;
+    String armPattern;
+    String cancelPattern;
+    String commitPattern;
+    int pendingTimeoutMs = 0;
+};
+
 class RenameTriggerSource : public ProcessorAction
 {
 public:

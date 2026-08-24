@@ -1,4 +1,4 @@
-#include "Average/DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "TriggerCore/TriggerSource.h"
 #include <JuceHeader.h>
 #include <gtest/gtest.h>

@@ -194,9 +194,9 @@ juce::String TriggerMonitorWindow::diagnose() const
         std::any_of (m_rows.begin(), m_rows.end(), [] (const Row& r) { return r.edges > 0; });
 
     if (! anySourceSawAnEdge)
-        return "Edges are arriving on line " + juce::String (m_lastLine)
+        return "Edges are arriving on line " + juce::String (m_lastLine + 1)
                + ", but no source is configured for that line. Change a source's TTL column to "
-               + juce::String (m_lastLine) + ".";
+               + juce::String (m_lastLine + 1) + ".";
 
     const bool anyQueued =
         std::any_of (m_rows.begin(), m_rows.end(), [] (const Row& r) { return r.queued > 0; });
@@ -295,8 +295,10 @@ void TriggerMonitorWindow::drawRow (juce::Graphics& g,
                 juce::Justification::centredLeft,
                 true);
 
-    g.drawText (
-        juce::String (row.line), area.removeFromLeft (lineWidth), juce::Justification::centred);
+    // Displayed 1-based, matching the LFP viewer's TTL line numbering.
+    g.drawText (juce::String (row.line + 1),
+                area.removeFromLeft (lineWidth),
+                juce::Justification::centred);
 
     // A disarmed or unimplemented source is the usual reason edges arrive and
     // nothing is queued, so it is worth making it stand out from a live one.
@@ -352,7 +354,7 @@ void TriggerMonitorWindow::paint (juce::Graphics& g)
     juce::String summaryText = "TTL rising edges seen on any line: " + juce::String (m_edgesSeen);
 
     if (m_lastLine >= 0)
-        summaryText += "   (most recent on line " + juce::String (m_lastLine) + ")";
+        summaryText += "   (most recent on line " + juce::String (m_lastLine + 1) + ")";
 
     g.drawText (summaryText, summary, juce::Justification::centredLeft);
 

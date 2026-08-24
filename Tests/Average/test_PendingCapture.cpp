@@ -3,7 +3,7 @@
     - DataStore pending capture (store / commit / discard / expire / hasPending)
     - TriggerSource XML save/load round-trip for pattern fields
 */
-#include "Average/DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "TriggerCore/MultiChannelRingBuffer.h"
 #include "TriggerCore/TriggerSource.h"
 #include <JuceHeader.h>

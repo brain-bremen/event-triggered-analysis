@@ -130,11 +130,12 @@ bool RemoveTriggerConditions::perform()
 {
     if (triggerSourcesToRemove.size() > 0)
     {
-        for (auto* sourceXml : settings->getChildIterator())
-        {
-            int indexToRemove = sourceXml->getIntAttribute ("index", -1);
-            processorNode->getTriggerSources().removeTriggerSource (indexToRemove);
-        }
+        // By pointer identity, not by the indices saved in `settings`: removing
+        // several sources by index in ascending order is unsafe, since each
+        // removal shifts every later index down, so removeTriggerSource() would
+        // delete the wrong (or already-shifted) entry for every source after the
+        // first -- exactly what CLEAR ALL hit.
+        processorNode->getTriggerSources().removeTriggerSources (triggerSourcesToRemove);
 
         processorNode->registerUndoableAction (processorNode->getNodeId(), this);
         processorNode->getEditor()->updateSettings();
@@ -174,6 +175,60 @@ bool RemoveTriggerConditions::undo()
     CoreServices::sendStatusMessage ("Added " + String (triggerSourcesToRemove.size())
                                      + " trigger condition(s)");
     processorNode->getEditor()->updateSettings();
+    return true;
+}
+
+DuplicateTriggerSource::DuplicateTriggerSource (TriggeredCaptureNode* processor_,
+                                                TriggerSource* sourceToDuplicate)
+    : ProcessorAction ("DuplicateTriggerSource"),
+      processorNode (processor_),
+      name (sourceToDuplicate->name),
+      line (sourceToDuplicate->line),
+      type (sourceToDuplicate->type),
+      colour (sourceToDuplicate->colour),
+      armPattern (sourceToDuplicate->armPattern),
+      cancelPattern (sourceToDuplicate->cancelPattern),
+      commitPattern (sourceToDuplicate->commitPattern),
+      pendingTimeoutMs (sourceToDuplicate->pendingTimeoutMs)
+{
+    sourceIndex = processorNode->getTriggerSources().getIndexOf (sourceToDuplicate);
+}
+
+void DuplicateTriggerSource::restoreOwner (GenericProcessor* processor)
+{
+    processorNode = (TriggeredCaptureNode*) processor;
+}
+
+bool DuplicateTriggerSource::perform()
+{
+    // Inserted right after the original -- and after its own prior copies, since
+    // sourceIndex is where the original sits regardless of how many duplicates
+    // already followed it -- rather than at the end, so a run of duplicates reads
+    // as a group next to the condition they came from.
+    auto* newSource = processorNode->getTriggerSources().addTriggerSource (line, type, sourceIndex + 1);
+
+    processorNode->getTriggerSources().setTriggerSourceName (newSource, name, false);
+    newSource->colour = colour;
+    newSource->armPattern = armPattern;
+    newSource->cancelPattern = cancelPattern;
+    newSource->commitPattern = commitPattern;
+    newSource->pendingTimeoutMs = pendingTimeoutMs;
+
+    duplicateIndex = processorNode->getTriggerSources().getIndexOf (newSource);
+
+    processorNode->registerUndoableAction (processorNode->getNodeId(), this);
+    processorNode->getEditor()->updateSettings();
+    CoreServices::sendStatusMessage ("Duplicated trigger condition " + name);
+
+    return true;
+}
+
+bool DuplicateTriggerSource::undo()
+{
+    processorNode->getTriggerSources().removeTriggerSource (duplicateIndex);
+    processorNode->getEditor()->updateSettings();
+    CoreServices::sendStatusMessage ("Removed duplicated trigger condition " + name);
+
     return true;
 }
 
@@ -251,8 +306,8 @@ bool ChangeTriggerTTLLine::perform()
         processorNode->getEditor()->updateSettings();
 
         processorNode->registerUndoableAction (processorNode->getNodeId(), this);
-        CoreServices::sendStatusMessage ("Changed trigger condition line from " + String (oldLine)
-                                         + " to " + String (newLine));
+        CoreServices::sendStatusMessage ("Changed trigger condition line from "
+                                         + String (oldLine + 1) + " to " + String (newLine + 1));
     }
 
     return true;
@@ -264,8 +319,8 @@ bool ChangeTriggerTTLLine::undo()
     if (source != nullptr)
     {
         processorNode->getTriggerSources().setTriggerSourceLine (source, oldLine);
-        CoreServices::sendStatusMessage ("Changed trigger condition line from " + String (newLine)
-                                         + " to " + String (oldLine));
+        CoreServices::sendStatusMessage ("Changed trigger condition line from "
+                                         + String (newLine + 1) + " to " + String (oldLine + 1));
     }
 
     return true;

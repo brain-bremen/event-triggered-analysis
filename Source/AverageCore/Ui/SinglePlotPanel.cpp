@@ -22,10 +22,9 @@
 
 */
 #include "SinglePlotPanel.h"
-#include "../DataCollector.h"
+#include "AverageCore/DataCollector.h"
 #include "PerformanceTimer.h"
 #include "TriggerCore/TriggerSource.h"
-#include "TriggeredAvgCanvas.h"
 
 using namespace EventTriggered;
 const static Colour panelBackground { 30, 30, 40 };
@@ -42,6 +41,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
       m_parentGrid (display_),
       m_averageBuffer (avgBuffer),
       waitingForWindowToClose (false),
+      m_channelName (channel->getName()),
       m_sampleRate (channel->getSampleRate()),
       channelIndexInAverageBuffer (channelIndexInAverageBuffer_)
 {
@@ -56,7 +56,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     channelLabel->setFont (font12pt);
     channelLabel->setJustificationType (Justification::topLeft);
     channelLabel->setColour (Label::textColourId, Colours::white);
-    channelLabel->setText (channel->getName(), dontSendNotification);
+    channelLabel->setText (m_channelName, dontSendNotification);
     addAndMakeVisible (channelLabel.get());
 
     conditionLabel = std::make_unique<Label> ("condition label");
@@ -64,6 +64,47 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     conditionLabel->setJustificationType (Justification::topLeft);
     String conditionText = m_triggerSource->name + " (N=" + String (numTrials) + ")";
     conditionLabel->setText (conditionText, dontSendNotification);
+    conditionLabel->setColour (Label::textColourId, baseColour);
+    addAndMakeVisible (conditionLabel.get());
+
+    clear();
+}
+
+SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
+                                  const String& channelName,
+                                  double sampleRate,
+                                  const TriggerSource* source_,
+                                  int channelIndexInAverageBuffer_,
+                                  const MultiChannelAverageBuffer* avgBuffer)
+    : streamId (0),
+      contChannel (nullptr),
+      baseColour (source_->colour),
+      m_triggerSource (source_),
+      m_parentGrid (display_),
+      m_averageBuffer (avgBuffer),
+      waitingForWindowToClose (false),
+      m_channelName (channelName),
+      m_sampleRate (sampleRate),
+      channelIndexInAverageBuffer (channelIndexInAverageBuffer_)
+{
+    pre_ms = 0;
+    post_ms = 0;
+    bin_size_ms = 10;
+
+    const auto font12pt = Font { withDefaultMetrics (FontOptions { 12.0f }) };
+
+    channelLabel = std::make_unique<Label> ("channel label");
+    channelLabel->setFont (font12pt);
+    channelLabel->setJustificationType (Justification::topLeft);
+    channelLabel->setColour (Label::textColourId, Colours::white);
+    channelLabel->setText (m_channelName, dontSendNotification);
+    addAndMakeVisible (channelLabel.get());
+
+    conditionLabel = std::make_unique<Label> ("condition label");
+    conditionLabel->setFont (font12pt);
+    conditionLabel->setJustificationType (Justification::topLeft);
+    conditionLabel->setText (m_triggerSource->name + " (N=" + String (numTrials) + ")",
+                             dontSendNotification);
     conditionLabel->setColour (Label::textColourId, baseColour);
     addAndMakeVisible (conditionLabel.get());
 
@@ -90,7 +131,11 @@ void SinglePlotPanel::resized()
     if (cachedPanelWidth != panelWidthPx)
     {
         cachedPanelWidth = panelWidthPx;
+
+        // Both caches hold paths in panel pixels, so both are stale after a width
+        // change -- the trial paths were being left at the old width.
         updateCachedAveragPath();
+        updateCachedTrialPaths();
     }
 
     channelLabel->setBounds (labelOffset, 10, 150, 20);
@@ -386,6 +431,10 @@ void SinglePlotPanel::plotWithDirectMapping (const float* channelData,
                                              const DataRange& dataRange)
 {
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0 || numSamples <= 1)
+        return;
+
     const int samplesPerPixel = std::max (1, numSamples / numPixels);
 
     if (samplesPerPixel <= 1)
@@ -483,6 +532,10 @@ void SinglePlotPanel::plotWithCustomXLimits (const float* channelData,
         return;
 
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0)
+        return;
+
     int numVisibleSamples = lastVisibleSample - firstVisibleSample + 1;
     int samplesPerPixel = std::max (1, numVisibleSamples / numPixels);
     bool pathStarted = false;
@@ -573,6 +626,9 @@ void SinglePlotPanel::plotTrialToPath (Path& path,
                                        const TimeRange& timeRange)
 {
     const int numPixels = panelWidthPx;
+
+    if (numPixels <= 0 || numSamples <= 1)
+        return;
 
     if (! useCustomXLimits)
     {
@@ -756,6 +812,14 @@ void SinglePlotPanel::plotTrialToPath (Path& path,
 
 bool SinglePlotPanel::updateCachedTrialPaths()
 {
+    // Nothing to plot into yet: the panel is given its data by addContChannel()
+    // and its size by the grid's resized() afterwards, and with data already in
+    // the buffer -- demo mode, or a canvas rebuilt over full accumulators -- the
+    // first path is built before the panel has a width. resized() invalidates
+    // the cache once the width arrives.
+    if (panelWidthPx <= 0 || panelHeightPx <= 0)
+        return false;
+
     if (! m_trialBuffer || ! plotAllTraces)
         return false;
 
@@ -832,6 +896,14 @@ bool SinglePlotPanel::updateCachedTrialPaths()
 
 bool SinglePlotPanel::updateCachedAveragPath()
 {
+    // Nothing to plot into yet: the panel is given its data by addContChannel()
+    // and its size by the grid's resized() afterwards, and with data already in
+    // the buffer -- demo mode, or a canvas rebuilt over full accumulators -- the
+    // first path is built before the panel has a width. resized() invalidates
+    // the cache once the width arrives.
+    if (panelWidthPx <= 0 || panelHeightPx <= 0)
+        return false;
+
     if (! m_averageBuffer)
         return false;
 
@@ -853,6 +925,15 @@ bool SinglePlotPanel::updateCachedAveragPath()
     conditionLabel->setText (trialCounterString, dontSendNotification);
 
     if (avgBuffer.getNumSamples() == 0 || avgBuffer.getNumChannels() == 0)
+        return false;
+
+    // The row this panel draws can be past the end of the buffer while a
+    // reconfiguration is in flight -- the panels and the accumulators are
+    // resized by separate calls, and a repaint can land between them. Reading
+    // past the end is a crash, not a glitch, so the panel simply draws nothing
+    // until the two agree again.
+    if (channelIndexInAverageBuffer < 0
+        || channelIndexInAverageBuffer >= avgBuffer.getNumChannels())
         return false;
 
     const int numSamples = avgBuffer.getNumSamples();
@@ -987,7 +1068,7 @@ DynamicObject SinglePlotPanel::getInfo() const
 {
     DynamicObject info;
 
-    info.setProperty (Identifier ("channel"), var (contChannel->getName()));
+    info.setProperty (Identifier ("channel"), var (m_channelName));
     info.setProperty (Identifier ("condition"), var (m_triggerSource->name));
     info.setProperty (Identifier ("color"), var (m_triggerSource->colour.toString()));
     info.setProperty (Identifier ("trial_count"), var (int (numTrials)));

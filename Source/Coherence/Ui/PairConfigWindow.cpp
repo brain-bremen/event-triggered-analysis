@@ -25,6 +25,7 @@
 #include "PairConfigWindow.h"
 
 #include "../TriggeredCoherenceNode.h"
+#include "TriggerCore/Ui/NestedCallOut.h"
 
 namespace EventTriggered
 {
@@ -180,14 +181,7 @@ public:
         if (! m_enabled || ! colour.has_value())
             return;
 
-        auto selector = std::make_unique<juce::ColourSelector> (
-            juce::ColourSelector::showColourAtTop | juce::ColourSelector::showColourspace);
-
-        selector->setCurrentColour (*colour);
-        selector->setSize (240, 280);
-        selector->addChangeListener (this);
-
-        juce::CallOutBox::launchAsynchronously (std::move (selector), getScreenBounds(), nullptr);
+        NestedCallOut::showColourPicker (*this, *colour, *this);
     }
 
     void changeListenerCallback (juce::ChangeBroadcaster* broadcaster) override
@@ -518,6 +512,17 @@ void PairConfigWindow::update()
 }
 
 void PairConfigWindow::updatePopup() { update(); }
+
+void PairConfigWindow::focusOfChildComponentChanged (juce::Component::FocusChangeType cause)
+{
+    // While the colour picker is up it must keep the keyboard focus it took on
+    // opening; the base class would grab it straight back and the picker would
+    // then close itself on the first click. See NestedCallOut.h.
+    if (NestedCallOut::isOpenOver (*this))
+        return;
+
+    PopupComponent::focusOfChildComponentChanged (cause);
+}
 
 void PairConfigWindow::buttonClicked (juce::Button* button)
 {

@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
+## [Unreleased]
+
+### Added
+
+- **SAVE and LOAD buttons in the trigger table**, in all four plugins. A rig
+  usually runs several of these plugins off the same conditions, and the trigger
+  table — names, TTL lines, colours and the three message patterns per condition —
+  had to be retyped identically into each of them. SAVE writes the table to a
+  small XML file; LOAD replaces the table with one from such a file, or from a
+  saved signal chain, whose `CUSTOM_PARAMETERS` block carries exactly the same
+  `TRIGGERSOURCE` elements. In the Bar Mapper the sweep angles and the direction
+  generator's settings travel with the table, so a direction set arrives meaning
+  what it meant where it was saved. LOAD is disabled during acquisition, and
+  refuses a file with no trigger sources in it rather than emptying the table
+
+- The Receptive Field Bar Mapper's direction generator is **configurable**. Besides
+  the number of directions it now takes the TTL line (fixed, or one line per
+  direction counting up from a base) and the arm message it writes — text before
+  the number, the number for the first direction, and text after it — so
+  `VSTIM: TRIALTYPE `, `200`, ` TIMESEQUENCE` generates
+  `VSTIM: TRIALTYPE 200 TIMESEQUENCE`, `… 201 …`, and so on. A preview line shows
+  the first and last pattern before REPLACE writes them, and the settings are
+  saved with the signal chain
+
+### Changed
+
+- The trigger source table now has **one serialiser** rather than one per place
+  that stores it. The signal chain, a saved session and the new trigger-settings
+  file all go through `writeTriggerSourcesToXml` / `readTriggerSourcesFromXml` in
+  `TriggerCore`, so a field added to a trigger source cannot reach one of them and
+  not the others
+
+- **`pendingTimeoutMs` now defaults to 5000 ms**, up from 2000. The old default
+  was shorter than the gap between a sweep's TTL edge and the trial-end message
+  that commits it in a typical mapping run, so the last trials of a block were
+  dropped. Sources in an existing signal chain keep whatever they were saved with
+
+### Fixed
+
+- The **Receptive Field Bar Mapper recomputed the whole map every time a trial was
+  parked** awaiting its commit message, producing exactly the map already on
+  screen. It was the only one of the four plugins to report a parked capture as a
+  display change; the other three already returned "nothing to show", which is
+  what that return value means
+
 ## [0.3.0]
 
 TriggeredAvg merged into the Triggered Spectra repository, which becomes

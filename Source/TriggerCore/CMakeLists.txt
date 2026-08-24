@@ -15,13 +15,19 @@ set(TRIGGER_CORE_SOURCES
     WorkQueue.cpp
     CaptureWorker.cpp
     TriggerSource.cpp
+    TriggerSourceXml.cpp
     TriggerMessaging.cpp
     BroadcastMessageLog.cpp
     TriggerSourceActions.cpp
     TriggeredCaptureNode.cpp
+    Session/NpyCodec.cpp
+    Session/SessionBundle.cpp
+    Session/CaptureSession.cpp
+    Session/SessionIoThread.cpp
     Ui/ParameterControl.cpp
     Ui/TriggerSourceConfigWindow.cpp
     Ui/TriggerMonitorWindow.cpp
+    Ui/SessionControls.cpp
 )
 
 set(TRIGGER_CORE_HEADERS
@@ -31,15 +37,22 @@ set(TRIGGER_CORE_HEADERS
     WorkQueue.h
     CaptureWorker.h
     TriggerSource.h
+    TriggerSourceXml.h
     TriggerMessaging.h
     BroadcastMessageLog.h
     TriggerSourceActions.h
     TriggeredCaptureNode.h
+    Session/NpyCodec.h
+    Session/SessionBundle.h
+    Session/CaptureSession.h
+    Session/SessionIoThread.h
     Ui/ParameterControl.h
     Ui/TriggerSourceConfigWindow.h
     Ui/TriggerMonitorWindow.h
+    Ui/SessionControls.h
     Ui/TriggerCountDisplay.h
     Ui/EditorLayout.h
+    Ui/NestedCallOut.h
 )
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})

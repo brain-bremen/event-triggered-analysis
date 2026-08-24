@@ -49,6 +49,27 @@ public:
     EstimateMode getEstimateMode() const;
 
 protected:
+    // --- Sessions -----------------------------------------------------------
+    //
+    // Not yet implemented for the frequency-domain plugins, and refused rather
+    // than half-done. The base class makes these pure virtual so that the
+    // decision has to be taken explicitly; taking it here, once, covers both
+    // spectral plugins and keeps the answer in one place.
+    //
+    // What is missing is a spectra_core counterpart to average_core's
+    // AverageSession: PowerAccumulator is a pair of double vectors and a trial
+    // count and would be straightforward, but CrossSpectrumAccumulator holds
+    // three complex sums per pair and PpcAccumulator counts trials differently
+    // again — deliberately, see its note on tapers. Serialising those wrongly
+    // would produce coherence values that look ordinary and are not, so they are
+    // worth doing properly rather than quickly.
+    //
+    // Returning false means saveSession() reports failure instead of writing a
+    // bundle whose manifest promises accumulators it does not contain.
+
+    bool saveSessionPayload (SessionWriter& writer) override;
+    bool loadSessionPayload (const SessionReader& reader) override;
+
     /** Registers the frequency-domain parameter set, then hands over to
      *  registerPluginParameters().
      *

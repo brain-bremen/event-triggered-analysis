@@ -23,6 +23,7 @@
 */
 #include "TriggeredAvgNode.h"
 
+#include "AverageCore/Session/AverageSession.h"
 #include "TriggerCore/ParameterNames.h"
 
 #include "Ui/TriggeredAvgCanvas.h"
@@ -228,6 +229,28 @@ void TriggeredAvgNode::refreshDisplay()
 {
     if (m_canvas != nullptr)
         m_canvas->refresh();
+}
+
+// --- Sessions --------------------------------------------------------------
+
+bool TriggeredAvgNode::saveSessionPayload (SessionWriter& writer)
+{
+    // gather() takes the DataStore lock itself and does nothing but copy under
+    // it; the disk work happens later, on the session I/O thread.
+    return AverageSession::gather (m_dataStore, getTriggerSources().getAll(), writer);
+}
+
+bool TriggeredAvgNode::loadSessionPayload (const SessionReader& reader)
+{
+    if (! AverageSession::apply (m_dataStore, getTriggerSources().getAll(), reader))
+        return false;
+
+    // The panels point at the accumulators by address, and apply() replaced their
+    // contents rather than the buffers themselves — but the trial counts and the
+    // averages have changed underneath, so the display has to be told.
+    rebuildDisplayPanels();
+    triggerAsyncUpdate();
+    return true;
 }
 
 // --- Worker callbacks ------------------------------------------------------

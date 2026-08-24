@@ -1,0 +1,104 @@
+/*
+    ------------------------------------------------------------------
+
+    This file is part of the Open Ephys GUI Plugin Receptive Field Mapper
+    Copyright (C) 2025-2026 Joscha Schmiedt, Universität Bremen
+
+    ------------------------------------------------------------------
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+*/
+#pragma once
+
+#include "TriggerCore/Ui/EditorLayout.h"
+#include "TriggerCore/Ui/TriggerCountDisplay.h"
+
+#include <EditorHeaders.h>
+#include <VisualizerEditorHeaders.h>
+
+class Visualizer;
+
+namespace EventTriggered
+{
+
+class RfCanvas;
+class BarMapperNode;
+class TriggerSource;
+
+/** The receptive-field plugin's editor.
+ *
+ *  Deliberately the same shape as the other three: TRIGGERS / MONITOR / ANALYSIS
+ *  across the top, channels below, Pre and Post at the bottom, all placed by the
+ *  shared EditorLayout::layoutCommonContents. A plugin in this repository that
+ *  laid its editor out differently would look like a different piece of software
+ *  sitting in the same signal chain.
+ *
+ *  The one addition to the button row is SWEEPS, which opens the angle table;
+ *  DEMO takes the spare slot on the channel row, the same one TriggeredCoherence
+ *  puts CH PAIRS in. The editor is wider than its siblings by exactly the fourth
+ *  button — three buttons' worth of width could not hold four labels, and every
+ *  attempt to fit them ended in truncation ("STIM.") or overlap.
+ */
+/** Wider than EditorLayout::totalWidth by one button, for SWEEPS. */
+constexpr int editorWidth = EditorLayout::totalWidth + 90;
+
+class BarMapperEditor : public VisualizerEditor,
+                 public Button::Listener,
+                 public TriggerCountDisplay
+{
+public:
+    explicit BarMapperEditor (GenericProcessor* parentNode);
+    ~BarMapperEditor() override = default;
+
+    Visualizer* createNewCanvas() override;
+
+    void updateSettings() override;
+    void resized() override;
+
+    void setTriggerCount (int count) override;
+
+    void updateColours (TriggerSource* source);
+
+    void updateConditionName (TriggerSource* source);
+
+    void buttonClicked (Button* button) override;
+
+private:
+    BarMapperNode* getNode();
+
+    std::unique_ptr<UtilityButton> m_triggersButton;
+    std::unique_ptr<UtilityButton> m_monitorButton;
+    std::unique_ptr<UtilityButton> m_analysisButton;
+
+    /** Opens the angle table and the compass preview. Shows the direction count,
+        so a set that is half configured is visible without opening it. */
+    std::unique_ptr<UtilityButton> m_stimulusButton;
+
+    /** Fills the plugin with the paper's simulation so it can be driven with no
+     *  rig. Kept as a visibly separate control, never a saved parameter, and
+     *  always accompanied by the badge — a simulated receptive-field map is
+     *  entirely convincing, and it must be impossible to screenshot one and
+     *  later mistake it for a recording. */
+
+    std::unique_ptr<Label> m_channelsLabel;
+    std::unique_ptr<Label> m_preLabel;
+    std::unique_ptr<Label> m_postLabel;
+
+    RfCanvas* m_canvas = nullptr;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BarMapperEditor)
+};
+
+} // namespace EventTriggered

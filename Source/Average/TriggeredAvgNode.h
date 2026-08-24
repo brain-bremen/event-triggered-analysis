@@ -23,7 +23,7 @@
 */
 #pragma once
 
-#include "DataCollector.h"
+#include "AverageCore/DataCollector.h"
 
 #include "TriggerCore/TriggeredCaptureNode.h"
 
@@ -99,6 +99,14 @@ public:
     int getMaxTrials() const;
 
 protected:
+    /** The running mean/SD accumulators, via average_core's shared payload.
+     *
+     *  Nothing plugin-specific: the arrays a saved evoked average holds are the
+     *  same arrays a saved receptive-field session holds, which is why the code
+     *  writing them lives beside the DataStore rather than here. */
+    bool saveSessionPayload (SessionWriter& writer) override;
+    bool loadSessionPayload (const SessionReader& reader) override;
+
     void registerAdditionalParameters() override;
 
     /** Reallocates the accumulators for the current geometry and channel count,
