@@ -30,6 +30,7 @@
 #include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
+#include <PluginVersion.h>
 
 using namespace juce;
 
@@ -37,7 +38,7 @@ namespace EventTriggered
 {
 
 BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "RF BARMAPPER", EditorLayout::totalWidth)
+    : VisualizerEditor (parentNode, "RF BARMAPPER v" PLUGIN_VERSION_STRING, EditorLayout::totalWidth)
 {
     const auto makeButton = [this] (const String& text) {
         auto button = std::make_unique<UtilityButton> (text);

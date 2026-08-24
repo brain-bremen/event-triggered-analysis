@@ -30,12 +30,13 @@
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "PairConfigWindow.h"
 #include "TriggeredCoherenceCanvas.h"
+#include <PluginVersion.h>
 
 namespace EventTriggered
 {
 
 TriggeredCoherenceEditor::TriggeredCoherenceEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG COHER", EditorLayout::totalWidth)
+    : VisualizerEditor (parentNode, "TRIG COHER v" PLUGIN_VERSION_STRING, EditorLayout::totalWidth)
 {
     // See TriggeredPowerEditor: the editor carries collection and computation,
     // the canvas carries display.
