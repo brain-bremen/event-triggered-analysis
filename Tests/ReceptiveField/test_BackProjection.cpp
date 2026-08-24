@@ -319,3 +319,113 @@ TEST (BackProjection, EvenDirectionCountsHalveTheNumberOfRidgeLines)
     EXPECT_EQ (countRidges (7), 14);
     EXPECT_EQ (countRidges (9), 18);
 }
+
+// --- Sweep coverage --------------------------------------------------------
+//
+// Pure geometry: does the recorded window follow the bar far enough to reach the
+// map at all? Answerable before a trial is recorded, and the failure it catches
+// is silent -- back-projection pads with zero, so a window that stops short and a
+// cell that never fired produce the same flat map.
+
+namespace
+{
+/** A profile whose samples run from `fromDeg` to exactly `toDeg`.
+ *
+ *  The step is derived from the sample count rather than the other way round, so
+ *  the last sample lands on toDeg instead of one rounding short of it -- these
+ *  tests are about the extent, and a helper that quietly overshot it by half a
+ *  step would make every fraction below wrong in the fourth decimal. */
+SpatialProfile profileSpanning (double canonicalAngleDeg, double fromDeg, double toDeg)
+{
+    constexpr std::size_t samples = 4001;
+
+    SpatialProfile profile;
+    profile.canonicalAngleDeg = canonicalAngleDeg;
+    profile.startDeg = fromDeg;
+    profile.stepDeg = (toDeg - fromDeg) / static_cast<double> (samples - 1);
+    profile.values.assign (samples, 1.0f);
+    return profile;
+}
+} // namespace
+
+TEST (SweepCoverageTest, AWindowThatSpansTheMapCoversItCompletely)
+{
+    // 20.1 deg square, so a rightward sweep has to run from -10.05 to +10.05.
+    const auto profile = profileSpanning (0.0, -15.0, 15.0);
+    const SweepCoverage coverage = sweepCoverage (profile, testGeometry());
+
+    EXPECT_TRUE (coverage.reachesCentre);
+    EXPECT_DOUBLE_EQ (coverage.fraction, 1.0);
+}
+
+TEST (SweepCoverageTest, TheStockDefaultsNeverReachTheMapCentre)
+{
+    // Exactly the shipped defaults: 10 deg/s from -15 deg, 500 ms pre and 1000 ms
+    // post, 60 ms latency. The bar runs from -20.6 to -5.6 deg along its axis
+    // while the map covers +/-10.05, so it stops 5.6 deg short of the centre.
+    const auto profile = profileSpanning (0.0, -20.6, -5.6);
+    const SweepCoverage coverage = sweepCoverage (profile, testGeometry());
+
+    EXPECT_FALSE (coverage.reachesCentre);
+
+    // It does clip the near edge of the map: -10.05 to -5.6 out of 20.1 degrees.
+    EXPECT_NEAR (coverage.fraction, 4.45 / 20.1, 1e-9);
+}
+
+TEST (SweepCoverageTest, ADiagonalSweepNeedsALongerWindowThanAnAxisAlignedOne)
+{
+    // A square projects onto a segment of half-length h(|cos| + |sin|): h for an
+    // axis-aligned direction, h*sqrt(2) for a diagonal. So the same window that
+    // exactly covers the map horizontally falls short at 45 degrees.
+    const double half = 0.5 * testGeometry().spanDeg();
+
+    EXPECT_DOUBLE_EQ (sweepCoverage (profileSpanning (0.0, -half, half), testGeometry()).fraction,
+                      1.0);
+
+    const SweepCoverage diagonal =
+        sweepCoverage (profileSpanning (45.0, -half, half), testGeometry());
+
+    EXPECT_TRUE (diagonal.reachesCentre);
+    EXPECT_NEAR (diagonal.fraction, 1.0 / std::sqrt (2.0), 1e-6);
+}
+
+TEST (SweepCoverageTest, CoverageFollowsTheMapCentreRatherThanTheOrigin)
+{
+    // A map moved to where the receptive field is needs a window that follows it.
+    // Past the end of the sweep, not merely off-origin: a map centred at 12 deg
+    // is still inside a sweep that runs to 15.
+    MapGeometry offset = testGeometry();
+    offset.centreXDeg = 20.0;
+
+    const auto profile = profileSpanning (0.0, -15.0, 15.0);
+
+    EXPECT_TRUE (sweepCoverage (profile, testGeometry()).reachesCentre);
+    EXPECT_FALSE (sweepCoverage (profile, offset).reachesCentre);
+}
+
+TEST (SweepCoverageTest, TheWorstDirectionIsTheOneReported)
+{
+    const double half = 0.5 * testGeometry().spanDeg();
+
+    const std::vector<SpatialProfile> profiles {
+        profileSpanning (0.0, -half, half),      // covers the map exactly
+        profileSpanning (90.0, -half, half),     // likewise
+        profileSpanning (180.0, -half, 0.5 * half) // stops short of one side
+    };
+
+    const SweepCoverage worst = worstSweepCoverage (profiles, testGeometry());
+
+    EXPECT_TRUE (worst.reachesCentre);
+    EXPECT_NEAR (worst.fraction, 0.75, 1e-9);
+}
+
+TEST (SweepCoverageTest, NothingToCheckIsNotAWarning)
+{
+    // No profiles at all is a plugin that has not been configured yet, not a
+    // geometry mistake. An empty profile is, though: it covers nothing.
+    EXPECT_DOUBLE_EQ (worstSweepCoverage ({}, testGeometry()).fraction, 1.0);
+    EXPECT_TRUE (worstSweepCoverage ({}, testGeometry()).reachesCentre);
+
+    EXPECT_DOUBLE_EQ (sweepCoverage (SpatialProfile {}, testGeometry()).fraction, 0.0);
+    EXPECT_FALSE (sweepCoverage (SpatialProfile {}, testGeometry()).reachesCentre);
+}

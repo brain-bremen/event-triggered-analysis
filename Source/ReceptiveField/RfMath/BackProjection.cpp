@@ -24,6 +24,7 @@
 
 #include "AngleConvention.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace EventTriggered::Rf
@@ -121,6 +122,54 @@ Map2D backProject (std::span<const SpatialProfile> profiles,
     }
 
     return map;
+}
+
+SweepCoverage sweepCoverage (const SpatialProfile& profile, const MapGeometry& map)
+{
+    if (profile.isEmpty() || ! map.isValid())
+        return { 0.0, false };
+
+    const double rad = degToRad (profile.canonicalAngleDeg);
+    const double cosAngle = std::cos (rad);
+    const double sinAngle = std::sin (rad);
+
+    // Where the map's centre projects onto the axis of motion, and how far the
+    // square reaches either side of it once projected. A square of half-side h
+    // projects onto a segment of half-length h(|cos t| + |sin t|) -- h for an
+    // axis-aligned sweep, h*sqrt(2) for a diagonal one, which is why a diagonal
+    // direction needs a longer window than a horizontal one over the same map.
+    const double centreDeg = map.centreXDeg * cosAngle + map.centreYDeg * sinAngle;
+    const double halfDeg =
+        0.5 * map.spanDeg() * (std::abs (cosAngle) + std::abs (sinAngle));
+
+    const double from = std::max (profile.startDeg, centreDeg - halfDeg);
+    const double to = std::min (profile.endDeg(), centreDeg + halfDeg);
+
+    SweepCoverage coverage;
+    coverage.fraction =
+        halfDeg > 0.0 ? std::clamp ((to - from) / (2.0 * halfDeg), 0.0, 1.0) : 1.0;
+    coverage.reachesCentre =
+        profile.startDeg <= centreDeg && centreDeg <= profile.endDeg();
+
+    return coverage;
+}
+
+SweepCoverage worstSweepCoverage (std::span<const SpatialProfile> profiles,
+                                  const MapGeometry& map)
+{
+    SweepCoverage worst;
+
+    if (profiles.empty())
+        return worst;
+
+    for (const SpatialProfile& profile : profiles)
+    {
+        const SweepCoverage coverage = sweepCoverage (profile, map);
+        worst.fraction = std::min (worst.fraction, coverage.fraction);
+        worst.reachesCentre = worst.reachesCentre && coverage.reachesCentre;
+    }
+
+    return worst;
 }
 
 LatencyScanResult scanLatency (std::span<const SpatialProfile> zeroLatencyProfiles,

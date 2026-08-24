@@ -76,6 +76,44 @@ Map2D backProject (std::span<const SpatialProfile> profiles,
                    MapGeometry geometry,
                    BackProjectionOptions options = {});
 
+/** How much of the map a direction's bar actually swept through.
+ *
+ *  Back-projection pads with zero wherever a map point projects outside the
+ *  recorded sweep, and zero is the right pad -- it is what "no evidence" means
+ *  once the traces are z-scored. But it makes a window that is too short
+ *  indistinguishable from a cell that did not respond: the map comes out flat,
+ *  or bright along one edge, and nothing anywhere says why.
+ *
+ *  It is a geometry question, not a data question -- the same for every channel,
+ *  answerable before a single trial is recorded, and easy to get wrong. With the
+ *  stock defaults (10 deg/s from -15 deg, a 1000 ms post window and a 20 deg map)
+ *  the bar stops 5 deg short of the map's near edge and never reaches the centre.
+ */
+struct SweepCoverage
+{
+    /** Fraction of the map's projection onto this direction's axis of motion that
+        the recorded window actually covered, in [0, 1]. */
+    double fraction = 1.0;
+
+    /** Whether the bar reached the map's centre at all.
+     *
+     *  Called out separately because it is the difference between a map that is
+     *  merely cropped and one that cannot show a receptive field at the place the
+     *  user pointed the map at. */
+    bool reachesCentre = true;
+};
+
+/** Coverage of `map` by one profile. */
+SweepCoverage sweepCoverage (const SpatialProfile& profile, const MapGeometry& map);
+
+/** The least-covering direction: the smallest fraction, and false for
+ *  reachesCentre if *any* direction fails to reach it.
+ *
+ *  The worst rather than the mean, because one direction that stops short is
+ *  enough to put a spurious edge in the combined map. */
+SweepCoverage worstSweepCoverage (std::span<const SpatialProfile> profiles,
+                                  const MapGeometry& map);
+
 /** One candidate latency and the map peak it produced. */
 struct LatencyScanPoint
 {
