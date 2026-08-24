@@ -235,7 +235,7 @@ void RfCanvas::clearData()
 
 void RfCanvas::refreshState() {}
 
-void RfCanvas::update()
+void RfCanvas::updateSettings()
 {
     if (m_node != nullptr)
         m_node->requestRecompute();
@@ -276,9 +276,32 @@ void RfCanvas::refresh()
     // Warnings are recomputed here rather than pushed from the node, so they
     // follow whatever is actually on screen.
     m_warningText.clear();
-    for (const Rf::AngleSetWarning warning : m_node->checkAngles())
-        m_warningText += (m_warningText.isEmpty() ? "" : "   ") + String (Rf::describe (warning));
 
+    const auto addWarning = [this] (const String& text) {
+        m_warningText += (m_warningText.isEmpty() ? "" : "   ") + text;
+    };
+
+    for (const Rf::AngleSetWarning warning : m_node->checkAngles())
+        addWarning (String (Rf::describe (warning)));
+
+    // Whether the bar actually swept across the map. Read off the first channel's
+    // profiles because coverage is pure geometry -- the same for every channel,
+    // and identical to what a second channel would say.
+    if (! results.channels.empty())
+    {
+        const Rf::SweepCoverage coverage = Rf::worstSweepCoverage (
+            results.channels.front().profiles, results.settings.map);
+
+        if (! coverage.reachesCentre)
+            addWarning ("The bar never reaches the map centre: check Post, Speed and Sweep start");
+        else if (coverage.fraction < 0.995)
+            addWarning ("The sweep covers only " + String (roundToInt (coverage.fraction * 100.0))
+                        + "% of the map; the rest is padding, not absence of response");
+    }
+
+    // The warning band takes a strip off the top, so appearing or disappearing
+    // changes the space the maps get.
+    resized();
     repaint();
 }
 

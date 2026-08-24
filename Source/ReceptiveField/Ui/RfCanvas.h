@@ -88,7 +88,14 @@ public:
     ~RfCanvas() override;
 
     void refreshState() override;
-    void update();
+
+    /** The hook Visualizer::update() calls. Spelled updateSettings(), not
+     *  update(): the base's update() is *not* virtual, so an override-looking
+     *  `void update()` here would merely hide it -- and since the framework holds
+     *  a Visualizer*, the one that actually ran was still the base's. This one is
+     *  reached. */
+    void updateSettings() override;
+
     void refresh() override;
     void paint (juce::Graphics& g) override;
     void resized() override;

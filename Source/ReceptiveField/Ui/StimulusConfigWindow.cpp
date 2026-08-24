@@ -299,10 +299,14 @@ void StimulusConfigWindow::buttonClicked (Button* button)
         "Replace",
         "Cancel",
         this,
-        ModalCallbackFunction::create ([this] (int result) {
-            if (result != 0)
-                applyGeneratedDirections();
-        }));
+        // SafePointer, not `this`: the popup this lives in can be dismissed while
+        // the alert is still up -- clicking away from it is enough -- and the
+        // callback then fires against a destroyed component.
+        ModalCallbackFunction::create (
+            [safe = Component::SafePointer<StimulusConfigWindow> (this)] (int result) {
+                if (result != 0 && safe != nullptr)
+                    safe->applyGeneratedDirections();
+            }));
 }
 
 void StimulusConfigWindow::paint (Graphics& g)
