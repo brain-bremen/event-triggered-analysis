@@ -924,8 +924,18 @@ bool SinglePlotPanel::updateCachedAveragPath()
         m_triggerSource->name + " (N=" + String (m_averageBuffer->getNumTrials()) + ")";
     conditionLabel->setText (trialCounterString, dontSendNotification);
 
+    // A reset (Clear) drops the buffer to zero trials/samples. Without clearing
+    // the cache here, the stale path from before the reset stays cached forever
+    // -- currentNumTrials (0) never matches a positive cachedNumTrials only once,
+    // this branch is taken again next time with the same two zeros, and the old
+    // trace never leaves the screen.
     if (avgBuffer.getNumSamples() == 0 || avgBuffer.getNumChannels() == 0)
-        return false;
+    {
+        const bool hadPath = ! cachedAveragePath.isEmpty();
+        cachedAveragePath.clear();
+        cachedNumTrials = currentNumTrials;
+        return hadPath;
+    }
 
     // The row this panel draws can be past the end of the buffer while a
     // reconfiguration is in flight -- the panels and the accumulators are
