@@ -511,7 +511,7 @@ void RfMapGrid::paint (Graphics& g)
     {
         g.setColour (Colours::grey);
         g.setFont (FontOptions (15.0f));
-        g.drawText ("No maps yet. Select channels, configure directions under SWEEPS, "
+        g.drawText ("No maps yet. Select channels, configure directions under ANALYSIS, "
                     "and record some trials.",
                     getLocalBounds().reduced (20),
                     Justification::centredTop,

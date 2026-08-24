@@ -25,7 +25,6 @@
 #include "../BarMapperNode.h"
 #include "RfAnalysisSettingsWindow.h"
 #include "RfCanvas.h"
-#include "StimulusConfigWindow.h"
 
 #include "TriggerCore/ParameterNames.h"
 #include "TriggerCore/Ui/EditorLayout.h"
@@ -38,7 +37,7 @@ namespace EventTriggered
 {
 
 BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "RF BARMAPPER", editorWidth)
+    : VisualizerEditor (parentNode, "RF BARMAPPER", EditorLayout::totalWidth)
 {
     const auto makeButton = [this] (const String& text) {
         auto button = std::make_unique<UtilityButton> (text);
@@ -51,8 +50,6 @@ BarMapperEditor::BarMapperEditor (GenericProcessor* parentNode)
     m_triggersButton = makeButton ("TRIGGERS");
     m_monitorButton = makeButton ("MONITOR");
     m_analysisButton = makeButton ("ANALYSIS");
-    m_stimulusButton = makeButton ("SWEEPS");
-    m_stimulusButton->setTooltip ("Map each trigger condition to the direction its bar swept in.");
 
     addSelectedChannelsParameterEditor (Parameter::STREAM_SCOPE, ParameterNames::channels, 15, 58);
 
@@ -77,15 +74,9 @@ void BarMapperEditor::resized()
 {
     VisualizerEditor::resized();
 
-    // SWEEPS sits on the button row with its siblings, because it opens a popup
-    // exactly as they do. An earlier arrangement put it in the spare slot on the
-    // channel row, where it was left with 38 px and rendered as "STIM.".
     EditorLayout::layoutCommonContents (
         *this,
-        { m_triggersButton.get(),
-          m_monitorButton.get(),
-          m_analysisButton.get(),
-          m_stimulusButton.get() },
+        { m_triggersButton.get(), m_monitorButton.get(), m_analysisButton.get() },
         m_channelsLabel.get(),
         m_preLabel.get(),
         m_postLabel.get());
@@ -94,17 +85,6 @@ void BarMapperEditor::resized()
 void BarMapperEditor::setTriggerCount (int count)
 {
     m_triggersButton->setLabel (count > 0 ? "TRIGGERS (" + String (count) + ")" : "TRIGGERS");
-
-    // The sweeps button carries the count of directions that actually have an
-    // angle, which is not the same number: a source with no angle contributes
-    // nothing to the map. "TRIGGERS (8)" beside "SWEEPS (6)" is the fastest way
-    // to see that two directions were never filled in.
-    if (auto* node = getNode())
-    {
-        const auto configured = static_cast<int> (node->getSweepAngles().size());
-        m_stimulusButton->setLabel (configured > 0 ? "SWEEPS (" + String (configured) + ")"
-                                                   : "SWEEPS");
-    }
 }
 
 Visualizer* BarMapperEditor::createNewCanvas()
@@ -165,11 +145,6 @@ void BarMapperEditor::buttonClicked (Button* button)
     {
         CoreServices::getPopupManager()->showPopup (
             std::make_unique<RfAnalysisSettingsWindow> (node, acquisitionIsActive, button), button);
-    }
-    else if (button == m_stimulusButton.get())
-    {
-        CoreServices::getPopupManager()->showPopup (
-            std::make_unique<StimulusConfigWindow> (node, acquisitionIsActive, button), button);
     }
 }
 

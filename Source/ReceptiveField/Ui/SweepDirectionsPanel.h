@@ -26,6 +26,7 @@
 
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
+#include <functional>
 #include <vector>
 
 namespace EventTriggered
@@ -60,17 +61,35 @@ private:
     std::vector<Arrow> m_arrows;
 };
 
-/** The angle table, the compass, and the direction generator. */
-class StimulusConfigWindow : public PopupComponent,
+/** One arrow per trigger source that has an angle, in the node's current
+ *  convention. Shared by RfAnalysisSettingsWindow's inline compass and
+ *  SweepDirectionsPanel, so the two never compute it two different ways. */
+std::vector<CompassPreview::Arrow> buildCompassArrows (BarMapperNode& node);
+
+/** The angle-set warnings (missing angles, duplicates, ...), joined into one
+ *  line, or empty if there are none. Same sharing reason as buildCompassArrows. */
+juce::String describeAngleWarnings (BarMapperNode& node);
+
+/** The angle table and the direction generator, opened from a button beside
+ *  RfAnalysisSettingsWindow's compass rather than shown inline -- the table,
+ *  the convention selectors and the generator's five controls do not fit next
+ *  to the mapping parameters without crowding them. Launched as a nested
+ *  call-out (see NestedCallOut.h); a fresh instance each time, so it always
+ *  opens showing the node's current state. */
+class SweepDirectionsPanel : public juce::Component,
                              public juce::Button::Listener,
                              public juce::Label::Listener,
                              public juce::ComboBox::Listener
 {
 public:
-    StimulusConfigWindow (BarMapperNode* node, bool acquisitionIsActive, juce::Component* anchor);
-    ~StimulusConfigWindow() override;
+    SweepDirectionsPanel (BarMapperNode* node, bool acquisitionIsActive);
+    ~SweepDirectionsPanel() override;
 
-    void updatePopup() override;
+    /** Fires whenever an edit here could have changed what the compass or the
+        warning line outside this popout should show -- an angle typed in, the
+        convention changed, or REPLACE regenerating the sources. The popout
+        does not own either, so it reports the change instead of drawing it. */
+    std::function<void()> onChanged;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -80,8 +99,9 @@ public:
     void comboBoxChanged (juce::ComboBox* box) override;
 
 private:
+    void refresh();
     void rebuildRows();
-    void refreshCompass();
+    void refreshWarnings();
     void applyGeneratedDirections();
 
     /** The generator settings as the controls currently read. */
@@ -137,10 +157,9 @@ private:
      *  never fires" from a debugging session into a misspelling you can read. */
     std::unique_ptr<juce::Label> m_previewLabel;
 
-    std::unique_ptr<CompassPreview> m_compass;
     std::unique_ptr<juce::Label> m_warningLabel;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StimulusConfigWindow)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SweepDirectionsPanel)
 };
 
 } // namespace EventTriggered

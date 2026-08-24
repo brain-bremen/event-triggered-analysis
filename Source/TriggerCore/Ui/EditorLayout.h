@@ -109,10 +109,9 @@ inline std::unique_ptr<juce::Label> makeCaptionLabel (const juce::String& text)
  *    at in row two), both computed from the same triggersWidth/otherWidth/
  *    channelsCaptionWidth row one and two use.
  *
- *  Any number of buttons is accepted, sharing one column template; three
- *  (TRIGGERS, MONITOR, ANALYSIS) for TriggeredAverage, TriggeredPower and
- *  TriggeredCoherence, four for ReceptiveFieldBarMapper, whose SWEEPS button
- *  belongs beside its siblings rather than squeezed onto another row.
+ *  Any number of buttons is accepted, sharing one column template -- currently
+ *  three (TRIGGERS, MONITOR, ANALYSIS) for every plugin in this repository,
+ *  but a fourth is a caller decision, not a limit of this function.
  *
  *  Placement is by named `grid-template-areas` string, not by numeric
  *  row/column line (`GridItem::withArea(1, 2)` and friends): this GUI's
@@ -182,7 +181,7 @@ inline void layoutCommonContents (GenericEditor& editor,
         if (button != nullptr)
             present.add (button);
 
-    // --- Row 1: TRIGGERS / MONITOR / ANALYSIS [/ SWEEPS] ------------------------
+    // --- Row 1: TRIGGERS / MONITOR / ANALYSIS [/ ...] ---------------------------
     int triggersWidth = width;
     int otherWidth = width;
 
@@ -207,8 +206,8 @@ inline void layoutCommonContents (GenericEditor& editor,
         for (int i = 0; i < count; ++i)
             grid.templateColumns.add (Track (Px (i == 0 ? triggersWidth : otherWidth)));
 
-        // Area names are generated rather than written out, so a fourth button
-        // (ReceptiveFieldBarMapper's SWEEPS) needs no second copy of this block.
+        // Area names are generated rather than written out, so a caller with a
+        // fourth button needs no second copy of this block.
         juce::StringArray areaNames;
 
         for (int i = 0; i < count; ++i)

@@ -77,9 +77,9 @@ A direction reaches the plugin through three mechanisms, deliberately kept apart
 - the **angle** each source stands for is typed in by the user, and is the one thing nothing can
   verify.
 
-So the plugin parses no messages and knows no message grammar. It does own the angle table, under
-**SWEEPS**: one row per trigger source, showing what arms it and what angle it means, with a
-generator that replaces the sources with evenly spaced directions.
+So the plugin parses no messages and knows no message grammar. It does own the angle table,
+behind **ANALYSIS → DIRECTIONS...**: one row per trigger source, showing what arms it and what
+angle it means, with a generator that replaces the sources with evenly spaced directions.
 
 The generator is configured to your stimulus program, because the message form is its business
 and not the plugin's:

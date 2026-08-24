@@ -18,7 +18,7 @@
 #
 # Everything else in rf_math is about bars specifically -- BackProjection,
 # ResponseProfile (time to space along an axis of motion), SweepGeometry,
-# RfSimulator, RfPipeline -- as is SweepAngles, StimulusConfigWindow and
+# RfSimulator, RfPipeline -- as is SweepAngles, SweepDirectionsPanel and
 # BarMapperNode itself.
 #
 # Deliberately not split into two libraries yet. The boundary above is real, but
@@ -47,8 +47,8 @@ oe_add_plugin(ReceptiveFieldBarMapper average_core
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapPanel.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/StimulusConfigWindow.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/StimulusConfigWindow.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/SweepDirectionsPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/SweepDirectionsPanel.h
 )
 
 target_link_libraries(ReceptiveFieldBarMapper PRIVATE rf_math)

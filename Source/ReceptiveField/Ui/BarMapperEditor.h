@@ -22,7 +22,6 @@
 */
 #pragma once
 
-#include "TriggerCore/Ui/EditorLayout.h"
 #include "TriggerCore/Ui/TriggerCountDisplay.h"
 
 #include <EditorHeaders.h>
@@ -41,19 +40,16 @@ class TriggerSource;
  *
  *  Deliberately the same shape as the other three: TRIGGERS / MONITOR / ANALYSIS
  *  across the top, channels below, Pre and Post at the bottom, all placed by the
- *  shared EditorLayout::layoutCommonContents. A plugin in this repository that
- *  laid its editor out differently would look like a different piece of software
- *  sitting in the same signal chain.
+ *  shared EditorLayout::layoutCommonContents, at the shared
+ *  EditorLayout::totalWidth. A plugin in this repository that laid its editor
+ *  out differently would look like a different piece of software sitting in
+ *  the same signal chain.
  *
- *  The one addition to the button row is SWEEPS, which opens the angle table;
- *  DEMO takes the spare slot on the channel row, the same one TriggeredCoherence
- *  puts CH PAIRS in. The editor is wider than its siblings by exactly the fourth
- *  button — three buttons' worth of width could not hold four labels, and every
- *  attempt to fit them ended in truncation ("STIM.") or overlap.
+ *  The angle table, the compass preview and the direction generator that used
+ *  to sit behind a fourth button (SWEEPS) now live inside ANALYSIS's popup --
+ *  see RfAnalysisSettingsWindow -- rather than costing the editor a button's
+ *  worth of extra width that none of its siblings had.
  */
-/** Wider than EditorLayout::totalWidth by one button, for SWEEPS. */
-constexpr int editorWidth = EditorLayout::totalWidth + 90;
-
 class BarMapperEditor : public VisualizerEditor,
                  public Button::Listener,
                  public TriggerCountDisplay
@@ -81,16 +77,6 @@ private:
     std::unique_ptr<UtilityButton> m_triggersButton;
     std::unique_ptr<UtilityButton> m_monitorButton;
     std::unique_ptr<UtilityButton> m_analysisButton;
-
-    /** Opens the angle table and the compass preview. Shows the direction count,
-        so a set that is half configured is visible without opening it. */
-    std::unique_ptr<UtilityButton> m_stimulusButton;
-
-    /** Fills the plugin with the paper's simulation so it can be driven with no
-     *  rig. Kept as a visibly separate control, never a saved parameter, and
-     *  always accompanied by the badge — a simulated receptive-field map is
-     *  entirely convincing, and it must be impossible to screenshot one and
-     *  later mistake it for a recording. */
 
     std::unique_ptr<Label> m_channelsLabel;
     std::unique_ptr<Label> m_preLabel;
