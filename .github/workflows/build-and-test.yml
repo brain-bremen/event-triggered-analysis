@@ -245,3 +245,33 @@ jobs:
             plugin/Build/TriggeredCoherence.so
             plugin/Build/TriggeredAverage.so
           if-no-files-found: error
+
+  # Builds the site without deploying it, so a dead link or a missing page fails
+  # a pull request rather than a release. mkdocs.yml sets strict: true, which is
+  # what turns those warnings into a non-zero exit.
+  #
+  # Deployment happens only in release.yml.
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The docs toolchain is a uv project in Docs/, pinned by Docs/uv.lock, so
+      # CI builds the site with exactly the versions that were reviewed locally.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: Docs/uv.lock
+
+      - name: Build the site
+        run: uv run --project Docs --locked mkdocs build
+
+      - name: Upload the built site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: Build/site
+          if-no-files-found: error

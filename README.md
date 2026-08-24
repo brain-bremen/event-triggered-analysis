@@ -4,6 +4,13 @@ Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that 
 continuous data in windows locked to an event — a TTL edge, a broadcast message, and in
 time spikes.
 
+📖 **[Documentation](https://brain-bremen.github.io/event-triggered-analysis/)** — every
+parameter, the trigger and message model, and how to read a saved session in
+[Python](https://brain-bremen.github.io/event-triggered-analysis/sessions/python/) or
+[MATLAB](https://brain-bremen.github.io/event-triggered-analysis/sessions/matlab/). The
+source is in [`Docs/`](Docs/); the changelog moved there too, to
+[`Docs/changelog.md`](Docs/changelog.md).
+
 Four plugins are built from this repository:
 
 | Plugin | Status | What it shows |
