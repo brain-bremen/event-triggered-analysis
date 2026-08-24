@@ -42,6 +42,14 @@ struct RfResults
         even after the selection has changed underneath. */
     std::vector<int> channelIndices;
 
+    /** The settings these were computed with.
+     *
+     *  Carried alongside the maps rather than re-read from the node by whoever
+     *  draws them: a colour scale labelled from the *current* parameters would
+     *  name the wrong unit for the map in front of it for as long as a recompute
+     *  takes. */
+    Rf::MappingSettings settings;
+
     /** Incremented on every completed recompute, so a reader can tell whether
         what it is holding is stale without comparing whole maps. */
     std::uint64_t generation = 0;

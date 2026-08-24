@@ -92,6 +92,7 @@ void RfComputeJob::run()
             continue;
 
         RfResults results;
+        results.settings = settings;
         results.channelIndices = std::move (channelIndices);
         results.channels.reserve (tracesPerChannel.size());
 

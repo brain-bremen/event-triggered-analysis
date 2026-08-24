@@ -27,6 +27,8 @@
 
 #include <VisualizerWindowHeaders.h>
 
+#include <utility>
+
 namespace EventTriggered
 {
 
@@ -52,17 +54,32 @@ public:
     void setShowPolargram (bool show);
 
     /** Fixes the colour scale across panels, so channels are comparable.
-        Passing an empty range restores per-panel auto-scaling. */
+        Passing shared == false restores this panel's own auto-scaling and
+        ignores the range. */
     void setSharedColourRange (bool shared, float low, float high);
+
+    /** What one map value is, in words, for the colour scale's caption.
+     *
+     *  Depends on the combine mode and on whether the profiles were rectified,
+     *  neither of which the map itself records — so it is handed down from the
+     *  results rather than guessed at here. */
+    void setValueUnit (const juce::String& unit);
 
     void paint (juce::Graphics& g) override;
     void resized() override;
 
 private:
     void rebuildImage();
+
+    /** Low and high ends of the colour scale actually in force: the shared range
+        when one is set, this panel's own min and max otherwise. */
+    std::pair<float, float> colourRange() const;
+
+    void paintColourScale (juce::Graphics& g, juce::Rectangle<int> area) const;
     void paintPolargram (juce::Graphics& g, juce::Rectangle<int> area) const;
 
     juce::String m_channelName;
+    juce::String m_valueUnit { "z" };
     Rf::ChannelMapping m_mapping;
     juce::Image m_image;
 
@@ -102,6 +119,7 @@ private:
 
     juce::OwnedArray<RfMapPanel> m_panels;
     std::vector<Rf::ChannelMapping> m_mappings;
+    juce::String m_valueUnit { "z" };
 
     int m_columns = 4;
     int m_panelHeight = 220;

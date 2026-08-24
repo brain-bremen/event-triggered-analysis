@@ -47,6 +47,56 @@ namespace
     }
 
     constexpr int labelHeight = 18;
+
+    /** The colour scale's own column, to the right of the map: the gradient
+     *  strip, its numbers, and the caption naming the unit underneath.
+     *
+     *  Beside the map rather than inset over it. The polargram already covers one
+     *  corner, and a scale that hides map pixels is a scale that has to be
+     *  switched off to read the thing it explains. */
+    constexpr int scaleStripWidth = 10;
+    constexpr int scaleNumberWidth = 34;
+    constexpr int scaleGap = 4;
+    constexpr int scaleCaptionHeight = 12;
+    constexpr int scaleColumnWidth = scaleGap + scaleStripWidth + 2 + scaleNumberWidth;
+
+    /** Enough digits to tell two ends of the scale apart, and no more: the
+        numbers sit in 34 px. */
+    String formatScaleValue (float value)
+    {
+        const float magnitude = std::abs (value);
+
+        if (magnitude >= 100.0f)
+            return String (roundToInt (value));
+        if (magnitude >= 10.0f)
+            return String (value, 1);
+        if (magnitude >= 1.0f)
+            return String (value, 2);
+
+        return String (value, 3);
+    }
+
+    /** The degree sign, as an explicit code point rather than a literal: the
+        source file's encoding is not something a build should have to be right
+        about. Same reasoning as SweepAngles::generateDirections. */
+    String degreeSign()
+    {
+        return String::charToString (static_cast<juce_wchar> (0x00B0));
+    }
+
+    /** What one map value is, given how it was made.
+     *
+     *  The profiles are z-scored per direction, so a map pixel is in units of the
+     *  spontaneous SD of that channel -- but only until the combine mode changes.
+     *  A mean or a signed geometric mean of z-scores is still a z-score; a plain
+     *  product of n of them is a z to the nth, and calling that "z" is how a
+     *  number that grew by a factor of 100 gets read as a stronger response. */
+    String mapValueUnit (const Rf::MappingSettings& settings)
+    {
+        const String base = settings.profile.useAbsoluteValue ? "|z|" : "z";
+
+        return settings.backProjection.combine == Rf::CombineMode::Product ? base + "^n" : base;
+    }
 } // namespace
 
 // --- RfMapPanel ------------------------------------------------------------
@@ -83,6 +133,28 @@ void RfMapPanel::setSharedColourRange (bool shared, float low, float high)
     repaint();
 }
 
+void RfMapPanel::setValueUnit (const String& unit)
+{
+    if (m_valueUnit == unit)
+        return;
+
+    m_valueUnit = unit;
+    repaint();
+}
+
+std::pair<float, float> RfMapPanel::colourRange() const
+{
+    if (m_sharedColourRange)
+        return { m_sharedLow, m_sharedHigh };
+
+    if (m_mapping.map.isEmpty())
+        return { 0.0f, 1.0f };
+
+    const auto& values = m_mapping.map.values();
+    const auto [minIt, maxIt] = std::minmax_element (values.begin(), values.end());
+    return { *minIt, *maxIt };
+}
+
 void RfMapPanel::rebuildImage()
 {
     if (! m_mapping.valid || m_mapping.map.isEmpty())
@@ -93,17 +165,7 @@ void RfMapPanel::rebuildImage()
 
     const int pixels = m_mapping.map.pixels();
 
-    float low = m_sharedLow;
-    float high = m_sharedHigh;
-
-    if (! m_sharedColourRange)
-    {
-        const auto& values = m_mapping.map.values();
-        const auto [minIt, maxIt] = std::minmax_element (values.begin(), values.end());
-        low = *minIt;
-        high = *maxIt;
-    }
-
+    const auto [low, high] = colourRange();
     const float range = std::max (1e-9f, high - low);
 
     // Rasterised once per result rather than in paint(): a 201x201 map redrawn
@@ -129,16 +191,25 @@ void RfMapPanel::paint (Graphics& g)
     auto labelArea = bounds.removeFromTop (labelHeight);
     g.drawText (m_channelName, labelArea, Justification::centredLeft, true);
 
+    // What the numbers on this line are is the whole reason they are spelled out
+    // rather than abbreviated: "2.4 deg z=5.3 n=12" needed a key to read, and the
+    // one number it did label -- the peak -- is now the top of the colour scale,
+    // where it says what it is by standing next to the colour it belongs to.
     if (m_mapping.valid && m_mapping.estimate.valid && m_mapping.estimate.equivalentDiameterDeg > 0.0)
     {
         g.setColour (Colours::lightgrey);
         g.setFont (FontOptions (11.0f));
-        g.drawText (String (m_mapping.estimate.equivalentDiameterDeg, 1) + " deg  z="
-                        + String (m_mapping.estimate.peak, 1) + "  n=" + String (m_mapping.minimumTrialCount),
+        g.drawText ("RF " + String (m_mapping.estimate.equivalentDiameterDeg, 1) + degreeSign()
+                        + "   n = " + String (m_mapping.minimumTrialCount),
                     labelArea,
                     Justification::centredRight,
                     true);
     }
+
+    // The colour scale takes its column before the map is sized, so the map stays
+    // square rather than being squeezed into what is left over.
+    const bool showScale = m_image.isValid() && bounds.getWidth() > scaleColumnWidth * 3;
+    Rectangle<int> scaleArea = showScale ? bounds.removeFromRight (scaleColumnWidth) : Rectangle<int>();
 
     // Square, so degrees per pixel is the same in x and y. A stretched map would
     // make a circular receptive field look elliptical, which is a property people
@@ -157,6 +228,9 @@ void RfMapPanel::paint (Graphics& g)
     }
 
     g.drawImage (m_image, mapArea.toFloat());
+
+    if (showScale)
+        paintColourScale (g, scaleArea.withY (mapArea.getY()).withHeight (mapArea.getHeight()));
 
     const Rf::MapGeometry& geometry = m_mapping.map.geometry();
     const double scale = static_cast<double> (mapArea.getWidth()) / geometry.pixels;
@@ -189,6 +263,67 @@ void RfMapPanel::paint (Graphics& g)
 
     g.setColour (Colours::darkgrey);
     g.drawRect (mapArea, 1);
+}
+
+void RfMapPanel::paintColourScale (Graphics& g, Rectangle<int> area) const
+{
+    const auto [low, high] = colourRange();
+
+    area.removeFromLeft (scaleGap);
+    const Rectangle<int> caption = area.removeFromBottom (scaleCaptionHeight);
+
+    Rectangle<int> strip = area.removeFromLeft (scaleStripWidth);
+    area.removeFromLeft (2);
+
+    if (strip.getHeight() < 8)
+        return;
+
+    // Drawn line by line rather than as a ColourGradient: jet is not a linear
+    // interpolation between two colours, and a two-stop gradient would draw a
+    // scale that does not match the image it is a key to.
+    for (int y = 0; y < strip.getHeight(); ++y)
+    {
+        const float t = 1.0f - static_cast<float> (y) / static_cast<float> (strip.getHeight() - 1);
+        g.setColour (jetColour (t));
+        g.fillRect (strip.getX(), strip.getY() + y, strip.getWidth(), 1);
+    }
+
+    g.setColour (Colours::darkgrey);
+    g.drawRect (strip, 1);
+
+    // Where this panel's own peak falls on a scale it does not set. Only under
+    // SAME SCALE: with per-panel scaling the peak is the top of the bar by
+    // construction, and a tick there says nothing.
+    if (m_sharedColourRange && m_mapping.estimate.valid && high > low)
+    {
+        const float t = jlimit (0.0f, 1.0f, (m_mapping.estimate.peak - low) / (high - low));
+        const int y = strip.getBottom() - roundToInt (t * (strip.getHeight() - 1));
+
+        g.setColour (Colours::white);
+        g.drawLine (static_cast<float> (strip.getX() - 3),
+                    static_cast<float> (y),
+                    static_cast<float> (strip.getRight() + 3),
+                    static_cast<float> (y),
+                    1.0f);
+    }
+
+    g.setFont (FontOptions (10.0f));
+    g.setColour (Colours::lightgrey);
+
+    const auto label = [&] (float value, int y, Justification justification) {
+        g.drawText (formatScaleValue (value),
+                    Rectangle<int> (area.getX(), y, area.getWidth(), 11),
+                    justification,
+                    false);
+    };
+
+    label (high, strip.getY(), Justification::centredLeft);
+    label (0.5f * (low + high), strip.getCentreY() - 5, Justification::centredLeft);
+    label (low, strip.getBottom() - 11, Justification::centredLeft);
+
+    g.setFont (FontOptions (10.0f));
+    g.setColour (Colours::grey);
+    g.drawText (m_valueUnit, caption, Justification::centredLeft, false);
 }
 
 void RfMapPanel::paintPolargram (Graphics& g, Rectangle<int> area) const
@@ -263,12 +398,14 @@ void RfMapGrid::setResults (const RfResults& results, const StringArray& channel
     }
 
     m_mappings = results.channels;
+    m_valueUnit = mapValueUnit (results.settings);
 
     for (int i = 0; i < m_panels.size(); ++i)
     {
         m_panels[i]->setChannelName (i < channelNames.size() ? channelNames[i]
                                                              : "CH " + String (i + 1));
         m_panels[i]->setShowPolargram (m_showPolargram);
+        m_panels[i]->setValueUnit (m_valueUnit);
         m_panels[i]->setMapping (m_mappings[static_cast<std::size_t> (i)]);
     }
 
@@ -299,8 +436,17 @@ void RfMapGrid::applyColourRange()
         high = std::max (high, *maxIt);
     }
 
+    // Nothing valid to share a scale over -- an empty grid, or every map still
+    // waiting for its first trial. Falling back to per-panel scaling rather than
+    // returning: leaving the panels on whatever range was last shared would
+    // label the next map with numbers from the previous one.
     if (low > high)
+    {
+        for (auto* panel : m_panels)
+            panel->setSharedColourRange (false, 0.0f, 1.0f);
+
         return;
+    }
 
     for (auto* panel : m_panels)
         panel->setSharedColourRange (true, low, high);
@@ -370,7 +516,7 @@ void RfMapGrid::paint (Graphics& g)
     {
         g.setColour (Colours::grey);
         g.setFont (FontOptions (15.0f));
-        g.drawText ("No maps yet. Select channels, configure directions under STIMULUS, "
+        g.drawText ("No maps yet. Select channels, configure directions under SWEEPS, "
                     "and record some trials.",
                     getLocalBounds().reduced (20),
                     Justification::centredTop,
