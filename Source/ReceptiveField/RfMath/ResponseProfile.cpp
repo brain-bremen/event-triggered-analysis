@@ -142,9 +142,62 @@ std::vector<float> absoluteValue (std::span<const float> values)
     return result;
 }
 
+std::vector<float> decimate (std::span<const float> values, int factor)
+{
+    if (factor <= 1 || values.empty())
+        return { values.begin(), values.end() };
+
+    const std::size_t blocks = values.size() / static_cast<std::size_t> (factor);
+
+    std::vector<float> result (blocks);
+
+    for (std::size_t block = 0; block < blocks; ++block)
+    {
+        double sum = 0.0;
+
+        for (int k = 0; k < factor; ++k)
+            sum += values[block * static_cast<std::size_t> (factor) + static_cast<std::size_t> (k)];
+
+        result[block] = static_cast<float> (sum / factor);
+    }
+
+    return result;
+}
+
+int decimationFactor (double sampleRateHz,
+                      const SweepGeometry& sweep,
+                      const ProfileOptions& options)
+{
+    if (options.targetStepDeg <= 0.0 || sampleRateHz <= 0.0 || ! sweep.isValid())
+        return 1;
+
+    // Smoothing off means the caller asked for the trace as recorded. There is
+    // then no low-pass in front of the decimation but the block average itself,
+    // and no reason to spend accuracy on speed that is already there.
+    if (options.smoothingSigmaMs <= 0.0)
+        return 1;
+
+    const double stepDeg = sweep.speedDegPerSec / sampleRateHz;
+
+    if (! (stepDeg > 0.0))
+        return 1;
+
+    // Ceiling one: never coarser than the caller says the map can read.
+    const double byResolution = options.targetStepDeg / stepDeg;
+
+    // Ceiling two: never coarser than the Gaussian can be drawn on. Ten samples
+    // per sigma puts the truncation at 4 sigma forty samples out, which is far
+    // more than enough to keep the kernel a Gaussian rather than a staircase.
+    constexpr double samplesPerSigma = 10.0;
+    const double sigmaSamples = options.smoothingSigmaMs * sampleRateHz / 1000.0;
+    const double bySmoothing = sigmaSamples / samplesPerSigma;
+
+    return std::max (1, static_cast<int> (std::floor (std::min (byResolution, bySmoothing))));
+}
+
 SpatialProfile toSpatialProfile (std::span<const float> trace,
                                  double sampleRateHz,
-                                 int preSamples,
+                                 double preSamples,
                                  const SweepGeometry& sweep)
 {
     SpatialProfile profile;
@@ -154,7 +207,7 @@ SpatialProfile toSpatialProfile (std::span<const float> trace,
     if (sampleRateHz <= 0.0 || ! sweep.isValid())
         return profile;
 
-    const double firstSampleTimeSec = -static_cast<double> (preSamples) / sampleRateHz;
+    const double firstSampleTimeSec = -preSamples / sampleRateHz;
     const double latencySec = sweep.latencyMs / 1000.0;
 
     profile.startDeg = (firstSampleTimeSec - latencySec) * sweep.speedDegPerSec + sweep.sweepStartDeg;
@@ -169,15 +222,35 @@ SpatialProfile makeProfile (std::span<const float> trace,
                             const SweepGeometry& sweep,
                             const ProfileOptions& options)
 {
+    // z-scored at the full rate, before anything is thrown away: the spontaneous
+    // rate and the SD about zero are measured over the whole baseline, and
+    // measuring them over a decimated one would change the scale of every map.
     std::vector<float> working = zScore (trace, options.zScore);
 
-    const double sigmaSamples = options.smoothingSigmaMs * sampleRateHz / 1000.0;
+    const int factor = decimationFactor (sampleRateHz, sweep, options);
+    const double effectiveRateHz = sampleRateHz / factor;
+
+    // A block-averaged sample stands for the centre of its block, so the trigger
+    // is (factor - 1) / 2 samples closer to the first one than it was. Carried
+    // through as a fraction rather than rounded: at the factors this reaches --
+    // 75 at the shipped defaults -- rounding it away would displace the whole
+    // profile by most of a map pixel, in the direction of motion, which is
+    // indistinguishable from getting the latency wrong.
+    double effectivePreSamples = preSamples;
+
+    if (factor > 1)
+    {
+        working = decimate (working, factor);
+        effectivePreSamples = (preSamples - 0.5 * (factor - 1)) / factor;
+    }
+
+    const double sigmaSamples = options.smoothingSigmaMs * effectiveRateHz / 1000.0;
     working = gaussianSmooth (working, sigmaSamples);
 
     if (options.useAbsoluteValue)
         working = absoluteValue (working);
 
-    return toSpatialProfile (working, sampleRateHz, preSamples, sweep);
+    return toSpatialProfile (working, effectiveRateHz, effectivePreSamples, sweep);
 }
 
 } // namespace EventTriggered::Rf

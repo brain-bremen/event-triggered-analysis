@@ -41,6 +41,21 @@ namespace
         std::vector<SpatialProfile> profiles;
         profiles.reserve (traces.size());
 
+        ProfileOptions profileOptions = settings.profile;
+
+        // The profile only ever gets read at map resolution, by nearest
+        // neighbour, so there is nothing to be had from carrying it at the
+        // recording's. A quarter of a pixel leaves the decimation error four
+        // times finer than the quantisation the lookup already imposes -- so the
+        // map is the same map, and the smoothing stops being the most expensive
+        // thing in the plugin by three orders of magnitude.
+        //
+        // Set here rather than by the caller because it is a property of the map
+        // the profiles are being built for, and RfMath is the only place that
+        // knows both halves.
+        if (profileOptions.targetStepDeg <= 0.0 && settings.map.isValid())
+            profileOptions.targetStepDeg = 0.25 * settings.map.degreesPerPixel;
+
         for (const DirectionTrace& direction : traces)
         {
             if (direction.trace.empty() || ! direction.sweep.isValid())
@@ -54,7 +69,7 @@ namespace
                 sweep.latencyMs = settings.commonLatencyMs;
 
             profiles.push_back (makeProfile (
-                direction.trace, settings.sampleRateHz, settings.preSamples, sweep, settings.profile));
+                direction.trace, settings.sampleRateHz, settings.preSamples, sweep, profileOptions));
         }
 
         return profiles;

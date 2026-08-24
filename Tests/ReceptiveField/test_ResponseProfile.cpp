@@ -252,3 +252,113 @@ TEST (ResponseProfile, MakeProfileRunsTheStepsInThePapersOrder)
     EXPECT_NEAR (peakPositionDeg, -15.0 + 16.0, 0.2);
     EXPECT_NEAR (profile.canonicalAngleDeg, 0.0, 1e-9);
 }
+
+// --- Decimation ------------------------------------------------------------
+//
+// The profile is carried at the recording's sample rate and read at the map's,
+// which at 30 kHz and 0.1-degree pixels is 300x more samples than anything looks
+// at. Since the Gaussian's cost is quadratic in that oversampling -- once at the
+// sample count, again at the kernel width -- it is the whole cost of a recompute.
+
+TEST (ResponseProfile, DecimateBlockAveragesAndDropsThePartialTail)
+{
+    const std::vector<float> values { 1.0f, 3.0f, 5.0f, 7.0f, 9.0f, 11.0f, 13.0f };
+
+    // Three whole blocks of two; the odd sample at the end is dropped rather than
+    // averaged over a shorter span, so every returned sample means the same thing.
+    const std::vector<float> byTwo = decimate (values, 2);
+    ASSERT_EQ (byTwo.size(), 3u);
+    EXPECT_FLOAT_EQ (byTwo[0], 2.0f);
+    EXPECT_FLOAT_EQ (byTwo[1], 6.0f);
+    EXPECT_FLOAT_EQ (byTwo[2], 10.0f);
+
+    EXPECT_EQ (decimate (values, 1), values);
+    EXPECT_EQ (decimate (values, 0), values);
+}
+
+TEST (ResponseProfile, DecimationIsBoundedByBothTheMapAndTheSmoothing)
+{
+    SweepGeometry sweep;
+    sweep.speedDegPerSec = 10.0;
+
+    ProfileOptions options;
+    options.smoothingSigmaMs = 100.0;
+
+    // Off by default: a caller that says nothing gets every sample it recorded.
+    EXPECT_EQ (decimationFactor (30000.0, sweep, options), 1);
+
+    // At 30 kHz a sample is 10/30000 = 0.000333 deg. A quarter-pixel ceiling of
+    // 0.025 deg allows 75; sigma is 3000 samples, which at ten per sigma allows
+    // 300. The map is the binding constraint.
+    options.targetStepDeg = 0.025;
+    EXPECT_EQ (decimationFactor (30000.0, sweep, options), 75);
+
+    // Shorten the smoothing and it becomes the binding one: sigma is now 30
+    // samples, so ten per sigma allows only 3.
+    options.smoothingSigmaMs = 1.0;
+    EXPECT_EQ (decimationFactor (30000.0, sweep, options), 3);
+
+    // No smoothing means the caller asked for the trace as recorded.
+    options.smoothingSigmaMs = 0.0;
+    EXPECT_EQ (decimationFactor (30000.0, sweep, options), 1);
+}
+
+TEST (ResponseProfile, ADecimatedProfileStandsInTheSamePlaceAsAFullRateOne)
+{
+    // The claim the whole optimisation rests on. A block-averaged sample stands
+    // for the centre of its block, so a profile built on it has to be offset by
+    // half a block or the response lands somewhere else along the axis of motion
+    // -- which is indistinguishable from getting the latency wrong.
+    constexpr double rate = 30000.0;
+    constexpr int preSamples = 15000;
+
+    SweepGeometry sweep;
+    sweep.speedDegPerSec = 10.0;
+    sweep.sweepStartDeg = -15.0;
+    sweep.latencyMs = 0.0;
+
+    // A narrow bump well inside the window, so its position is unambiguous.
+    std::vector<float> trace (45000, 0.0f);
+    for (int i = 20000; i < 20600; ++i)
+        trace[static_cast<std::size_t> (i)] = 1.0f;
+
+    ProfileOptions options;
+    options.zScore.source = BaselineSource::PreTrigger;
+    options.zScore.preTriggerSamples = preSamples;
+    options.smoothingSigmaMs = 100.0;
+
+    const SpatialProfile full = makeProfile (trace, rate, preSamples, sweep, options);
+
+    options.targetStepDeg = 0.025;
+    const SpatialProfile decimated = makeProfile (trace, rate, preSamples, sweep, options);
+
+    ASSERT_LT (decimated.values.size(), full.values.size() / 50);
+
+    const auto centroidDeg = [] (const SpatialProfile& profile) {
+        double weighted = 0.0;
+        double total = 0.0;
+        for (std::size_t i = 0; i < profile.values.size(); ++i)
+        {
+            const double weight = std::max (0.0f, profile.values[i]);
+            weighted += weight * (profile.startDeg + profile.stepDeg * static_cast<double> (i));
+            total += weight;
+        }
+        return weighted / total;
+    };
+
+    // Well inside one map pixel (0.1 deg) of each other -- so the back-projection
+    // reads the same value at the same place, and the map is the same map.
+    EXPECT_NEAR (centroidDeg (decimated), centroidDeg (full), 0.01);
+
+    // The first sample does *not* sit where the full-rate one does, and must not:
+    // it is the average of a whole block, so it stands for that block's centre,
+    // half a block later. Asserted exactly rather than loosely, because this
+    // offset is the entire correction -- drop it and every map slides along each
+    // direction of motion by half a block, which reads as a latency error.
+    const int factor = decimationFactor (rate, sweep, options);
+    ASSERT_GT (factor, 1);
+
+    EXPECT_NEAR (decimated.startDeg - full.startDeg,
+                 0.5 * (factor - 1) * full.stepDeg,
+                 1e-9);
+}

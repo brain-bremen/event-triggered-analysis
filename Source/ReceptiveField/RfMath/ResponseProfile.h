@@ -132,11 +132,28 @@ std::vector<float> absoluteValue (std::span<const float> values);
  *  (t - latency) * speed + sweepStart.
  *
  *  Latency correction is just an offset of `startDeg`, which is why scanning
- *  latencies costs nothing per candidate beyond rebuilding the map. */
+ *  latencies costs nothing per candidate beyond rebuilding the map.
+ *
+ *  `preSamples` is a double because after decimation it genuinely is fractional:
+ *  a block-averaged sample sits at the block's centre, not at its first sample.
+ *  Passing an int still works and means what it always did. */
 SpatialProfile toSpatialProfile (std::span<const float> trace,
                                  double sampleRateHz,
-                                 int preSamples,
+                                 double preSamples,
                                  const SweepGeometry& sweep);
+
+/** Block-averages `values` by `factor`, dropping any trailing partial block.
+ *
+ *  Averaged rather than subsampled: dropping samples outright would fold the
+ *  high-frequency noise the smoothing exists to remove back into the band it is
+ *  removing it from, which is the one way to make a decimated profile *worse*
+ *  than the full-rate one rather than indistinguishable from it.
+ *
+ *  The partial block at the end is dropped rather than averaged over whatever it
+ *  happens to contain, so that every returned sample stands for the same span and
+ *  the step stays uniform. It costs at most `factor - 1` samples off the end of
+ *  the sweep -- by construction under one map pixel. */
+std::vector<float> decimate (std::span<const float> values, int factor);
 
 /** Everything above, in the order the paper applies it. */
 struct ProfileOptions
@@ -144,7 +161,32 @@ struct ProfileOptions
     ZScoreOptions zScore {};
     double smoothingSigmaMs = 30.0;
     bool useAbsoluteValue = false;
+
+    /** Coarsest profile step worth keeping, in degrees along the axis of motion.
+     *  Zero -- the default -- keeps every recorded sample.
+     *
+     *  This is the difference between a recompute that takes milliseconds and one
+     *  that takes ten seconds a channel, and it costs nothing real. At 30 kHz and
+     *  10 deg/s a profile sample is 0.00033 degrees apart, while the map it is
+     *  read into has 0.1-degree pixels and is read by nearest neighbour: 299 of
+     *  every 300 smoothed samples are computed and never looked at. Set this to a
+     *  fraction of the map resolution and the Gaussian -- whose cost is quadratic
+     *  in the oversampling, once at the sample count and again at the kernel
+     *  width -- gets cheap without the map changing.
+     *
+     *  makeProfile() never decimates below what the smoothing itself needs, so
+     *  this is a ceiling on the step rather than a target. */
+    double targetStepDeg = 0.0;
 };
+
+/** How far makeProfile() will decimate, given the sweep and these options.
+ *
+ *  Exposed so the bound can be tested directly rather than inferred from a
+ *  profile's step. Returns 1 when nothing is to be gained -- including whenever
+ *  smoothing is off, since there is then no low-pass to justify a coarser grid. */
+int decimationFactor (double sampleRateHz,
+                      const SweepGeometry& sweep,
+                      const ProfileOptions& options);
 
 /** z-score, smooth, optionally rectify, then convert time to space. */
 SpatialProfile makeProfile (std::span<const float> trace,
