@@ -481,6 +481,7 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     // Same rule as ADD and CLEAR ALL, and for a stronger reason: loading
     // reallocates every per-source accumulator underneath the capture worker.
     m_loadButton->setEnabled (! acquisitionIsActive);
+    m_loadButton->addListener (this);
     addAndMakeVisible (m_loadButton.get());
 
     update();
