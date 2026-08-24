@@ -23,7 +23,7 @@
 #pragma once
 
 #include "../RfComputeJob.h"
-#include "RfMath/RfPipeline.h"
+#include "../RfMath/RfPipeline.h"
 
 #include <VisualizerWindowHeaders.h>
 

@@ -288,8 +288,9 @@ private:
         the thread that reads it. */
     ComputeInputs m_computeInputs;
 
-    /** Message thread only: read and written by the SWEEPS popup, and by
-        save/load. The compute thread has no interest in it. */
+    /** Message thread only: read and written by the sweep-directions panel
+        under ANALYSIS, and by save/load. The compute thread has no interest in
+        it. */
     DirectionGeneratorSpec m_generatorSpec;
 
     /** Gives a source the colour of the direction it stands for. Used where this

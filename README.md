@@ -4,6 +4,13 @@ Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that 
 continuous data in windows locked to an event — a TTL edge, a broadcast message, and in
 time spikes.
 
+📖 **[Documentation](https://brain-bremen.github.io/event-triggered-analysis/)** — every
+parameter, the trigger and message model, and how to read a saved session in
+[Python](https://brain-bremen.github.io/event-triggered-analysis/sessions/python/) or
+[MATLAB](https://brain-bremen.github.io/event-triggered-analysis/sessions/matlab/). The
+source is in [`Docs/`](Docs/); the changelog moved there too, to
+[`Docs/changelog.md`](Docs/changelog.md).
+
 Four plugins are built from this repository:
 
 | Plugin | Status | What it shows |
@@ -77,9 +84,9 @@ A direction reaches the plugin through three mechanisms, deliberately kept apart
 - the **angle** each source stands for is typed in by the user, and is the one thing nothing can
   verify.
 
-So the plugin parses no messages and knows no message grammar. It does own the angle table, under
-**SWEEPS**: one row per trigger source, showing what arms it and what angle it means, with a
-generator that replaces the sources with evenly spaced directions.
+So the plugin parses no messages and knows no message grammar. It does own the angle table,
+behind **ANALYSIS → DIRECTIONS...**: one row per trigger source, showing what arms it and what
+angle it means, with a generator that replaces the sources with evenly spaced directions.
 
 The generator is configured to your stimulus program, because the message form is its business
 and not the plugin's:
@@ -144,6 +151,22 @@ has no button in the editor yet.
 
 Every parameter, what it does to the map, and how to make the trial window and the sweep agree:
 [`Source/ReceptiveField/README.md`](Source/ReceptiveField/README.md).
+
+## Sessions
+
+**SAVE** and **LOAD**, at the right-hand end of every canvas's options bar, write and resume what
+has been accumulated so far. One component and one bundle format across all four plugins: a
+directory holding `session.xml` — provenance, trial geometry, channels, the array index and the
+processor's own configuration verbatim — plus one `.npy` per array and any exported figures. The
+sums rather than the averages, which is what makes it *resume* rather than *reload*.
+
+Saving works during acquisition; loading does not, and a session that does not match the current
+sample rate, trial window, channel count or trigger conditions is refused with the reasons rather
+than half-applied.
+
+The array tables, the manifest, and worked examples for reading one in Python or MATLAB:
+[Sessions](https://brain-bremen.github.io/event-triggered-analysis/sessions/), source in
+[`Docs/sessions/`](Docs/sessions/).
 
 ## Design notes
 

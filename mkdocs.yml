@@ -1,0 +1,146 @@
+# MkDocs configuration for the Event-Triggered Analysis documentation.
+#
+# The markdown lives in ./Docs rather than the conventional ./docs, so that the
+# directory reads as a sibling of Source/ and Tests/ in a repository that is
+# primarily a C++ project. docs_dir below is the only thing that depends on that
+# choice.
+#
+# Built and deployed by .github/workflows/release.yml on a version tag; built
+# without deploying by .github/workflows/build-and-test.yml, so a broken link or
+# a missing page fails a pull request rather than a release.
+
+site_name: Event-Triggered Analysis
+site_description: >-
+  Open Ephys GUI plugins for analysing continuous data in windows locked to an
+  event: triggered averages, power, coherence and receptive-field maps.
+site_author: Joscha Schmiedt
+site_url: https://brain-bremen.github.io/event-triggered-analysis/
+
+repo_url: https://github.com/brain-bremen/event-triggered-analysis
+repo_name: brain-bremen/event-triggered-analysis
+edit_uri: edit/main/Docs/
+
+copyright: Copyright &copy; 2025–2026 Joscha Schmiedt, Universität Bremen — GPL-3.0
+
+docs_dir: Docs
+site_dir: Build/site
+
+# Not pages: the note to whoever replaces the placeholders, the script that
+# writes them, and the uv project that builds this site. Excluded rather than
+# left out of the nav, so they are not built into the site at all.
+#
+# Docs/.venv needs no entry — MkDocs already ignores dot-directories.
+exclude_docs: |
+  assets/screenshots/README.md
+  assets/make_placeholders.py
+  pyproject.toml
+  uv.lock
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - toc.follow
+    - search.highlight
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.smartsymbols
+  - pymdownx.caret
+  - pymdownx.tilde
+  - pymdownx.keys
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/brain-bremen/event-triggered-analysis
+      name: The repository
+
+extra_css:
+  - assets/extra.css
+
+# Warnings become errors: a link to a page that was renamed, or a reference to a
+# screenshot that was never added, fails the build here rather than shipping a
+# dead link to the site.
+strict: true
+
+# Anchors are checked too, not only page paths. A #heading link that a later edit
+# renamed is exactly the kind of rot that survives a build otherwise.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Getting started: getting-started.md
+  - Triggers and messages: triggers.md
+  - Plugins:
+      - plugins/index.md
+      - Triggered Average: plugins/triggered-average.md
+      - Triggered Power: plugins/triggered-power.md
+      - Triggered Coherence: plugins/triggered-coherence.md
+      - Receptive Field Bar Mapper: plugins/receptive-field-mapper.md
+  - Parameter reference:
+      - reference/index.md
+      - Shared capture parameters: reference/capture.md
+      - Triggered Average: reference/triggered-average.md
+      - Spectral (Power & Coherence): reference/spectral.md
+      - Receptive Field Bar Mapper: reference/receptive-field.md
+  - Saved sessions:
+      - sessions/index.md
+      - Format: sessions/format.md
+      - Loading in Python: sessions/python.md
+      - Loading in MATLAB: sessions/matlab.md
+  - Changelog: changelog.md
+  - Development: development.md

@@ -29,12 +29,13 @@
 #include "TriggerCore/Ui/TriggerMonitorWindow.h"
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "TriggeredPowerCanvas.h"
+#include <PluginVersion.h>
 
 namespace EventTriggered
 {
 
 TriggeredPowerEditor::TriggeredPowerEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG POWER", EditorLayout::totalWidth)
+    : VisualizerEditor (parentNode, "TRIG POWER v" PLUGIN_VERSION_STRING, EditorLayout::totalWidth)
 {
     // The editor carries what governs collection and computation; everything that
     // only changes how the result is drawn lives on the canvas. Sixteen analysis

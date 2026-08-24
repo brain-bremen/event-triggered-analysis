@@ -78,6 +78,38 @@ inline bool isOpenOver (const juce::Component& popupContent)
     return modal != nullptr && modal != popupContent.findParentComponentOfClass<juce::CallOutBox>();
 }
 
+/** Opens `content` in a call-out anchored to `anchor`, guarded the same way as
+ *  the class comment above describes: the call-out's window never takes the
+ *  keyboard focus, so a click inside it cannot be misread as a click outside
+ *  the popup that owns it, and the popup gets the focus back once `content`
+ *  closes. Ownership of `content` passes to the CallOutBox.
+ *
+ *  Generic across whatever `content` needs of its own -- a colour selector's
+ *  showColourPicker() below sets its size and colour before handing it here;
+ *  a settings panel would do the same for its own state. */
+inline void show (juce::Component& anchor, std::unique_ptr<juce::Component> content)
+{
+    auto& box = juce::CallOutBox::launchAsynchronously (
+        std::move (content), anchor.getScreenBounds(), nullptr);
+
+    // See the class comment: this is what keeps the click from closing it.
+    box.setMouseClickGrabsKeyboardFocus (false);
+
+    // Hand the focus back when it closes: the popup needs it for Escape and
+    // Ctrl+Z, and it stopped taking it for itself while this was up.
+    if (auto* popup = anchor.findParentComponentOfClass<PopupComponent>())
+    {
+        juce::ModalComponentManager::getInstance()->attachCallback (
+            &box,
+            juce::ModalCallbackFunction::create (
+                [safePopup = juce::Component::SafePointer<juce::Component> (popup)] (int)
+                {
+                    if (safePopup != nullptr && safePopup->isShowing())
+                        safePopup->grabKeyboardFocus();
+                }));
+    }
+}
+
 /** Opens a colour picker anchored to `anchor`, reporting changes to `listener`.
  *
  *  Deliberately no `editableColour` option: the hex field it adds is a Label
@@ -94,25 +126,7 @@ inline void showColourPicker (juce::Component& anchor,
     selector->setSize (240, 280);
     selector->addChangeListener (&listener);
 
-    auto& box = juce::CallOutBox::launchAsynchronously (
-        std::move (selector), anchor.getScreenBounds(), nullptr);
-
-    // See the note above: this is what keeps the click from closing the picker.
-    box.setMouseClickGrabsKeyboardFocus (false);
-
-    // Hand the focus back when the picker closes: the popup needs it for Escape
-    // and Ctrl+Z, and it stopped taking it for itself while the picker was up.
-    if (auto* popup = anchor.findParentComponentOfClass<PopupComponent>())
-    {
-        juce::ModalComponentManager::getInstance()->attachCallback (
-            &box,
-            juce::ModalCallbackFunction::create (
-                [safePopup = juce::Component::SafePointer<juce::Component> (popup)] (int)
-                {
-                    if (safePopup != nullptr && safePopup->isShowing())
-                        safePopup->grabKeyboardFocus();
-                }));
-    }
+    show (anchor, std::move (selector));
 }
 
 } // namespace EventTriggered::NestedCallOut

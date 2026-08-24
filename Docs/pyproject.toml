@@ -1,0 +1,33 @@
+# Documentation toolchain, managed by uv.
+#
+# This is not a Python package and this repository is not a Python project — the
+# file exists so that `uv` has somewhere to pin the tools that build the site,
+# and it lives in Docs/ rather than at the repository root so that a C++ checkout
+# does not look like a Python one.
+#
+#     uv run --project Docs mkdocs serve     # http://127.0.0.1:8000/event-triggered-analysis/
+#     uv run --project Docs mkdocs build     # into Build/site
+#
+# Run those from the repository root: mkdocs.yml is there (it has to be, because
+# MkDocs refuses a config file that sits inside its own docs_dir), and `--project`
+# only tells uv where the environment is defined — it does not change directory.
+#
+# uv.lock beside this file pins the exact versions, so a site built from a
+# release tag two years from now is the site that was reviewed.
+
+[project]
+name = "event-triggered-analysis-docs"
+version = "0"
+description = "Documentation build for the Event-Triggered Analysis Open Ephys plugins"
+requires-python = ">=3.10"
+
+dependencies = [
+    "mkdocs~=1.6",
+    "mkdocs-material~=9.5",
+    "pymdown-extensions~=10.9",
+]
+
+[tool.uv]
+# Nothing here is importable and nothing is installed from this directory; uv
+# would otherwise try to build it as a package before creating the environment.
+package = false

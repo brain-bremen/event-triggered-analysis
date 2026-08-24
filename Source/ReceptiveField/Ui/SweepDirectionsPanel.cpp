@@ -20,7 +20,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "StimulusConfigWindow.h"
+#include "SweepDirectionsPanel.h"
 
 #include "../BarMapperNode.h"
 
@@ -41,7 +41,6 @@ namespace
     constexpr int nameWidth = 70;
     constexpr int patternWidth = 220;
     constexpr int angleWidth = 70;
-    constexpr int compassSize = 150;
     constexpr int windowWidth = nameWidth + patternWidth + angleWidth + 40;
 
     /** The generator block: count, trigger, arm message. */
@@ -50,6 +49,9 @@ namespace
     /** Two lines, because a full base message plus the first and last pattern
         does not fit on one. */
     constexpr int previewHeight = 32;
+
+    constexpr int warningHeight = 16;
+    constexpr int bottomMargin = 10;
 
     juce::String arrow()
     {
@@ -99,8 +101,9 @@ void CompassPreview::paint (Graphics& g)
         g.setColour (arrow.colour);
         g.drawArrow (Line<float> (centre, tip), 1.5f, 6.0f, 8.0f);
 
-        const Point<float> labelAt (centre.x + (radius + 10.0f) * static_cast<float> (std::cos (rad)),
-                                    centre.y - (radius + 10.0f) * static_cast<float> (std::sin (rad)));
+        const Point<float> labelAt (
+            centre.x + (radius + 10.0f) * static_cast<float> (std::cos (rad)),
+            centre.y - (radius + 10.0f) * static_cast<float> (std::sin (rad)));
 
         g.setFont (FontOptions (10.0f));
         g.drawText (arrow.label,
@@ -110,14 +113,44 @@ void CompassPreview::paint (Graphics& g)
     }
 }
 
-// --- Window ----------------------------------------------------------------
+// --- Shared with RfAnalysisSettingsWindow's inline compass ------------------
 
-StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
-                                            bool acquisitionIsActive,
-                                            Component* anchor)
-    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+std::vector<CompassPreview::Arrow> buildCompassArrows (BarMapperNode& node)
 {
-    const auto makeLabel = [this] (const String& text) {
+    const Rf::AngleConvention convention = node.getAngleConvention();
+
+    std::vector<CompassPreview::Arrow> arrows;
+
+    for (TriggerSource* source : node.getTriggerSources().getAll())
+    {
+        const auto angle = node.getSweepAngles().getAngleDeg (source);
+
+        if (! angle.has_value())
+            continue;
+
+        arrows.push_back ({ Rf::toCanonicalDeg (*angle, convention), source->name, source->colour });
+    }
+
+    return arrows;
+}
+
+String describeAngleWarnings (BarMapperNode& node)
+{
+    String warnings;
+
+    for (const Rf::AngleSetWarning warning : node.checkAngles())
+        warnings += (warnings.isEmpty() ? "" : "; ") + String (Rf::describe (warning));
+
+    return warnings;
+}
+
+// --- Panel -------------------------------------------------------------
+
+SweepDirectionsPanel::SweepDirectionsPanel (BarMapperNode* node, bool acquisitionIsActive)
+    : m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+{
+    const auto makeLabel = [this] (const String& text)
+    {
         auto label = std::make_unique<Label> (text, text);
         label->setFont (FontOptions (12.0f));
         addAndMakeVisible (label.get());
@@ -136,7 +169,8 @@ StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
     m_senseSelector->addListener (this);
     addAndMakeVisible (m_senseSelector.get());
 
-    const auto makeEditable = [this] (const String& name, const String& tooltip) {
+    const auto makeEditable = [this] (const String& name, const String& tooltip)
+    {
         auto label = std::make_unique<Label> (name, String());
         label->setEditable (true);
         label->setFont (FontOptions (12.0f));
@@ -173,8 +207,8 @@ StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
 
     m_armLabel = makeLabel ("Arm msg");
     m_armBase = makeEditable ("armBase", "Text before the number, e.g. \"VSTIM: TRIALTYPE \"");
-    m_armNumber = makeEditable ("armNumber",
-                                "Number for the first direction; the rest step up by one");
+    m_armNumber =
+        makeEditable ("armNumber", "Number for the first direction; the rest step up by one");
     m_armSuffix = makeEditable ("armSuffix",
                                 "Text after the number. The trailing boundary is what stops "
                                 "\"TRIALTYPE 3\" from also matching \"TRIALTYPE 30\", and what "
@@ -185,19 +219,16 @@ StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
     m_previewLabel->setFont (FontOptions (11.0f));
     m_previewLabel->setColour (Label::textColourId, Colours::grey);
 
-    m_compass = std::make_unique<CompassPreview>();
-    addAndMakeVisible (m_compass.get());
-
     m_warningLabel = makeLabel ("");
     m_warningLabel->setColour (Label::textColourId, Colours::orange);
     m_warningLabel->setFont (FontOptions (11.0f));
 
-    updatePopup();
+    refresh();
 }
 
-StimulusConfigWindow::~StimulusConfigWindow() = default;
+SweepDirectionsPanel::~SweepDirectionsPanel() = default;
 
-void StimulusConfigWindow::updatePopup()
+void SweepDirectionsPanel::refresh()
 {
     if (m_node == nullptr)
         return;
@@ -208,16 +239,15 @@ void StimulusConfigWindow::updatePopup()
 
     syncGeneratorControls();
     rebuildRows();
-    refreshCompass();
+    refreshWarnings();
 
     setSize (windowWidth,
-             headerHeight
-                 + rowHeight * (static_cast<int> (m_rows.size()) + 1 + generatorRows)
-                 + previewHeight + compassSize + 52);
+             headerHeight + rowHeight * (static_cast<int> (m_rows.size()) + 1 + generatorRows)
+                 + previewHeight + warningHeight + bottomMargin);
     resized();
 }
 
-void StimulusConfigWindow::syncGeneratorControls()
+void SweepDirectionsPanel::syncGeneratorControls()
 {
     const DirectionGeneratorSpec& spec = m_node->getDirectionGeneratorSpec();
 
@@ -239,7 +269,7 @@ void StimulusConfigWindow::syncGeneratorControls()
     generatorSettingsChanged();
 }
 
-DirectionGeneratorSpec StimulusConfigWindow::specFromControls() const
+DirectionGeneratorSpec SweepDirectionsPanel::specFromControls() const
 {
     DirectionGeneratorSpec spec = m_node->getDirectionGeneratorSpec();
 
@@ -261,7 +291,7 @@ DirectionGeneratorSpec StimulusConfigWindow::specFromControls() const
     return spec;
 }
 
-void StimulusConfigWindow::generatorSettingsChanged()
+void SweepDirectionsPanel::generatorSettingsChanged()
 {
     const DirectionGeneratorSpec spec = specFromControls();
     m_node->setDirectionGeneratorSpec (spec);
@@ -283,14 +313,13 @@ void StimulusConfigWindow::generatorSettingsChanged()
         text += "  " + arrow() + "  " + last.armPattern;
 
     text += spec.incrementTriggerNumber && directions.size() > 1
-                ? "   on TTL " + String (first.triggerNumber) + "-"
-                      + String (last.triggerNumber)
+                ? "   on TTL " + String (first.triggerNumber) + "-" + String (last.triggerNumber)
                 : "   on TTL " + String (first.triggerNumber);
 
     m_previewLabel->setText (text, dontSendNotification);
 }
 
-void StimulusConfigWindow::rebuildRows()
+void SweepDirectionsPanel::rebuildRows()
 {
     m_rows.clear();
 
@@ -310,9 +339,9 @@ void StimulusConfigWindow::rebuildRows()
         // failure the generator exists to prevent. Showing it still matters,
         // because "which message arms this row" is the first question when a
         // condition never fires.
-        row.armPattern = std::make_unique<Label> ("pattern", source->armPattern.isNotEmpty()
-                                                                 ? source->armPattern
-                                                                 : String ("(not gated)"));
+        row.armPattern = std::make_unique<Label> (
+            "pattern",
+            source->armPattern.isNotEmpty() ? source->armPattern : String ("(not gated)"));
         row.armPattern->setFont (FontOptions (11.0f));
         row.armPattern->setColour (Label::textColourId, Colours::grey);
         addAndMakeVisible (row.armPattern.get());
@@ -334,37 +363,20 @@ void StimulusConfigWindow::rebuildRows()
     addAndMakeVisible (m_warningLabel.get());
 }
 
-void StimulusConfigWindow::refreshCompass()
+void SweepDirectionsPanel::refreshWarnings()
 {
-    const Rf::AngleConvention convention = m_node->getAngleConvention();
+    m_warningLabel->setText (describeAngleWarnings (*m_node), dontSendNotification);
 
-    std::vector<CompassPreview::Arrow> arrows;
-
-    for (const Row& row : m_rows)
-    {
-        const auto angle = m_node->getSweepAngles().getAngleDeg (row.source);
-
-        if (! angle.has_value())
-            continue;
-
-        arrows.push_back ({ Rf::toCanonicalDeg (*angle, convention),
-                            row.source->name,
-                            row.source->colour });
-    }
-
-    m_compass->setArrows (std::move (arrows));
-
-    String warnings;
-    for (const Rf::AngleSetWarning warning : m_node->checkAngles())
-        warnings += (warnings.isEmpty() ? "" : "; ") + String (Rf::describe (warning));
-
-    m_warningLabel->setText (warnings, dontSendNotification);
+    // Neither the warning line nor the compass lives in this popout; the
+    // owner draws both, so it has to be told they might have changed.
+    if (onChanged)
+        onChanged();
 }
 
-void StimulusConfigWindow::labelTextChanged (Label* label)
+void SweepDirectionsPanel::labelTextChanged (Label* label)
 {
-    if (label == m_triggerNumber.get() || label == m_armBase.get()
-        || label == m_armNumber.get() || label == m_armSuffix.get())
+    if (label == m_triggerNumber.get() || label == m_armBase.get() || label == m_armNumber.get()
+        || label == m_armSuffix.get())
     {
         generatorSettingsChanged();
 
@@ -393,12 +405,13 @@ void StimulusConfigWindow::labelTextChanged (Label* label)
         break;
     }
 
-    refreshCompass();
+    refreshWarnings();
 }
 
-void StimulusConfigWindow::comboBoxChanged (ComboBox* box)
+void SweepDirectionsPanel::comboBoxChanged (ComboBox* box)
 {
-    const auto setParameter = [this] (const char* name, int index) {
+    const auto setParameter = [this] (const char* name, int index)
+    {
         if (auto* parameter = m_node->getParameter (name))
             parameter->setNextValue (index);
     };
@@ -416,18 +429,18 @@ void StimulusConfigWindow::comboBoxChanged (ComboBox* box)
     else
         return;
 
-    // The angles in the table do not change; what they *mean* does. Redrawing the
-    // compass here is what makes that visible.
-    refreshCompass();
+    // The angles in the table do not change; what they *mean* does. Refreshing
+    // here is what makes the owner's compass redraw to match.
+    refreshWarnings();
 }
 
-void StimulusConfigWindow::applyGeneratedDirections()
+void SweepDirectionsPanel::applyGeneratedDirections()
 {
     m_node->generateDirectionSources (specFromControls());
-    updatePopup();
+    refresh();
 }
 
-void StimulusConfigWindow::buttonClicked (Button* button)
+void SweepDirectionsPanel::buttonClicked (Button* button)
 {
     if (button == m_incrementTrigger.get())
     {
@@ -450,8 +463,8 @@ void StimulusConfigWindow::buttonClicked (Button* button)
         "Replace all conditions?",
         "This removes the current trigger sources and their accumulated trials, and "
         "creates "
-            + String (m_generateCount->getSelectedId())
-            + " evenly spaced directions armed by\n\n" + m_previewLabel->getText(),
+            + String (m_generateCount->getSelectedId()) + " evenly spaced directions armed by\n\n"
+            + m_previewLabel->getText(),
         "Replace",
         "Cancel",
         this,
@@ -459,13 +472,14 @@ void StimulusConfigWindow::buttonClicked (Button* button)
         // the alert is still up -- clicking away from it is enough -- and the
         // callback then fires against a destroyed component.
         ModalCallbackFunction::create (
-            [safe = Component::SafePointer<StimulusConfigWindow> (this)] (int result) {
+            [safe = Component::SafePointer<SweepDirectionsPanel> (this)] (int result)
+            {
                 if (result != 0 && safe != nullptr)
                     safe->applyGeneratedDirections();
             }));
 }
 
-void StimulusConfigWindow::paint (Graphics& g)
+void SweepDirectionsPanel::paint (Graphics& g)
 {
     g.fillAll (findColour (ThemeColours::componentBackground));
 
@@ -483,12 +497,13 @@ void StimulusConfigWindow::paint (Graphics& g)
                                 std::pair { "Armed by", patternWidth },
                                 std::pair { "Angle", angleWidth } })
     {
-        g.drawText (column.first, x, headerHeight - 2, column.second, 16, Justification::centredLeft);
+        g.drawText (
+            column.first, x, headerHeight - 2, column.second, 16, Justification::centredLeft);
         x += column.second;
     }
 }
 
-void StimulusConfigWindow::resized()
+void SweepDirectionsPanel::resized()
 {
     auto bounds = getLocalBounds().reduced (10, 0);
     bounds.removeFromTop (headerHeight + 16);
@@ -527,9 +542,7 @@ void StimulusConfigWindow::resized()
 
     m_previewLabel->setBounds (bounds.removeFromTop (previewHeight));
 
-    m_warningLabel->setBounds (bounds.removeFromTop (16));
-
-    m_compass->setBounds (bounds.removeFromTop (compassSize));
+    m_warningLabel->setBounds (bounds.removeFromTop (warningHeight));
 }
 
 } // namespace EventTriggered

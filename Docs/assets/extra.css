@@ -1,0 +1,33 @@
+/* Parameter tables are the bulk of this site, and they are wide: a default,
+   value, a range and a paragraph of "what it does". Left-aligned and a touch
+   tighter reads far better than the theme's default centring at that width. */
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-typeset table:not([class]) td:first-child {
+  white-space: nowrap;
+}
+
+/* A parameter's default and range are reference values, not prose. */
+.md-typeset table:not([class]) code {
+  white-space: nowrap;
+}
+
+/* Screenshots: a thin border so a light UI capture does not bleed into the page
+   background, and so a placeholder is obviously a bounded rectangle. */
+.md-typeset img[src*="/screenshots/"] {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 2px;
+}
+
+/* The "screenshot to be added" marker, used as {: .placeholder } on the caption
+   under a placeholder image. */
+.md-typeset .placeholder {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.75rem;
+  font-style: italic;
+  margin-top: -0.8em;
+}

@@ -139,6 +139,87 @@ bool gather (DataStore& store,
                                std::span (countShape));
 }
 
+bool gatherDerived (DataStore& store,
+                    const juce::Array<TriggerSource*>& sources,
+                    double sampleRateHz,
+                    int preSamples,
+                    SessionWriter& writer)
+{
+    if (sources.isEmpty() || sampleRateHz <= 0.0 || preSamples < 0)
+        return false;
+
+    auto lock = store.GetLock();
+
+    int numChannels = 0;
+    int numSamples = 0;
+
+    if (! commonGeometry (store, sources, numChannels, numSamples))
+        return false;
+
+    // A pre-window longer than the whole trial means the caller's geometry does
+    // not describe these accumulators, and every time stamp written from it would
+    // be wrong. Refused rather than clamped: a time axis that silently disagrees
+    // with the traces beside it is worse than no time axis.
+    if (preSamples > numSamples)
+        return false;
+
+    const auto numSources = static_cast<std::size_t> (sources.size());
+    const auto perSource = static_cast<std::size_t> (numChannels) * numSamples;
+
+    std::vector<float> averages (numSources * perSource, 0.0f);
+    std::vector<float> deviations (numSources * perSource, 0.0f);
+
+    for (int sourceIndex = 0; sourceIndex < sources.size(); ++sourceIndex)
+    {
+        const auto* buffer = store.getRefToAverageBufferForTriggerSource (sources[sourceIndex]);
+
+        if (buffer == nullptr)
+            continue;
+
+        // Both accessors return an empty buffer for a condition that never fired,
+        // so a source with no trials keeps the zeros it was initialised with. That
+        // is the same convention gather() uses for a source with no accumulator at
+        // all, and trial_counts is what distinguishes either from a real zero.
+        const auto mean = buffer->getAverage();
+        const auto deviation = buffer->getStandardDeviation();
+
+        const auto base = static_cast<std::size_t> (sourceIndex) * perSource;
+
+        const auto copyChannels =
+            [&] (const juce::AudioBuffer<float>& from, std::vector<float>& into)
+        {
+            if (from.getNumChannels() != numChannels || from.getNumSamples() != numSamples)
+                return;
+
+            for (int channel = 0; channel < numChannels; ++channel)
+                std::memcpy (into.data() + base + static_cast<std::size_t> (channel) * numSamples,
+                             from.getReadPointer (channel),
+                             static_cast<std::size_t> (numSamples) * sizeof (float));
+        };
+
+        copyChannels (mean, averages);
+        copyChannels (deviation, deviations);
+    }
+
+    // Sample `preSamples` is the trigger, because the capture worker reads the
+    // window [edge - preSamples, edge + postSamples). Written in milliseconds to
+    // match every number the editor shows.
+    std::vector<double> timeMs (static_cast<std::size_t> (numSamples), 0.0);
+
+    for (int sample = 0; sample < numSamples; ++sample)
+        timeMs[static_cast<std::size_t> (sample)] = 1000.0 * (sample - preSamples) / sampleRateHz;
+
+    const std::vector<std::int64_t> traceShape { static_cast<std::int64_t> (sources.size()),
+                                                 numChannels,
+                                                 numSamples };
+    const std::vector<std::int64_t> timeShape { numSamples };
+
+    return writer.addArray (averagesArrayName, std::span (averages), std::span (traceShape))
+           && writer.addArray (
+               standardDeviationsArrayName, std::span (deviations), std::span (traceShape))
+           && writer.addArray (timeAxisArrayName, std::span (timeMs), std::span (timeShape));
+}
+
 Shape peekShape (const SessionReader& reader)
 {
     const auto shape = reader.arrayShape (sumsArrayName);

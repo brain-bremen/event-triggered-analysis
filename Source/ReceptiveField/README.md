@@ -42,11 +42,11 @@ elsewhere they do not.
 ## Getting a first map
 
 1. **Select channels** in the editor.
-2. **SWEEPS → Generate → REPLACE.** This replaces the trigger sources with *N* evenly
-   spaced directions, each armed by a VStim trial-type message, all on **TTL line 0**.
-   If your sweep-onset TTL is on a different line, change it per row under **TRIGGERS**
-   afterwards — the generator does not ask.
-3. **Check the compass** in the same window. The angle each condition stands for is the
+2. **ANALYSIS → DIRECTIONS... → Generate → REPLACE.** This replaces the trigger sources
+   with *N* evenly spaced directions, each armed by a VStim trial-type message, all on
+   **TTL line 0**. If your sweep-onset TTL is on a different line, change it per row
+   under **TRIGGERS** afterwards — the generator does not ask.
+3. **Check the compass** under ANALYSIS. The angle each condition stands for is the
    one thing in this plugin that nothing can verify (see *Angles* below).
 4. **ANALYSIS → set the speed, sweep start and latency** to match the stimulus program,
    then check that Pre/Post actually cover the sweep (see *Making the window and the
@@ -100,7 +100,7 @@ they are not free parameters.
 | **Map centre X / Y** | 0, 0 | ±90 | Visual-field coordinates of the map's centre pixel, in the same frame the sweep angles are in (+x right, +y up). Move the map to where the receptive field is rather than enlarging it — cost is quadratic in size, and free in centre. |
 | **Border** | 0.76 | 0.1–0.99 | Fraction of the map peak at which the receptive-field border is drawn, and therefore what the reported area, equivalent diameter and bounding box mean. Not 0.5: smoothing and the back-projection both enlarge the mapped field, and 0.76 is the correction the paper measured empirically on its own population (§3.1.1) so that the mapped field matched the extent of the response at half height. Change it and the reported sizes change with it; the map does not. |
 
-### Angles (SWEEPS)
+### Angles (ANALYSIS → DIRECTIONS...)
 
 | Parameter | Default | What it does |
 |---|---|---|
@@ -120,8 +120,8 @@ perfectly plausible and entirely wrong map. Hence the compass preview, which red
 the convention changes.
 
 A condition with **no angle contributes nothing** to the map — it is not treated as 0°.
-`SWEEPS (6)` next to `TRIGGERS (8)` is how you see that two directions were never filled
-in.
+An angle left blank shows in orange in the sweep-directions table, and as a gap in the
+compass preview, which is how you see that a direction was never filled in.
 
 Three warnings are raised and shown across the top of the canvas. All three are
 legitimate — the paper itself uses odd direction counts — and all three are more often a
@@ -268,9 +268,9 @@ The remaining lever is the channel count, which everything is linear in.
 BarMapperNode          the plugin: parameters, capture, the angle table, sessions
 RfComputeJob           recomputes the maps off the message thread
 SweepAngles            which direction each trigger source stands for, and the generator
-Ui/BarMapperEditor     TRIGGERS / MONITOR / ANALYSIS / SWEEPS
-Ui/StimulusConfigWindow  the angle table, the convention, the compass preview
-Ui/RfAnalysisSettingsWindow  the mapping parameters
+Ui/BarMapperEditor     TRIGGERS / MONITOR / ANALYSIS
+Ui/RfAnalysisSettingsWindow  the mapping parameters, the compass, and DIRECTIONS...
+Ui/SweepDirectionsPanel  DIRECTIONS...'s call-out: the angle table, convention, generator
 Ui/RfCanvas            the visualizer: Map and Traces
 Ui/RfMapPanel          one map, its contour, colour scale and polargram
 RfMath/                the algorithm — no JUCE, no Open Ephys, no FFTW

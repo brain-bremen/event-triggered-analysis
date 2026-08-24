@@ -30,10 +30,11 @@
 #include "TriggerCore/Ui/TriggerSourceConfigWindow.h"
 #include "TriggeredAvgCanvas.h"
 #include "../TriggeredAvgNode.h"
+#include <PluginVersion.h>
 using namespace EventTriggered;
 
 TriggeredAvgEditor::TriggeredAvgEditor (GenericProcessor* parentNode)
-    : VisualizerEditor (parentNode, "TRIG AVG", EditorLayout::totalWidth),
+    : VisualizerEditor (parentNode, "TRIG AVG v" PLUGIN_VERSION_STRING, EditorLayout::totalWidth),
       canvas (nullptr)
 {
     // TRIGGERS opens the shared configuration table; MONITOR the shared live
