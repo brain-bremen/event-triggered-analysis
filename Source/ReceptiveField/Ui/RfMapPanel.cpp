@@ -22,7 +22,7 @@
 */
 #include "RfMapPanel.h"
 
-#include "RfMath/AngleConvention.h"
+#include "../RfMath/AngleConvention.h"
 
 #include <algorithm>
 #include <cmath>
@@ -39,9 +39,8 @@ namespace
     {
         t = jlimit (0.0f, 1.0f, t);
 
-        const auto channel = [t] (float centre) {
-            return jlimit (0.0f, 1.0f, 1.5f - std::abs (4.0f * t - centre));
-        };
+        const auto channel = [t] (float centre)
+        { return jlimit (0.0f, 1.0f, 1.5f - std::abs (4.0f * t - centre)); };
 
         return Colour::fromFloatRGBA (channel (3.0f), channel (2.0f), channel (1.0f), 1.0f);
     }
@@ -79,10 +78,7 @@ namespace
     /** The degree sign, as an explicit code point rather than a literal: the
         source file's encoding is not something a build should have to be right
         about. Same reasoning as SweepAngles::generateDirections. */
-    String degreeSign()
-    {
-        return String::charToString (static_cast<juce_wchar> (0x00B0));
-    }
+    String degreeSign() { return String::charToString (static_cast<juce_wchar> (0x00B0)); }
 
     /** What one map value is, given how it was made.
      *
@@ -101,15 +97,9 @@ namespace
 
 // --- RfMapPanel ------------------------------------------------------------
 
-RfMapPanel::RfMapPanel()
-{
-    setInterceptsMouseClicks (false, false);
-}
+RfMapPanel::RfMapPanel() { setInterceptsMouseClicks (false, false); }
 
-void RfMapPanel::setChannelName (const String& name)
-{
-    m_channelName = name;
-}
+void RfMapPanel::setChannelName (const String& name) { m_channelName = name; }
 
 void RfMapPanel::setMapping (const Rf::ChannelMapping& mapping)
 {
@@ -195,7 +185,8 @@ void RfMapPanel::paint (Graphics& g)
     // rather than abbreviated: "2.4 deg z=5.3 n=12" needed a key to read, and the
     // one number it did label -- the peak -- is now the top of the colour scale,
     // where it says what it is by standing next to the colour it belongs to.
-    if (m_mapping.valid && m_mapping.estimate.valid && m_mapping.estimate.equivalentDiameterDeg > 0.0)
+    if (m_mapping.valid && m_mapping.estimate.valid
+        && m_mapping.estimate.equivalentDiameterDeg > 0.0)
     {
         g.setColour (Colours::lightgrey);
         g.setFont (FontOptions (11.0f));
@@ -209,14 +200,14 @@ void RfMapPanel::paint (Graphics& g)
     // The colour scale takes its column before the map is sized, so the map stays
     // square rather than being squeezed into what is left over.
     const bool showScale = m_image.isValid() && bounds.getWidth() > scaleColumnWidth * 3;
-    Rectangle<int> scaleArea = showScale ? bounds.removeFromRight (scaleColumnWidth) : Rectangle<int>();
+    Rectangle<int> scaleArea =
+        showScale ? bounds.removeFromRight (scaleColumnWidth) : Rectangle<int>();
 
     // Square, so degrees per pixel is the same in x and y. A stretched map would
     // make a circular receptive field look elliptical, which is a property people
     // read off these pictures.
     const int side = std::min (bounds.getWidth(), bounds.getHeight());
-    const Rectangle<int> mapArea =
-        Rectangle<int> (side, side).withCentre (bounds.getCentre());
+    const Rectangle<int> mapArea = Rectangle<int> (side, side).withCentre (bounds.getCentre());
 
     if (! m_image.isValid())
     {
@@ -235,9 +226,12 @@ void RfMapPanel::paint (Graphics& g)
     const Rf::MapGeometry& geometry = m_mapping.map.geometry();
     const double scale = static_cast<double> (mapArea.getWidth()) / geometry.pixels;
 
-    const auto toScreen = [&] (double xDeg, double yDeg) {
-        const double col = (xDeg - geometry.centreXDeg) / geometry.degreesPerPixel + geometry.centreIndex();
-        const double row = geometry.centreIndex() - (yDeg - geometry.centreYDeg) / geometry.degreesPerPixel;
+    const auto toScreen = [&] (double xDeg, double yDeg)
+    {
+        const double col =
+            (xDeg - geometry.centreXDeg) / geometry.degreesPerPixel + geometry.centreIndex();
+        const double row =
+            geometry.centreIndex() - (yDeg - geometry.centreYDeg) / geometry.degreesPerPixel;
         return Point<float> (static_cast<float> (mapArea.getX() + col * scale),
                              static_cast<float> (mapArea.getY() + row * scale));
     };
@@ -247,8 +241,8 @@ void RfMapPanel::paint (Graphics& g)
         const Point<float> centre =
             toScreen (m_mapping.estimate.centreXDeg, m_mapping.estimate.centreYDeg);
 
-        const auto radius = static_cast<float> (
-            0.5 * m_mapping.estimate.equivalentDiameterDeg / geometry.degreesPerPixel * scale);
+        const auto radius = static_cast<float> (0.5 * m_mapping.estimate.equivalentDiameterDeg
+                                                / geometry.degreesPerPixel * scale);
 
         g.setColour (Colours::black);
         g.drawEllipse (centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f, 1.5f);
@@ -310,7 +304,8 @@ void RfMapPanel::paintColourScale (Graphics& g, Rectangle<int> area) const
     g.setFont (FontOptions (10.0f));
     g.setColour (Colours::lightgrey);
 
-    const auto label = [&] (float value, int y, Justification justification) {
+    const auto label = [&] (float value, int y, Justification justification)
+    {
         g.drawText (formatScaleValue (value),
                     Rectangle<int> (area.getX(), y, area.getWidth(), 11),
                     justification,

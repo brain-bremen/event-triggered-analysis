@@ -24,8 +24,6 @@
 
 #include "../SweepAngles.h"
 
-#include "RfMath/AngleConvention.h"
-
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
 #include <vector>

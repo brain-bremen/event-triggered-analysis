@@ -99,8 +99,9 @@ void CompassPreview::paint (Graphics& g)
         g.setColour (arrow.colour);
         g.drawArrow (Line<float> (centre, tip), 1.5f, 6.0f, 8.0f);
 
-        const Point<float> labelAt (centre.x + (radius + 10.0f) * static_cast<float> (std::cos (rad)),
-                                    centre.y - (radius + 10.0f) * static_cast<float> (std::sin (rad)));
+        const Point<float> labelAt (
+            centre.x + (radius + 10.0f) * static_cast<float> (std::cos (rad)),
+            centre.y - (radius + 10.0f) * static_cast<float> (std::sin (rad)));
 
         g.setFont (FontOptions (10.0f));
         g.drawText (arrow.label,
@@ -115,9 +116,12 @@ void CompassPreview::paint (Graphics& g)
 StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
                                             bool acquisitionIsActive,
                                             Component* anchor)
-    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+    : PopupComponent (anchor),
+      m_node (node),
+      m_acquisitionIsActive (acquisitionIsActive)
 {
-    const auto makeLabel = [this] (const String& text) {
+    const auto makeLabel = [this] (const String& text)
+    {
         auto label = std::make_unique<Label> (text, text);
         label->setFont (FontOptions (12.0f));
         addAndMakeVisible (label.get());
@@ -136,7 +140,8 @@ StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
     m_senseSelector->addListener (this);
     addAndMakeVisible (m_senseSelector.get());
 
-    const auto makeEditable = [this] (const String& name, const String& tooltip) {
+    const auto makeEditable = [this] (const String& name, const String& tooltip)
+    {
         auto label = std::make_unique<Label> (name, String());
         label->setEditable (true);
         label->setFont (FontOptions (12.0f));
@@ -173,8 +178,8 @@ StimulusConfigWindow::StimulusConfigWindow (BarMapperNode* node,
 
     m_armLabel = makeLabel ("Arm msg");
     m_armBase = makeEditable ("armBase", "Text before the number, e.g. \"VSTIM: TRIALTYPE \"");
-    m_armNumber = makeEditable ("armNumber",
-                                "Number for the first direction; the rest step up by one");
+    m_armNumber =
+        makeEditable ("armNumber", "Number for the first direction; the rest step up by one");
     m_armSuffix = makeEditable ("armSuffix",
                                 "Text after the number. The trailing boundary is what stops "
                                 "\"TRIALTYPE 3\" from also matching \"TRIALTYPE 30\", and what "
@@ -211,8 +216,7 @@ void StimulusConfigWindow::updatePopup()
     refreshCompass();
 
     setSize (windowWidth,
-             headerHeight
-                 + rowHeight * (static_cast<int> (m_rows.size()) + 1 + generatorRows)
+             headerHeight + rowHeight * (static_cast<int> (m_rows.size()) + 1 + generatorRows)
                  + previewHeight + compassSize + 52);
     resized();
 }
@@ -283,8 +287,7 @@ void StimulusConfigWindow::generatorSettingsChanged()
         text += "  " + arrow() + "  " + last.armPattern;
 
     text += spec.incrementTriggerNumber && directions.size() > 1
-                ? "   on TTL " + String (first.triggerNumber) + "-"
-                      + String (last.triggerNumber)
+                ? "   on TTL " + String (first.triggerNumber) + "-" + String (last.triggerNumber)
                 : "   on TTL " + String (first.triggerNumber);
 
     m_previewLabel->setText (text, dontSendNotification);
@@ -310,9 +313,9 @@ void StimulusConfigWindow::rebuildRows()
         // failure the generator exists to prevent. Showing it still matters,
         // because "which message arms this row" is the first question when a
         // condition never fires.
-        row.armPattern = std::make_unique<Label> ("pattern", source->armPattern.isNotEmpty()
-                                                                 ? source->armPattern
-                                                                 : String ("(not gated)"));
+        row.armPattern = std::make_unique<Label> (
+            "pattern",
+            source->armPattern.isNotEmpty() ? source->armPattern : String ("(not gated)"));
         row.armPattern->setFont (FontOptions (11.0f));
         row.armPattern->setColour (Label::textColourId, Colours::grey);
         addAndMakeVisible (row.armPattern.get());
@@ -347,9 +350,8 @@ void StimulusConfigWindow::refreshCompass()
         if (! angle.has_value())
             continue;
 
-        arrows.push_back ({ Rf::toCanonicalDeg (*angle, convention),
-                            row.source->name,
-                            row.source->colour });
+        arrows.push_back (
+            { Rf::toCanonicalDeg (*angle, convention), row.source->name, row.source->colour });
     }
 
     m_compass->setArrows (std::move (arrows));
@@ -363,8 +365,8 @@ void StimulusConfigWindow::refreshCompass()
 
 void StimulusConfigWindow::labelTextChanged (Label* label)
 {
-    if (label == m_triggerNumber.get() || label == m_armBase.get()
-        || label == m_armNumber.get() || label == m_armSuffix.get())
+    if (label == m_triggerNumber.get() || label == m_armBase.get() || label == m_armNumber.get()
+        || label == m_armSuffix.get())
     {
         generatorSettingsChanged();
 
@@ -398,7 +400,8 @@ void StimulusConfigWindow::labelTextChanged (Label* label)
 
 void StimulusConfigWindow::comboBoxChanged (ComboBox* box)
 {
-    const auto setParameter = [this] (const char* name, int index) {
+    const auto setParameter = [this] (const char* name, int index)
+    {
         if (auto* parameter = m_node->getParameter (name))
             parameter->setNextValue (index);
     };
@@ -450,8 +453,8 @@ void StimulusConfigWindow::buttonClicked (Button* button)
         "Replace all conditions?",
         "This removes the current trigger sources and their accumulated trials, and "
         "creates "
-            + String (m_generateCount->getSelectedId())
-            + " evenly spaced directions armed by\n\n" + m_previewLabel->getText(),
+            + String (m_generateCount->getSelectedId()) + " evenly spaced directions armed by\n\n"
+            + m_previewLabel->getText(),
         "Replace",
         "Cancel",
         this,
@@ -459,7 +462,8 @@ void StimulusConfigWindow::buttonClicked (Button* button)
         // the alert is still up -- clicking away from it is enough -- and the
         // callback then fires against a destroyed component.
         ModalCallbackFunction::create (
-            [safe = Component::SafePointer<StimulusConfigWindow> (this)] (int result) {
+            [safe = Component::SafePointer<StimulusConfigWindow> (this)] (int result)
+            {
                 if (result != 0 && safe != nullptr)
                     safe->applyGeneratedDirections();
             }));
@@ -483,7 +487,8 @@ void StimulusConfigWindow::paint (Graphics& g)
                                 std::pair { "Armed by", patternWidth },
                                 std::pair { "Angle", angleWidth } })
     {
-        g.drawText (column.first, x, headerHeight - 2, column.second, 16, Justification::centredLeft);
+        g.drawText (
+            column.first, x, headerHeight - 2, column.second, 16, Justification::centredLeft);
         x += column.second;
     }
 }
