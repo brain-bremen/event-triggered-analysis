@@ -195,7 +195,7 @@ TEST (GenerateDirections, ProducesEvenlySpacedAnglesOnConsecutiveTrialTypes)
 
     for (int i = 0; i < 8; ++i)
     {
-        EXPECT_EQ (directions[static_cast<std::size_t> (i)].trialType, i);
+        EXPECT_EQ (directions[static_cast<std::size_t> (i)].armNumber, i);
         EXPECT_NEAR (directions[static_cast<std::size_t> (i)].angleDeg, i * 45.0, 1e-9);
         EXPECT_TRUE (directions[static_cast<std::size_t> (i)].armPattern.isNotEmpty());
     }
@@ -206,8 +206,8 @@ TEST (GenerateDirections, RespectsTheFirstTrialTypeAndAngle)
     const std::vector<GeneratedDirection> directions = generateDirections (4, 10, 22.5);
 
     ASSERT_EQ (directions.size(), 4u);
-    EXPECT_EQ (directions[0].trialType, 10);
-    EXPECT_EQ (directions[3].trialType, 13);
+    EXPECT_EQ (directions[0].armNumber, 10);
+    EXPECT_EQ (directions[3].armNumber, 13);
     EXPECT_NEAR (directions[0].angleDeg, 22.5, 1e-9);
     EXPECT_NEAR (directions[3].angleDeg, 292.5, 1e-9);
 }
@@ -216,6 +216,191 @@ TEST (GenerateDirections, HandlesNonPositiveCounts)
 {
     EXPECT_TRUE (generateDirections (0).empty());
     EXPECT_TRUE (generateDirections (-3).empty());
+}
+
+// --- The configurable generator --------------------------------------------
+
+TEST (GeneratorSpec, DefaultsReproduceTheHistoricalGenerator)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 8;
+
+    const std::vector<GeneratedDirection> fromSpec = generateDirections (spec);
+    const std::vector<GeneratedDirection> historical = generateDirections (8);
+
+    ASSERT_EQ (fromSpec.size(), historical.size());
+
+    for (std::size_t i = 0; i < fromSpec.size(); ++i)
+    {
+        EXPECT_EQ (fromSpec[i].armNumber, historical[i].armNumber);
+        EXPECT_EQ (fromSpec[i].armPattern, historical[i].armPattern);
+        EXPECT_NEAR (fromSpec[i].angleDeg, historical[i].angleDeg, 1e-9);
+    }
+}
+
+TEST (GeneratorSpec, BuildsArmPatternsFromBaseNumberAndSuffix)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 4;
+    spec.armMessageBase = "VSTIM: TRIALTYPE ";
+    spec.firstArmNumber = 200;
+    spec.armMessageSuffix = " TIMESEQUENCE";
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 4u);
+    EXPECT_EQ (directions[0].armPattern, "VSTIM: TRIALTYPE 200 TIMESEQUENCE");
+    EXPECT_EQ (directions[1].armPattern, "VSTIM: TRIALTYPE 201 TIMESEQUENCE");
+    EXPECT_EQ (directions[2].armPattern, "VSTIM: TRIALTYPE 202 TIMESEQUENCE");
+    EXPECT_EQ (directions[3].armPattern, "VSTIM: TRIALTYPE 203 TIMESEQUENCE");
+}
+
+TEST (GeneratorSpec, AnEmptySuffixLeavesTheBareBaseAndNumber)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 2;
+    spec.armMessageBase = "VSTIM: TRIALTYPE ";
+    spec.firstArmNumber = 200;
+    spec.armMessageSuffix = "";
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 2u);
+    EXPECT_EQ (directions[0].armPattern, "VSTIM: TRIALTYPE 200");
+    EXPECT_EQ (directions[1].armPattern, "VSTIM: TRIALTYPE 201");
+}
+
+TEST (GeneratorSpec, AFixedTriggerNumberPutsEveryDirectionOnTheOneLine)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 6;
+    spec.firstTriggerNumber = 3;
+    spec.incrementTriggerNumber = false;
+
+    for (const GeneratedDirection& direction : generateDirections (spec))
+        EXPECT_EQ (direction.triggerNumber, 3);
+}
+
+TEST (GeneratorSpec, AnIncrementingTriggerNumberStepsOneLinePerDirection)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 4;
+    spec.firstTriggerNumber = 3;
+    spec.incrementTriggerNumber = true;
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 4u);
+    EXPECT_EQ (directions[0].triggerNumber, 3);
+    EXPECT_EQ (directions[1].triggerNumber, 4);
+    EXPECT_EQ (directions[2].triggerNumber, 5);
+    EXPECT_EQ (directions[3].triggerNumber, 6);
+}
+
+TEST (GeneratorSpec, ArmNumbersStepEvenWhenTheTriggerNumberIsFixed)
+{
+    // The property that makes a fixed trigger line usable at all: the arm
+    // messages are what tell the directions apart, so they must differ even
+    // though the line does not. Held constant alongside a fixed line, one
+    // message would arm every source and each direction would accumulate every
+    // trial.
+    DirectionGeneratorSpec spec;
+    spec.count = 8;
+    spec.firstTriggerNumber = 1;
+    spec.incrementTriggerNumber = false;
+    spec.firstArmNumber = 200;
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 8u);
+
+    for (int i = 0; i < 8; ++i)
+        EXPECT_EQ (directions[static_cast<std::size_t> (i)].armNumber, 200 + i);
+
+    for (std::size_t i = 0; i < directions.size(); ++i)
+        for (std::size_t j = i + 1; j < directions.size(); ++j)
+            EXPECT_NE (directions[i].armPattern, directions[j].armPattern);
+}
+
+TEST (GeneratorSpec, ArmNumbersDoNotFollowTheTriggerNumberWhenItIncrements)
+{
+    // The arm number counts directions, not lines. A set generated on lines
+    // 3..6 still starts its messages at firstArmNumber.
+    DirectionGeneratorSpec spec;
+    spec.count = 4;
+    spec.firstTriggerNumber = 3;
+    spec.incrementTriggerNumber = true;
+    spec.firstArmNumber = 200;
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 4u);
+    EXPECT_EQ (directions[0].armNumber, 200);
+    EXPECT_EQ (directions[3].armNumber, 203);
+}
+
+TEST (GeneratorSpec, RespectsTheFirstAngle)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = 4;
+    spec.firstAngleDeg = 22.5;
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    ASSERT_EQ (directions.size(), 4u);
+    EXPECT_NEAR (directions[0].angleDeg, 22.5, 1e-9);
+    EXPECT_NEAR (directions[3].angleDeg, 292.5, 1e-9);
+}
+
+TEST (GeneratorSpec, HandlesNonPositiveCounts)
+{
+    DirectionGeneratorSpec spec;
+
+    spec.count = 0;
+    EXPECT_TRUE (generateDirections (spec).empty());
+
+    spec.count = -3;
+    EXPECT_TRUE (generateDirections (spec).empty());
+}
+
+TEST (GeneratorSpec, ThreeDigitTrialTypesStillArmExactlyOneSourceEach)
+{
+    // The prefix collision the suffix exists to prevent, at the numbering the
+    // configurable generator makes easy to reach: 200 is a prefix of 2000 but
+    // also, within a set, 20 would be a prefix of 200. Checked against the real
+    // trial-start message shape.
+    DirectionGeneratorSpec spec;
+    spec.count = 12;
+    spec.firstArmNumber = 199;
+
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    juce::OwnedArray<TriggerSource> sources;
+    for (const GeneratedDirection& direction : directions)
+    {
+        auto* source = sources.add (new TriggerSource (direction.name, 0, TriggerType::TTL_TRIGGER));
+        source->armPattern = direction.armPattern;
+    }
+
+    for (std::size_t d = 0; d < directions.size(); ++d)
+    {
+        const juce::String message = trialStartMessage (42, directions[d].armNumber);
+
+        int armed = 0;
+        int armedIndex = -1;
+
+        for (int i = 0; i < sources.size(); ++i)
+        {
+            if (armsOn (*sources[i], message))
+            {
+                ++armed;
+                armedIndex = i;
+            }
+        }
+
+        EXPECT_EQ (armed, 1) << "arm number " << directions[d].armNumber;
+        EXPECT_EQ (armedIndex, static_cast<int> (d));
+    }
 }
 
 // --- The arm patterns, against real VStim messages -------------------------
@@ -306,7 +491,7 @@ TEST (ArmPattern, ArmsExactlyOneSourceOutOfAGeneratedSet)
 
     for (const GeneratedDirection& direction : directions)
     {
-        const juce::String message = trialStartMessage (42, direction.trialType);
+        const juce::String message = trialStartMessage (42, direction.armNumber);
 
         int armed = 0;
         int armedIndex = -1;
@@ -320,8 +505,8 @@ TEST (ArmPattern, ArmsExactlyOneSourceOutOfAGeneratedSet)
             }
         }
 
-        EXPECT_EQ (armed, 1) << "trial type " << direction.trialType;
-        EXPECT_EQ (armedIndex, direction.trialType);
+        EXPECT_EQ (armed, 1) << "trial type " << direction.armNumber;
+        EXPECT_EQ (armedIndex, direction.armNumber);
     }
 }
 

@@ -185,7 +185,7 @@ public:
 
     /** How long an uncommitted capture is held before being discarded, in ms.
         Zero means it never expires. */
-    int pendingTimeoutMs = 2000;
+    int pendingTimeoutMs = 5000;
 
     /** Diagnostic counts, shown in the trigger monitor.
      *

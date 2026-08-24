@@ -78,6 +78,49 @@ private:
     std::unordered_map<const TriggerSource*, double> m_angles;
 };
 
+/** How the direction generator turns "N directions" into N conditions.
+ *
+ *  Every field is something the stimulus program decides, not this plugin, which
+ *  is why they are all here rather than hard-coded: which TTL line carries sweep
+ *  onset, what the trial-start message looks like, and where its numbering
+ *  starts. The defaults reproduce what the generator did when the message form
+ *  was fixed.
+ */
+struct DirectionGeneratorSpec
+{
+    int count = 8;
+
+    /** TTL line for the first condition, numbered as the trigger table shows it:
+     *  1-based. Converted to the 0-based line a TTL event reports at the one
+     *  place a source is created. */
+    int firstTriggerNumber = 1;
+
+    /** One TTL line per direction (base, base + 1, ...) instead of all of them on
+     *  the base line.
+     *
+     *  Off by default because the arm message is what distinguishes the
+     *  directions; the line only has to carry sweep onset, so one line suffices
+     *  and costs no hardware. On when the stimulus program really does strobe a
+     *  different line per direction. */
+    bool incrementTriggerNumber = false;
+
+    /** The arm pattern is `base + number + suffix`, where the number starts at
+     *  `firstArmNumber` and steps by one per direction.
+     *
+     *  The suffix is not decoration. With VStim's messages, `TRIALTYPE 3` also
+     *  contains-matches `TRIALTYPE 30`, and TRIAL_END repeats the trial type, so
+     *  a pattern with no trailing boundary both collides with longer numbers and
+     *  re-arms the source at trial end -- which makes it fire on the *next*
+     *  trial's edge, very likely a different direction, with nothing looking
+     *  wrong. `" TIMESEQUENCE"` is the boundary that appears in TRIAL_START and
+     *  not in TRIAL_END. Clear it only if your messages have their own. */
+    juce::String armMessageBase = "TRIALTYPE ";
+    int firstArmNumber = 0;
+    juce::String armMessageSuffix = " TIMESEQUENCE";
+
+    double firstAngleDeg = 0.0;
+};
+
 /** What "generate N directions" produces for one source.
  *
  *  Returned as data rather than applied in place so the generator is testable
@@ -85,29 +128,31 @@ private:
  *  before it does it. */
 struct GeneratedDirection
 {
-    int trialType = 0;
+    /** 1-based, as the trigger table shows it. */
+    int triggerNumber = 1;
+
+    /** The number embedded in the arm pattern. */
+    int armNumber = 0;
+
     double angleDeg = 0.0;
     juce::String name;
     juce::String armPattern;
 };
 
-/** N evenly spaced directions bound to consecutive trial types.
- *
- *  The arm pattern is `TRIALTYPE <t> TIMESEQUENCE`, which is the only form that
- *  does all three necessary things against VStim's messages: it is contiguous in
- *  the trial-start message, the trailing space before TIMESEQUENCE stops
- *  `TRIALTYPE 3` from also matching `TRIALTYPE 30`, and TRIAL_END carries
- *  OUTCOME in that position so it cannot re-arm the source after the trial.
- *
- *  That last point is the one worth stating twice: a source re-armed at trial end
- *  fires on the *next* trial's edge, which is very likely a different direction,
- *  and nothing anywhere looks wrong. */
+/** N evenly spaced directions, one condition each, built from `spec`. */
+std::vector<GeneratedDirection> generateDirections (const DirectionGeneratorSpec& spec);
+
+/** The historical form: N directions on TTL line 1, arm numbers running from
+    `firstArmNumber`, in VStim's default message shape. */
 std::vector<GeneratedDirection> generateDirections (int count,
-                                                    int firstTrialType = 0,
+                                                    int firstArmNumber = 0,
                                                     double firstAngleDeg = 0.0);
 
-/** The arm pattern for one trial type. Exposed so the tests can assert against
-    real message strings, and so the editor can show it. */
+/** The arm pattern for one condition. Exposed so the tests can assert against
+    real message strings, and so the editor can preview what it will generate. */
+juce::String armPatternFor (const juce::String& base, int number, const juce::String& suffix);
+
+/** The arm pattern for one trial type in VStim's default message shape. */
 juce::String armPatternForTrialType (int trialType);
 
 /** A colour standing for a sweep direction.

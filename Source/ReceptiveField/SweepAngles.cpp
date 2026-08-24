@@ -61,36 +61,65 @@ std::vector<Rf::AngleSetWarning> SweepAngles::check (const juce::Array<TriggerSo
     return Rf::checkAngleSet (canonicalAngles (sources, convention));
 }
 
-juce::String armPatternForTrialType (int trialType)
+juce::String armPatternFor (const juce::String& base, int number, const juce::String& suffix)
 {
-    return "TRIALTYPE " + juce::String (trialType) + " TIMESEQUENCE";
+    return base + juce::String (number) + suffix;
 }
 
-std::vector<GeneratedDirection> generateDirections (int count, int firstTrialType, double firstAngleDeg)
+juce::String armPatternForTrialType (int trialType)
+{
+    const DirectionGeneratorSpec defaults;
+    return armPatternFor (defaults.armMessageBase, trialType, defaults.armMessageSuffix);
+}
+
+std::vector<GeneratedDirection> generateDirections (const DirectionGeneratorSpec& spec)
 {
     std::vector<GeneratedDirection> directions;
 
-    if (count <= 0)
+    if (spec.count <= 0)
         return directions;
 
-    const std::vector<double> angles = Rf::evenlySpacedAngles (count, firstAngleDeg);
+    const std::vector<double> angles = Rf::evenlySpacedAngles (spec.count, spec.firstAngleDeg);
     directions.reserve (angles.size());
 
-    for (int i = 0; i < count; ++i)
+    for (int i = 0; i < spec.count; ++i)
     {
         GeneratedDirection direction;
-        direction.trialType = firstTrialType + i;
+
+        direction.triggerNumber =
+            spec.firstTriggerNumber + (spec.incrementTriggerNumber ? i : 0);
+
+        // The arm number steps once per direction whether or not the TTL line
+        // does. Holding it fixed alongside a fixed line would give every
+        // condition the same pattern, so one message would arm all of them and
+        // every direction would accumulate every trial.
+        direction.armNumber = spec.firstArmNumber + i;
+
         direction.angleDeg = angles[static_cast<std::size_t> (i)];
+
         // Degree sign as an explicit code point: the source file's encoding is
         // not something a build should have to be right about.
         direction.name = juce::String (juce::roundToInt (direction.angleDeg))
                          + juce::String::charToString (static_cast<juce::juce_wchar> (0x00B0));
-        direction.armPattern = armPatternForTrialType (direction.trialType);
+
+        direction.armPattern = armPatternFor (spec.armMessageBase,
+                                              direction.armNumber,
+                                              spec.armMessageSuffix);
 
         directions.push_back (direction);
     }
 
     return directions;
+}
+
+std::vector<GeneratedDirection> generateDirections (int count, int firstArmNumber, double firstAngleDeg)
+{
+    DirectionGeneratorSpec spec;
+    spec.count = count;
+    spec.firstArmNumber = firstArmNumber;
+    spec.firstAngleDeg = firstAngleDeg;
+
+    return generateDirections (spec);
 }
 
 juce::Colour colourForDirection (double canonicalAngleDeg)
