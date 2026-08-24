@@ -242,6 +242,12 @@ Two views.
     - **The map** — jet colour scale, blue (low) through cyan, green and yellow to red
       (high), the paper's own scale. Rows run top to bottom while visual-field *y* runs
       upwards; the flip is applied once.
+    - **The degree axes**, along the bottom and down the left — ticks on round
+      multiples of degrees in *visual-field* coordinates, not fractions of the map, so
+      a map that covers the origin has a tick on it and a receptive-field centre can be
+      read straight off. The unit sits once in the corner the two gutters share. The
+      numbers thin out on a small panel while the ticks stay; the axes disappear
+      entirely below roughly 110 px of map, where they would cost more than they tell.
     - **The colour scale**, to the right — the numeric ends and midpoint of the range
       currently in force, with a caption naming the unit: `z` for the arithmetic or
       geometric mean of per-direction z-scores, `|z|` when *Absolute z* is on, `z^n` for

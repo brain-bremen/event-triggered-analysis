@@ -75,6 +75,47 @@ namespace
         return String (value, 3);
     }
 
+    /** Gutters for the degree axes: numbers down the left of the map and along
+     *  the bottom, plus half a label of slack on the sides they overhang.
+     *
+     *  Without them a map says where a receptive field is only relative to its own
+     *  centre pixel, and the one number that matters -- where in the visual field
+     *  the thing actually sits -- has to be counted out in pixels. */
+    constexpr int axisLabelWidth = 26;
+    constexpr int axisLabelHeight = 12;
+    constexpr int axisTickLength = 3;
+
+    /** A round tick step giving roughly four intervals across the span.
+     *
+     *  1, 2 or 5 times a power of ten, so the numbers printed are ones people read
+     *  off an axis rather than whatever the span divided by four happened to be. */
+    double axisTickStepDeg (double spanDeg)
+    {
+        const double raw = std::max (1e-6, spanDeg / 4.0);
+        const double magnitude = std::pow (10.0, std::floor (std::log10 (raw)));
+        const double normalised = raw / magnitude;
+
+        const double step = normalised <= 1.0   ? 1.0
+                            : normalised <= 2.0 ? 2.0
+                            : normalised <= 5.0 ? 5.0
+                                                : 10.0;
+
+        return step * magnitude;
+    }
+
+    /** Just enough decimals for one step to change the number printed. */
+    String formatDegrees (double value, double stepDeg)
+    {
+        const int decimals = stepDeg >= 1.0 ? 0 : (stepDeg >= 0.1 ? 1 : 2);
+
+        // Ticks are multiples of the step, so the one at the origin can carry a
+        // -0.0 out of the arithmetic and print as "-0" under a "0" beside it.
+        if (std::abs (value) < 0.5 * std::pow (10.0, -decimals))
+            value = 0.0;
+
+        return String (value, decimals);
+    }
+
     /** The degree sign, as an explicit code point rather than a literal: the
         source file's encoding is not something a build should have to be right
         about. Same reasoning as SweepAngles::generateDirections. */
@@ -203,6 +244,20 @@ void RfMapPanel::paint (Graphics& g)
     Rectangle<int> scaleArea =
         showScale ? bounds.removeFromRight (scaleColumnWidth) : Rectangle<int>();
 
+    // The axis gutters come out of the panel for the same reason, plus half a
+    // label on the top and right: the number beside a tick is centred on it, so
+    // the ones at the map's own corners hang over the edges it is drawn to.
+    const bool showAxes = m_image.isValid() && bounds.getWidth() > axisLabelWidth * 4
+                          && bounds.getHeight() > axisLabelHeight * 6;
+
+    if (showAxes)
+    {
+        bounds.removeFromLeft (axisLabelWidth);
+        bounds.removeFromRight (axisLabelWidth / 2);
+        bounds.removeFromBottom (axisLabelHeight);
+        bounds.removeFromTop (axisLabelHeight / 2);
+    }
+
     // Square, so degrees per pixel is the same in x and y. A stretched map would
     // make a circular receptive field look elliptical, which is a property people
     // read off these pictures.
@@ -223,23 +278,16 @@ void RfMapPanel::paint (Graphics& g)
     if (showScale)
         paintColourScale (g, scaleArea.withY (mapArea.getY()).withHeight (mapArea.getHeight()));
 
+    if (showAxes)
+        paintAxes (g, mapArea);
+
     const Rf::MapGeometry& geometry = m_mapping.map.geometry();
     const double scale = static_cast<double> (mapArea.getWidth()) / geometry.pixels;
-
-    const auto toScreen = [&] (double xDeg, double yDeg)
-    {
-        const double col =
-            (xDeg - geometry.centreXDeg) / geometry.degreesPerPixel + geometry.centreIndex();
-        const double row =
-            geometry.centreIndex() - (yDeg - geometry.centreYDeg) / geometry.degreesPerPixel;
-        return Point<float> (static_cast<float> (mapArea.getX() + col * scale),
-                             static_cast<float> (mapArea.getY() + row * scale));
-    };
 
     if (m_mapping.estimate.valid && m_mapping.estimate.equivalentDiameterDeg > 0.0)
     {
         const Point<float> centre =
-            toScreen (m_mapping.estimate.centreXDeg, m_mapping.estimate.centreYDeg);
+            mapToScreen (mapArea, m_mapping.estimate.centreXDeg, m_mapping.estimate.centreYDeg);
 
         const auto radius = static_cast<float> (0.5 * m_mapping.estimate.equivalentDiameterDeg
                                                 / geometry.degreesPerPixel * scale);
@@ -319,6 +367,108 @@ void RfMapPanel::paintColourScale (Graphics& g, Rectangle<int> area) const
     g.setFont (FontOptions (10.0f));
     g.setColour (Colours::grey);
     g.drawText (m_valueUnit, caption, Justification::centredLeft, false);
+}
+
+Point<float> RfMapPanel::mapToScreen (Rectangle<int> mapArea, double xDeg, double yDeg) const
+{
+    const Rf::MapGeometry& geometry = m_mapping.map.geometry();
+    const double scale = static_cast<double> (mapArea.getWidth()) / geometry.pixels;
+
+    const double col =
+        (xDeg - geometry.centreXDeg) / geometry.degreesPerPixel + geometry.centreIndex();
+    const double row =
+        geometry.centreIndex() - (yDeg - geometry.centreYDeg) / geometry.degreesPerPixel;
+
+    return { static_cast<float> (mapArea.getX() + col * scale),
+             static_cast<float> (mapArea.getY() + row * scale) };
+}
+
+void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
+{
+    const Rf::MapGeometry& geometry = m_mapping.map.geometry();
+
+    if (! geometry.isValid())
+        return;
+
+    const double step = axisTickStepDeg (geometry.spanDeg());
+
+    // Ticks land on multiples of the step in visual-field coordinates rather than
+    // on fractions of the map, so there is one at the origin whenever the map
+    // covers it -- and that is what a centre gets read against.
+    const auto firstTickAtOrAbove = [step] (double from)
+    { return std::ceil (from / step - 1e-6) * step; };
+
+    const double leftDeg = geometry.xDegAtColumn (0);
+    const double rightDeg = geometry.xDegAtColumn (geometry.pixels - 1);
+    const double topDeg = geometry.yDegAtRow (0);
+    const double bottomDeg = geometry.yDegAtRow (geometry.pixels - 1);
+
+    g.setFont (FontOptions (10.0f));
+
+    const int labelTop = mapArea.getBottom() + axisTickLength;
+    const int labelHeightBelow = axisLabelHeight - axisTickLength;
+
+    // Numbers are dropped -- and their ticks kept -- when a small panel puts them
+    // closer together than they can be read.
+    int lastLabelRight = std::numeric_limits<int>::lowest();
+
+    for (double x = firstTickAtOrAbove (leftDeg); x <= rightDeg + 1e-6; x += step)
+    {
+        const float screenX = mapToScreen (mapArea, x, geometry.centreYDeg).x;
+
+        g.setColour (Colours::grey);
+        g.drawLine (screenX,
+                    static_cast<float> (mapArea.getBottom()),
+                    screenX,
+                    static_cast<float> (labelTop),
+                    1.0f);
+
+        const Rectangle<int> box (
+            roundToInt (screenX) - axisLabelWidth / 2, labelTop, axisLabelWidth, labelHeightBelow);
+
+        if (box.getX() < lastLabelRight)
+            continue;
+
+        g.setColour (Colours::lightgrey);
+        g.drawText (formatDegrees (x, step), box, Justification::centredTop, false);
+        lastLabelRight = box.getRight();
+    }
+
+    const int labelLeft = mapArea.getX() - axisLabelWidth;
+    const int labelWidthBeside = axisLabelWidth - axisTickLength - 1;
+    int lastLabelBottom = std::numeric_limits<int>::max();
+
+    for (double y = firstTickAtOrAbove (bottomDeg); y <= topDeg + 1e-6; y += step)
+    {
+        const float screenY = mapToScreen (mapArea, geometry.centreXDeg, y).y;
+
+        g.setColour (Colours::grey);
+        g.drawLine (static_cast<float> (mapArea.getX() - axisTickLength),
+                    screenY,
+                    static_cast<float> (mapArea.getX()),
+                    screenY,
+                    1.0f);
+
+        const Rectangle<int> box (labelLeft,
+                                  roundToInt (screenY) - axisLabelHeight / 2,
+                                  labelWidthBeside,
+                                  axisLabelHeight);
+
+        if (box.getBottom() > lastLabelBottom)
+            continue;
+
+        g.setColour (Colours::lightgrey);
+        g.drawText (formatDegrees (y, step), box, Justification::centredRight, false);
+        lastLabelBottom = box.getY();
+    }
+
+    // The unit, once, in the corner the two gutters share -- rather than on every
+    // tick, where it would cost more width than the numbers themselves.
+    g.setColour (Colours::grey);
+    g.drawText (degreeSign(),
+                Rectangle<int> (labelLeft, labelTop, labelWidthBeside, labelHeightBelow),
+                Justification::centredRight,
+                false);
 }
 
 void RfMapPanel::paintPolargram (Graphics& g, Rectangle<int> area) const

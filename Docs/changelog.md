@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Degree axes on the Bar Mapper's maps** — ticks and numbers along the bottom
+  and down the left of every panel, in visual-field degrees, so the centre of a
+  mapped receptive field can be read off the picture. Until now a map showed
+  position only relative to its own centre pixel, and the actual coordinates of a
+  peak had to be counted out in pixels from the middle. Ticks land on round
+  multiples in visual-field coordinates rather than on fractions of the map, so a
+  map covering the origin always has a tick there; the numbers thin out on a small
+  panel while the ticks stay, and the axes step aside entirely when the panel is
+  too small for them to be worth the map pixels they cost
+
 - Triggered Average's **axis limits moved into an AXES popout**. Two labels, two
   AUTO/MANUAL toggles and four editors — some 570 pixels of options bar — for
   settings that are adjusted once and then left alone, crowding out the controls

@@ -76,7 +76,17 @@ private:
     std::pair<float, float> colourRange() const;
 
     void paintColourScale (juce::Graphics& g, juce::Rectangle<int> area) const;
+
+    /** Degree ticks and numbers down the left of the map and along its bottom. */
+    void paintAxes (juce::Graphics& g, juce::Rectangle<int> mapArea) const;
+
     void paintPolargram (juce::Graphics& g, juce::Rectangle<int> area) const;
+
+    /** Where a visual-field coordinate lands inside a map drawn into `mapArea`.
+     *
+     *  The one place the degrees-to-pixels conversion lives, so the axis ticks and
+     *  the peak marker cannot end up disagreeing about where a degree is. */
+    juce::Point<float> mapToScreen (juce::Rectangle<int> mapArea, double xDeg, double yDeg) const;
 
     juce::String m_channelName;
     juce::String m_valueUnit { "z" };
