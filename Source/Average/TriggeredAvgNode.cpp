@@ -237,7 +237,26 @@ bool TriggeredAvgNode::saveSessionPayload (SessionWriter& writer)
 {
     // gather() takes the DataStore lock itself and does nothing but copy under
     // it; the disk work happens later, on the session I/O thread.
-    return AverageSession::gather (m_dataStore, getTriggerSources().getAll(), writer);
+    if (! AverageSession::gather (m_dataStore, getTriggerSources().getAll(), writer))
+        return false;
+
+    // The mean, the SD and the time axis on top: derived from the sums, and
+    // written so that a session opened in Python or MATLAB hands over the traces
+    // the canvas drew rather than the accumulator state behind them. Loading
+    // ignores them — see the note on gatherDerived().
+    //
+    // Failing to add them does not abandon the save. They are an export
+    // convenience; the accumulators above are the session, and refusing to write
+    // one because the other did not fit would cost the user the run.
+    const auto geometry = getSessionGeometry();
+
+    AverageSession::gatherDerived (m_dataStore,
+                                   getTriggerSources().getAll(),
+                                   geometry.sampleRateHz,
+                                   geometry.preSamples,
+                                   writer);
+
+    return true;
 }
 
 bool TriggeredAvgNode::loadSessionPayload (const SessionReader& reader)

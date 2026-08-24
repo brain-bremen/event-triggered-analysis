@@ -27,6 +27,9 @@
 #include "AverageCore/Ui/GridDisplay.h"
 #include "AverageCore/Ui/TimeAxis.h"
 #include "../TriggeredAvgNode.h"
+#include "TriggerCore/Ui/NestedCallOut.h"
+
+#include <algorithm>
 
 using namespace EventTriggered;
 
@@ -40,6 +43,12 @@ OptionsBar::OptionsBar (TriggeredAvgCanvas* canvas_, GridDisplay* display_, Time
     clearButton->addListener (this);
     clearButton->setClickingTogglesState (false);
     addAndMakeVisible (clearButton.get());
+
+    // SAVE and LOAD. The component owns the chooser, the callbacks and the rule
+    // that loading is refused during acquisition; this canvas only gives it a
+    // place to sit. See TriggerCore/Ui/SessionControls.h.
+    sessionControls = std::make_unique<SessionControls> (canvas->getNode());
+    addAndMakeVisible (sessionControls.get());
 
     // Row height controls
     rowHeightLabel = std::make_unique<Label> ("Row Height Label", "Row Height");
@@ -92,72 +101,13 @@ OptionsBar::OptionsBar (TriggeredAvgCanvas* canvas_, GridDisplay* display_, Time
     plotTypeSelector->addListener (this);
     addAndMakeVisible (plotTypeSelector.get());
 
-    // X-axis limit controls
-    xLimitsLabel = std::make_unique<Label> ("X Limits Label", "X-Axis (ms)");
-    xLimitsLabel->setFont (FontOptions (20.0f));
-    xLimitsLabel->setJustificationType (Justification::centredRight);
-    addAndMakeVisible (xLimitsLabel.get());
-
-    xLimitsToggle = std::make_unique<UtilityButton> ("AUTO");
-    xLimitsToggle->setFont (FontOptions (12.0f));
-    xLimitsToggle->addListener (this);
-    xLimitsToggle->setClickingTogglesState (true);
-    addAndMakeVisible (xLimitsToggle.get());
-
-    xMinLabel = std::make_unique<Label> ("X Limits (ms)", "X LIM (ms)");
-    xMinLabel->setFont (FontOptions (12.0f));
-    xMinLabel->setJustificationType (Justification::centredRight);
-    addAndMakeVisible (xMinLabel.get());
-
-    xMaxLabel = std::make_unique<Label> ("X Max Label", "X Max (ms):");
-    xMaxLabel->setFont (FontOptions (12.0f));
-    xMaxLabel->setJustificationType (Justification::centredRight);
-    //addAndMakeVisible (xMaxLabel.get());
-
-    xMinEditor = std::make_unique<TextEditor> ("X Min");
-    xMinEditor->setText ("-50.0");
-    xMinEditor->setFont (FontOptions (12.0f));
-    xMinEditor->setEnabled (false);
-    xMinEditor->onReturnKey = [this]() { updateXLimits(); };
-    xMinEditor->onFocusLost = [this]() { updateXLimits(); };
-    addAndMakeVisible (xMinEditor.get());
-
-    xMaxEditor = std::make_unique<TextEditor> ("X Max");
-    xMaxEditor->setText ("50.0");
-    xMaxEditor->setFont (FontOptions (12.0f));
-    xMaxEditor->setEnabled (false);
-    xMaxEditor->onReturnKey = [this]() { updateXLimits(); };
-    xMaxEditor->onFocusLost = [this]() { updateXLimits(); };
-    addAndMakeVisible (xMaxEditor.get());
-
-    // Y-axis limit controls
-    yLimitsLabel = std::make_unique<Label> ("Y Limits Label", "Y-Axis (uV/V)");
-    yLimitsLabel->setFont (FontOptions (20.0f));
-    yLimitsLabel->setJustificationType (Justification::centredRight);
-    addAndMakeVisible (yLimitsLabel.get());
-
-    yLimitsToggle = std::make_unique<UtilityButton> ("AUTO");
-    yLimitsToggle->setFont (FontOptions (12.0f));
-    yLimitsToggle->addListener (this);
-    yLimitsToggle->setClickingTogglesState (true);
-    addAndMakeVisible (yLimitsToggle.get());
-
-    yMinEditor = std::make_unique<TextEditor> ("Y Min");
-    yMinEditor->setText ("-100.0");
-    yMinEditor->setFont (FontOptions (12.0f));
-    yMinEditor->setEnabled (false);
-    yMinEditor->onReturnKey = [this]() { updateYLimits(); };
-
-    yMinEditor->onFocusLost = [this]() { updateYLimits(); };
-    addAndMakeVisible (yMinEditor.get());
-
-    yMaxEditor = std::make_unique<TextEditor> ("Y Max");
-    yMaxEditor->setText ("100.0");
-    yMaxEditor->setFont (FontOptions (12.0f));
-    yMaxEditor->setEnabled (false);
-    yMaxEditor->onReturnKey = [this]() { updateYLimits(); };
-    yMaxEditor->onFocusLost = [this]() { updateYLimits(); };
-    addAndMakeVisible (yMaxEditor.get());
+    // Axis limits, behind one button. See AxisLimitsPanel.
+    axisLimitsButton = std::make_unique<UtilityButton> ("AXES");
+    axisLimitsButton->setFont (FontOptions (12.0f));
+    axisLimitsButton->setClickingTogglesState (false);
+    axisLimitsButton->setTooltip ("Fix the X and Y ranges, or let them scale automatically");
+    axisLimitsButton->addListener (this);
+    addAndMakeVisible (axisLimitsButton.get());
 
     //numTrialsLabel = std::make_unique<Label> ("Num Trials Label", "N:");
     //numTrialsLabel->setFont (FontOptions (12.0f));
@@ -214,63 +164,9 @@ void OptionsBar::buttonClicked (Button* button)
 
         canvas->resized();
     }
-    else if (button == yLimitsToggle.get())
+    else if (button == axisLimitsButton.get())
     {
-        useCustomYLimits = button->getToggleState();
-
-        if (useCustomYLimits)
-        {
-            yLimitsToggle->setLabel ("MANUAL");
-            yMinEditor->setEnabled (true);
-            yMaxEditor->setEnabled (true);
-            updateYLimits();
-        }
-        else
-        {
-            yLimitsToggle->setLabel ("AUTO");
-            yMinEditor->setEnabled (false);
-            yMaxEditor->setEnabled (false);
-            display->resetYLimits();
-        }
-
-        // Notify the processor of the change
-        if (auto* processor = canvas->getProcessor())
-        {
-            if (auto* triggeredAvgNode = dynamic_cast<TriggeredAvgNode*> (processor))
-            {
-                triggeredAvgNode->getParameter (ParameterNames::use_custom_y_limits)
-                    ->setNextValue (useCustomYLimits ? 1.0f : 0.0f, false);
-            }
-        }
-    }
-    else if (button == xLimitsToggle.get())
-    {
-        useCustomXLimits = button->getToggleState();
-
-        if (useCustomXLimits)
-        {
-            xLimitsToggle->setLabel ("MANUAL");
-            xMinEditor->setEnabled (true);
-            xMaxEditor->setEnabled (true);
-            updateXLimits();
-        }
-        else
-        {
-            xLimitsToggle->setLabel ("AUTO");
-            xMinEditor->setEnabled (false);
-            xMaxEditor->setEnabled (false);
-            display->resetXLimits();
-        }
-
-        // Notify the processor of the change
-        if (auto* processor = canvas->getProcessor())
-        {
-            if (auto* triggeredAvgNode = dynamic_cast<TriggeredAvgNode*> (processor))
-            {
-                triggeredAvgNode->getParameter (ParameterNames::use_custom_x_limits)
-                    ->setNextValue (useCustomXLimits ? 1.0f : 0.0f, false);
-            }
-        }
+        showAxisLimits();
     }
     //else if (button == showTrialsToggle.get())
     //{
@@ -320,9 +216,14 @@ void OptionsBar::comboBoxChanged (ComboBox* comboBox)
     }
 }
 
-void OptionsBar::resized()
+namespace
 {
-    const int verticalOffset = 7;
+constexpr int optionsBarVerticalOffset = 7;
+constexpr int optionsBarSideMargin = 5;
+} // namespace
+
+FlexBox OptionsBar::buildLayout() const
+{
     const int controlHeight = 25;
     const int spacing = 5;
 
@@ -333,11 +234,14 @@ void OptionsBar::resized()
 
     // Helper lambda to add spacing
     auto addSpacer = [&mainLayout] (int width)
-    { mainLayout.items.add (FlexItem().withWidth (width).withHeight (1)); };
+    { mainLayout.items.add (FlexItem().withWidth ((float) width).withHeight (1.0f)); };
 
     // Helper lambda to add a control with standard height
     auto addControl = [&mainLayout, controlHeight] (Component& comp, int width)
-    { mainLayout.items.add (FlexItem (comp).withWidth (width).withHeight (controlHeight)); };
+    {
+        mainLayout.items.add (
+            FlexItem (comp).withWidth ((float) width).withHeight ((float) controlHeight));
+    };
 
     // Left section: Layout controls
     addControl (*rowHeightLabel, 95);
@@ -361,34 +265,38 @@ void OptionsBar::resized()
     addControl (*plotTypeSelector, 150);
     addSpacer (spacing * 5);
 
-    // X-axis controls group
-    addControl (*xLimitsLabel, 95);
-    addSpacer (spacing);
-    addControl (*xLimitsToggle, 65);
-    addSpacer (spacing);
-    addControl (*xMinEditor, 60);
-    addSpacer (spacing);
-    addControl (*xMaxEditor, 60);
-    addSpacer (spacing * 5);
-
-    // Y-axis controls group
-    addControl (*yLimitsLabel, 105);
-    addSpacer (spacing);
-    addControl (*yLimitsToggle, 65);
-    addSpacer (spacing);
-    addControl (*yMinEditor, 60);
-    addSpacer (spacing);
-    addControl (*yMaxEditor, 60);
+    // Both axes, behind one button
+    addControl (*axisLimitsButton, 70);
 
     // Flexible spacer to push buttons to the right
     mainLayout.items.add (FlexItem().withFlex (1).withHeight (controlHeight));
 
     // Right section: Action buttons
+    addControl (*sessionControls, sessionControls->getDesiredWidth());
+    addSpacer (spacing * 2);
     addControl (*clearButton, 70);
 
-    // Perform layout
-    mainLayout.performLayout (
-        getLocalBounds().withTrimmedTop (verticalOffset).withTrimmedLeft (5).withTrimmedRight (5));
+    return mainLayout;
+}
+
+int OptionsBar::getDesiredWidth() const
+{
+    const auto layout = buildLayout();
+
+    float total = 0.0f;
+
+    for (const auto& item : layout.items)
+        total += std::max (0.0f, item.width); // the flexible spacer asks for none
+
+    return static_cast<int> (total) + 2 * optionsBarSideMargin;
+}
+
+void OptionsBar::resized()
+{
+    buildLayout().performLayout (getLocalBounds()
+                                     .withTrimmedTop (optionsBarVerticalOffset)
+                                     .withTrimmedLeft (optionsBarSideMargin)
+                                     .withTrimmedRight (optionsBarSideMargin));
 }
 
 void OptionsBar::paint (Graphics& g)
@@ -414,83 +322,97 @@ void OptionsBar::paint (Graphics& g)
     //g.drawText ("Trials", 1185, verticalOffset + 15, 50, 15, Justification::centred, false);
 }
 
-void OptionsBar::updateYLimits()
+void OptionsBar::showAxisLimits()
 {
-    if (! useCustomYLimits)
-        return;
+    auto* node = canvas->getNode();
 
-    float minY = yMinEditor->getText().getFloatValue();
-    float maxY = yMaxEditor->getText().getFloatValue();
+    // The window the traces cover. It is what the X range is clamped to, and the
+    // panel shows it so a clamped value is explained rather than mysterious.
+    const float windowMin = node != nullptr ? -node->getPreWindowSizeMs() : -50.0f;
+    const float windowMax = node != nullptr ? node->getPostWindowSizeMs() : 50.0f;
 
-    if (minY >= maxY)
+    auto panel = std::make_unique<AxisLimitsPanel> (axisLimits, windowMin, windowMax);
+
+    // Both ends of this callback are held weakly. The call-out owns the panel
+    // from here on and can destroy it at any time; and the call-out is a desktop
+    // window that can outlive the visualizer that opened it, so the options bar
+    // has to be checked too rather than captured as a raw `this`.
+    Component::SafePointer<AxisLimitsPanel> safePanel (panel.get());
+    Component::SafePointer<OptionsBar> safeThis (this);
+
+    panel->onChanged = [safeThis, safePanel] (const AxisLimits& edited) mutable
     {
-        // Invalid range - reset to defaults
-        yMinEditor->setText ("-100.0");
-        yMaxEditor->setText ("100.0");
-        minY = -100.0f;
-        maxY = 100.0f;
-    }
+        if (safeThis == nullptr)
+            return;
 
-    display->setYLimits (minY, maxY);
+        safeThis->axisLimits = edited;
+        safeThis->applyAxisLimits();
 
-    // Notify the processor of the changes
-    if (auto* processor = canvas->getProcessor())
-    {
-        if (auto* triggeredAvgNode = dynamic_cast<TriggeredAvgNode*> (processor))
-        {
-            triggeredAvgNode->getParameter (ParameterNames::y_min)->setNextValue (minY, false);
-            triggeredAvgNode->getParameter (ParameterNames::y_max)->setNextValue (maxY, false);
-        }
-    }
+        // applyAxisLimits() may have moved an X value onto the window's edge;
+        // the panel has to show what is in force, not what was typed.
+        if (safePanel != nullptr)
+            safePanel->setLimits (safeThis->axisLimits);
+    };
+
+    NestedCallOut::show (*axisLimitsButton, std::move (panel));
 }
 
-void OptionsBar::updateXLimits()
+void OptionsBar::applyAxisLimits()
 {
-    if (! useCustomXLimits)
+    auto* node = canvas->getNode();
+
+    if (axisLimits.useCustomX)
+    {
+        // Clamped to the captured window so the plot always shows data: a range
+        // outside it is an empty panel, which looks exactly like a condition
+        // that never fired.
+        if (node != nullptr)
+        {
+            const float windowMin = -node->getPreWindowSizeMs();
+            const float windowMax = node->getPostWindowSizeMs();
+
+            axisLimits.xMinMs = std::max (axisLimits.xMinMs, windowMin);
+            axisLimits.xMaxMs = std::min (axisLimits.xMaxMs, windowMax);
+
+            // Nothing of the window left after clamping — a range wholly outside
+            // it. The whole window is the only sensible answer.
+            if (axisLimits.xMinMs >= axisLimits.xMaxMs)
+            {
+                axisLimits.xMinMs = windowMin;
+                axisLimits.xMaxMs = windowMax;
+            }
+        }
+
+        display->setXLimits (axisLimits.xMinMs, axisLimits.xMaxMs);
+    }
+    else
+    {
+        display->resetXLimits();
+    }
+
+    if (axisLimits.useCustomY)
+        display->setYLimits (axisLimits.yMin, axisLimits.yMax);
+    else
+        display->resetYLimits();
+
+    if (node == nullptr)
         return;
 
-    float minX = xMinEditor->getText().getFloatValue();
-    float maxX = xMaxEditor->getText().getFloatValue();
-
-    // Clamp to the actual data collection window so the plot always shows data
-    if (auto* triggeredAvgNode =
-            dynamic_cast<TriggeredAvgNode*> (canvas->getProcessor()))
+    // Mirrored into the parameters so they travel with the signal chain. The
+    // canvas's own XML is what restores them -- see loadCustomParametersFromXml
+    // -- these are the copy anything else would read.
+    const auto set = [node] (const char* name, float value)
     {
-        const float windowMin = -triggeredAvgNode->getPreWindowSizeMs();
-        const float windowMax = triggeredAvgNode->getPostWindowSizeMs();
-        minX = std::max (minX, windowMin);
-        maxX = std::min (maxX, windowMax);
-    }
+        if (auto* parameter = node->getParameter (name))
+            parameter->setNextValue (value, false);
+    };
 
-    if (minX >= maxX)
-    {
-        // Invalid range after clamping - reset to full window
-        if (auto* triggeredAvgNode =
-                dynamic_cast<TriggeredAvgNode*> (canvas->getProcessor()))
-        {
-            minX = -triggeredAvgNode->getPreWindowSizeMs();
-            maxX = triggeredAvgNode->getPostWindowSizeMs();
-        }
-        else
-        {
-            minX = -50.0f;
-            maxX = 50.0f;
-        }
-        xMinEditor->setText (String (minX));
-        xMaxEditor->setText (String (maxX));
-    }
-
-    display->setXLimits (minX, maxX);
-
-    // Notify the processor of the changes
-    if (auto* processor = canvas->getProcessor())
-    {
-        if (auto* triggeredAvgNode = dynamic_cast<TriggeredAvgNode*> (processor))
-        {
-            triggeredAvgNode->getParameter (ParameterNames::x_min)->setNextValue (minX, false);
-            triggeredAvgNode->getParameter (ParameterNames::x_max)->setNextValue (maxX, false);
-        }
-    }
+    set (ParameterNames::use_custom_x_limits, axisLimits.useCustomX ? 1.0f : 0.0f);
+    set (ParameterNames::x_min, axisLimits.xMinMs);
+    set (ParameterNames::x_max, axisLimits.xMaxMs);
+    set (ParameterNames::use_custom_y_limits, axisLimits.useCustomY ? 1.0f : 0.0f);
+    set (ParameterNames::y_min, axisLimits.yMin);
+    set (ParameterNames::y_max, axisLimits.yMax);
 }
 
 //void OptionsBar::updateTrialDisplaySettings()
@@ -513,21 +435,18 @@ void OptionsBar::saveCustomParametersToXml (XmlElement* xml) const
     xml->setAttribute ("row_height", rowHeightSelector->getSelectedId());
     xml->setAttribute ("overlay", overlayButton->getToggleState());
 
-    // Save X-axis limit parameters
-    xml->setAttribute ("use_custom_x_limits", useCustomXLimits);
-    if (useCustomXLimits)
-    {
-        xml->setAttribute ("x_min", xMinEditor->getText().getFloatValue());
-        xml->setAttribute ("x_max", xMaxEditor->getText().getFloatValue());
-    }
+    // The axis limits, under the attribute names they have always had — a saved
+    // chain from before they moved into the popout restores unchanged. Both
+    // ranges are written whether or not they are in use, so switching an axis
+    // back to MANUAL finds the numbers that were last typed rather than the
+    // defaults.
+    xml->setAttribute ("use_custom_x_limits", axisLimits.useCustomX);
+    xml->setAttribute ("x_min", axisLimits.xMinMs);
+    xml->setAttribute ("x_max", axisLimits.xMaxMs);
 
-    // Save Y-axis limit parameters
-    xml->setAttribute ("use_custom_y_limits", useCustomYLimits);
-    if (useCustomYLimits)
-    {
-        xml->setAttribute ("y_min", yMinEditor->getText().getFloatValue());
-        xml->setAttribute ("y_max", yMaxEditor->getText().getFloatValue());
-    }
+    xml->setAttribute ("use_custom_y_limits", axisLimits.useCustomY);
+    xml->setAttribute ("y_min", axisLimits.yMin);
+    xml->setAttribute ("y_max", axisLimits.yMax);
 
     //// Save individual trial display parameters
     //xml->setAttribute ("show_trials", showTrials);
@@ -542,41 +461,18 @@ void OptionsBar::loadCustomParametersFromXml (XmlElement* xml)
     overlayButton->setToggleState (xml->getBoolAttribute ("overlay", false), sendNotification);
     plotTypeSelector->setSelectedId (xml->getIntAttribute ("plot_type", 1), sendNotification);
 
-    // Load X-axis limit parameters
-    bool customXLimits = xml->getBoolAttribute ("use_custom_x_limits", false);
+    axisLimits.useCustomX = xml->getBoolAttribute ("use_custom_x_limits", false);
+    axisLimits.xMinMs = (float) xml->getDoubleAttribute ("x_min", -50.0);
+    axisLimits.xMaxMs = (float) xml->getDoubleAttribute ("x_max", 50.0);
 
-    if (customXLimits)
-    {
-        float minX = (float) xml->getDoubleAttribute ("x_min", -50.0);
-        float maxX = (float) xml->getDoubleAttribute ("x_max", 50.0);
+    axisLimits.useCustomY = xml->getBoolAttribute ("use_custom_y_limits", false);
+    axisLimits.yMin = (float) xml->getDoubleAttribute ("y_min", -100.0);
+    axisLimits.yMax = (float) xml->getDoubleAttribute ("y_max", 100.0);
 
-        xMinEditor->setText (String (minX));
-        xMaxEditor->setText (String (maxX));
-
-        xLimitsToggle->setToggleState (true, sendNotification);
-    }
-    else
-    {
-        xLimitsToggle->setToggleState (false, sendNotification);
-    }
-
-    // Load Y-axis limit parameters
-    bool customYLimits = xml->getBoolAttribute ("use_custom_y_limits", false);
-
-    if (customYLimits)
-    {
-        float minY = (float) xml->getDoubleAttribute ("y_min", -100.0);
-        float maxY = (float) xml->getDoubleAttribute ("y_max", 100.0);
-
-        yMinEditor->setText (String (minY));
-        yMaxEditor->setText (String (maxY));
-
-        yLimitsToggle->setToggleState (true, sendNotification);
-    }
-    else
-    {
-        yLimitsToggle->setToggleState (false, sendNotification);
-    }
+    // Through the same call an edit in the popout takes, rather than by poking
+    // the display directly: the clamp and the parameter mirror belong to a
+    // restored layout as much as to a typed one.
+    applyAxisLimits();
 
     //// Load individual trial display parameters
     //showTrials = xml->getBoolAttribute ("show_trials", false);
@@ -591,6 +487,7 @@ void OptionsBar::loadCustomParametersFromXml (XmlElement* xml)
 
 TriggeredAvgCanvas::TriggeredAvgCanvas (TriggeredAvgNode* processor_)
     : Visualizer (processor_),
+      m_node (processor_),
       m_dataStore (processor_->getDataStore())
 {
     m_timeAxis = std::make_unique<TimeAxis>();
@@ -648,7 +545,11 @@ void TriggeredAvgCanvas::resized()
 
     m_optionsBarHolder->setBounds (0, getHeight() - optionsBarHeight, getWidth(), optionsBarHeight);
 
-    int optionsWidth = getWidth() < 775 ? 775 : getWidth();
+    // Never narrower than the controls need: the holder scrolls to this
+    // component's edge and no further, so a smaller width would leave the
+    // right-hand buttons — SAVE, LOAD and CLEAR — drawn past a boundary the
+    // scrollbar cannot reach.
+    const int optionsWidth = std::max (getWidth(), m_optionsBar->getDesiredWidth());
     m_optionsBar->setBounds (0, 0, optionsWidth, m_optionsBarHolder->getHeight());
 }
 

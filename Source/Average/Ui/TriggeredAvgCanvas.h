@@ -25,6 +25,8 @@
 #include "../TriggeredAvgNode.h"
 #include "AverageCore/Ui/GridDisplay.h"
 #include "AverageCore/Ui/TimeAxis.h"
+#include "AxisLimitsPanel.h"
+#include "TriggerCore/Ui/SessionControls.h"
 #include <VisualizerWindowHeaders.h>
 
 namespace EventTriggered
@@ -46,15 +48,42 @@ public:
     void paint (Graphics& g) override;
     void saveCustomParametersToXml (XmlElement* xml) const;
     void loadCustomParametersFromXml (XmlElement* xml);
-    void updateYLimits();
-    void updateXLimits();
+
+    /** Width the controls need laid out in a row.
+     *
+     *  The holding viewport scrolls only as far as this component's bounds, so a
+     *  width smaller than the layout asks for does not squeeze the controls —
+     *  it puts the right-hand ones past the edge of a viewport that will not
+     *  scroll to them. Computed from the same FlexBox resized() performs, so the
+     *  two cannot drift apart. */
+    int getDesiredWidth() const;
 
 private:
+    /** The row of controls, built but not laid out. See getDesiredWidth(). */
+    FlexBox buildLayout() const;
+
+    /** Opens the axis-limit call-out, anchored to the AXES button. */
+    void showAxisLimits();
+
+    /** Puts m_axisLimits into force: X clamped to the captured window, both axes
+     *  pushed into the trace panels, and both mirrored into the node's
+     *  parameters.
+     *
+     *  The one place that applies them, because it has to run for an edit made in
+     *  the popout *and* for a layout restored from a saved chain, and the two
+     *  reaching the display by different routes is how they would come to
+     *  disagree. Rewrites m_axisLimits with whatever the clamp settled on. */
+    void applyAxisLimits();
+
     GridDisplay* display;
     TriggeredAvgCanvas* canvas;
     TimeAxis* timescale;
 
     std::unique_ptr<UtilityButton> clearButton;
+
+    /** SAVE and LOAD, the same component the other triggered plugins use, so
+        every plugin's session is written and read by one implementation. */
+    std::unique_ptr<SessionControls> sessionControls;
 
     std::unique_ptr<Label> plotTypeLabel;
     std::unique_ptr<ComboBox> plotTypeSelector;
@@ -68,22 +97,13 @@ private:
     std::unique_ptr<Label> overlayLabel;
     std::unique_ptr<UtilityButton> overlayButton;
 
-    // X-axis limit controls
-    std::unique_ptr<Label> xLimitsLabel;
-    std::unique_ptr<UtilityButton> xLimitsToggle;
-    std::unique_ptr<Label> xMinLabel;
-    std::unique_ptr<Label> xMaxLabel;
-    std::unique_ptr<TextEditor> xMinEditor;
-    std::unique_ptr<TextEditor> xMaxEditor;
-    bool useCustomXLimits = false;
+    /** Opens AxisLimitsPanel. The four editors and two toggles behind it used to
+        be laid out here; see the note on that class. */
+    std::unique_ptr<UtilityButton> axisLimitsButton;
 
-    // Y-axis limit controls
-    std::unique_ptr<Label> yLimitsLabel;
-    std::unique_ptr<UtilityButton> yLimitsToggle;
-    std::unique_ptr<TextEditor> yMinEditor;
-    std::unique_ptr<TextEditor> yMaxEditor;
-
-    bool useCustomYLimits = false;
+    /** Owned here rather than by the panel, which is destroyed every time the
+        call-out closes. */
+    AxisLimits axisLimits;
 
     // Individual trial display controls
     //std::unique_ptr<UtilityButton> showTrialsToggle;
@@ -147,6 +167,8 @@ public:
     /** Prepare for update*/
     void prepareToUpdate();
 
+    TriggeredAvgNode* getNode() { return m_node; }
+
     /** Save plot type*/
     void saveCustomParametersToXml (XmlElement* xml) override;
 
@@ -155,6 +177,7 @@ public:
 
 private:
     // dependencies
+    TriggeredAvgNode* m_node;
     DataStore* m_dataStore;
 
     // data

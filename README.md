@@ -152,6 +152,22 @@ has no button in the editor yet.
 Every parameter, what it does to the map, and how to make the trial window and the sweep agree:
 [`Source/ReceptiveField/README.md`](Source/ReceptiveField/README.md).
 
+## Sessions
+
+**SAVE** and **LOAD**, at the right-hand end of every canvas's options bar, write and resume what
+has been accumulated so far. One component and one bundle format across all four plugins: a
+directory holding `session.xml` — provenance, trial geometry, channels, the array index and the
+processor's own configuration verbatim — plus one `.npy` per array and any exported figures. The
+sums rather than the averages, which is what makes it *resume* rather than *reload*.
+
+Saving works during acquisition; loading does not, and a session that does not match the current
+sample rate, trial window, channel count or trigger conditions is refused with the reasons rather
+than half-applied.
+
+The array tables, the manifest, and worked examples for reading one in Python or MATLAB:
+[Sessions](https://brain-bremen.github.io/event-triggered-analysis/sessions/), source in
+[`Docs/sessions/`](Docs/sessions/).
+
 ## Design notes
 
 - **All per-trial work runs on a background thread.** `process()` only appends to a lock-free ring

@@ -17,4 +17,6 @@ oe_add_plugin(TriggeredAverage average_core
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/TriggeredAvgEditor.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AvgAnalysisSettingsWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AvgAnalysisSettingsWindow.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AxisLimitsPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/AxisLimitsPanel.h
 )

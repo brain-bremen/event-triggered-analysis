@@ -13,6 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Triggered Average's **axis limits moved into an AXES popout**. Two labels, two
+  AUTO/MANUAL toggles and four editors — some 570 pixels of options bar — for
+  settings that are adjusted once and then left alone, crowding out the controls
+  that are used constantly. The popout shows the captured window the X range is
+  clamped to, so a value that comes back changed is explained; a range typed with
+  its ends the wrong way round is now rejected instead of silently reset, and both
+  ranges are remembered while an axis is on AUTO. Saved layouts keep the same
+  attribute names, so an existing signal chain restores unchanged
+
+- **SAVE and LOAD buttons on the Triggered Average canvas**, alongside CLEAR, so a
+  run can be resumed after a break and the data read outside the GUI. They are the
+  same `SessionControls` component and the same session bundle the Bar Mapper
+  already used — one XML file plus one `.npy` per array — so the two plugins cannot
+  drift into two formats that look alike and are not interchangeable. SAVE works
+  during acquisition (the accumulators are copied under their own lock and written
+  on a background thread); LOAD is refused while acquiring, and a session that does
+  not match the current sample rate, trial window, channel count or trigger
+  conditions is refused with the reasons rather than half-applied
+
+- Triggered Average's session also carries **what the canvas draws**: `averages`,
+  `standard_deviations` and a `time_ms` axis with the trigger at sample
+  `pre_samples`. Derived from the accumulators and ignored on load — they exist so
+  that reading a session in Python or MATLAB hands over the traces rather than the
+  accumulator state behind them. Conditions with no trials are written as zeros,
+  never NaN. The format is documented in the README
+
 - **SAVE and LOAD buttons in the trigger table**, in all four plugins. A rig
   usually runs several of these plugins off the same conditions, and the trigger
   table — names, TTL lines, colours and the three message patterns per condition —
@@ -47,6 +73,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dropped. Sources in an existing signal chain keep whatever they were saved with
 
 ### Fixed
+
+- Triggered Average's **options bar could place its right-hand buttons where the
+  scrollbar could not reach them**. The bar was laid out at least 775 px wide while
+  its controls needed nearly twice that, and the holding viewport scrolls only as
+  far as the bar's own bounds, so on a narrow window CLEAR was drawn past a
+  boundary nothing could scroll to. The width is now computed from the same layout
+  that is performed
 
 - The **Receptive Field Bar Mapper recomputed the whole map every time a trial was
   parked** awaiting its commit message, producing exactly the map already on

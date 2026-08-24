@@ -78,6 +78,37 @@ bool gather (DataStore& store,
              const juce::Array<TriggerSource*>& sources,
              SessionWriter& writer);
 
+/** Adds what the plugin *displays*, alongside the accumulators gather() wrote.
+ *
+ *      averages             (sources, channels, samples)  float32
+ *      standard_deviations  (sources, channels, samples)  float32
+ *      time_ms              (samples,)                    float64
+ *
+ *  Derived, and saved anyway, for the same reason the mapper saves its finished
+ *  maps: a session is also how the data leaves this program, and someone reading
+ *  it in Python or MATLAB should get the mean trace the canvas drew without
+ *  first having to work out that it is `sums / trial_counts` with the trigger at
+ *  sample `pre_samples`. The time axis in particular is the part that is easy to
+ *  get quietly wrong by one sample.
+ *
+ *  Outputs, not state: apply() ignores every array written here and rebuilds the
+ *  averages from the sums, so a session remains resumable whether or not this was
+ *  called. It follows that gather() must have been called first — this adds no
+ *  resumable state of its own.
+ *
+ *  The standard deviation is the population one, over trials, exactly as
+ *  MultiChannelAverageBuffer computes it for the display; divide by
+ *  sqrt(trial_counts) for the standard error. A condition with no trials is
+ *  written as zeros rather than NaN, and `trial_counts` is what says so.
+ *
+ *  Returns false if the store holds nothing, if the geometry does not describe
+ *  the accumulators it holds, or if the arrays could not be added. */
+bool gatherDerived (DataStore& store,
+                    const juce::Array<TriggerSource*>& sources,
+                    double sampleRateHz,
+                    int preSamples,
+                    SessionWriter& writer);
+
 /** What a stored set of accumulators is shaped like, read without loading it. */
 struct Shape
 {
@@ -114,6 +145,11 @@ bool apply (DataStore& store,
 inline constexpr auto sumsArrayName = "sums";
 inline constexpr auto sumSquaresArrayName = "sum_squares";
 inline constexpr auto trialCountsArrayName = "trial_counts";
+
+/** ... and the ones gatherDerived() adds. */
+inline constexpr auto averagesArrayName = "averages";
+inline constexpr auto standardDeviationsArrayName = "standard_deviations";
+inline constexpr auto timeAxisArrayName = "time_ms";
 
 } // namespace AverageSession
 

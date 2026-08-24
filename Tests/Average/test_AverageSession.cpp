@@ -267,6 +267,174 @@ TEST (AverageSessionIo, WritesTheDocumentedArrayShapes)
     EXPECT_EQ (shape.numSamples, numSamples);
 }
 
+// --- The derived arrays, for reading elsewhere ------------------------------
+//
+// These are what a session is *for* once the run is over: the numbers someone
+// opens in Python or MATLAB. They are not resumable state, and the tests below
+// pin down both halves of that — that they say what the canvas says, and that a
+// restore ignores them.
+
+namespace
+{
+constexpr double sampleRateHz = 1000.0;
+constexpr int preSamples = 4;
+
+/** Writes a session holding both payloads, the way TriggeredAvgNode does. */
+void writeFullSession (Fixture& fixture, const juce::File& target)
+{
+    SessionWriter writer;
+    ASSERT_TRUE (AverageSession::gather (fixture.store, fixture.sources, writer));
+    ASSERT_TRUE (AverageSession::gatherDerived (
+        fixture.store, fixture.sources, sampleRateHz, preSamples, writer));
+    ASSERT_TRUE (writer.flushToDirectory (target).wasOk());
+}
+} // namespace
+
+TEST (AverageSessionExport, WritesTheAveragesAndDeviationsTheCanvasDraws)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    Fixture saved (2);
+    saved.addTrial (0, 10.0f);
+    saved.addTrial (0, 20.0f);
+    saved.addTrial (0, 30.0f);
+    saved.addTrial (1, 4.0f);
+
+    writeFullSession (saved, target);
+
+    SessionReader reader (target);
+    ASSERT_TRUE (reader.isValid()) << reader.getError();
+
+    const std::vector<std::int64_t> shape { 2, numChannels, numSamples };
+    const auto averages = reader.readFloat32 ("averages", std::span (shape));
+    const auto deviations = reader.readFloat32 ("standard_deviations", std::span (shape));
+
+    ASSERT_TRUE (averages.has_value());
+    ASSERT_TRUE (deviations.has_value());
+
+    const auto at = [] (const std::vector<float>& values, int source, int channel, int sample)
+    {
+        return values[static_cast<std::size_t> ((source * numChannels + channel) * numSamples
+                                                + sample)];
+    };
+
+    // Channel c saw value + c on every sample, so the mean is (10+20+30)/3 + c.
+    EXPECT_FLOAT_EQ (at (*averages, 0, 0, 0), 20.0f);
+    EXPECT_FLOAT_EQ (at (*averages, 0, 2, numSamples - 1), 22.0f);
+    EXPECT_FLOAT_EQ (at (*averages, 1, 1, 3), 5.0f);
+
+    // The population SD over trials, exactly what the error bars are drawn from:
+    // sqrt(((10-20)^2 + 0 + (30-20)^2)/3).
+    EXPECT_NEAR (at (*deviations, 0, 0, 0), std::sqrt (200.0f / 3.0f), 1.0e-3f);
+    EXPECT_FLOAT_EQ (at (*deviations, 1, 0, 0), 0.0f); // one trial has no spread
+}
+
+/** The one number in the export that cannot be recovered by inspection if it is
+ *  wrong by a sample: everything plotted against it would be shifted, and it
+ *  would still look like data. */
+TEST (AverageSessionExport, TimeAxisPutsTheTriggerAtPreSamples)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    Fixture saved (1);
+    saved.addTrial (0, 1.0f);
+    writeFullSession (saved, target);
+
+    SessionReader reader (target);
+    ASSERT_TRUE (reader.isValid());
+
+    const std::vector<std::int64_t> shape { numSamples };
+    const auto timeMs = reader.readFloat64 ("time_ms", std::span (shape));
+    ASSERT_TRUE (timeMs.has_value());
+
+    EXPECT_DOUBLE_EQ ((*timeMs)[preSamples], 0.0);
+    EXPECT_DOUBLE_EQ ((*timeMs)[0], -1000.0 * preSamples / sampleRateHz);
+    EXPECT_DOUBLE_EQ ((*timeMs)[numSamples - 1],
+                      1000.0 * (numSamples - 1 - preSamples) / sampleRateHz);
+    EXPECT_DOUBLE_EQ ((*timeMs)[1] - (*timeMs)[0], 1000.0 / sampleRateHz);
+}
+
+/** A condition that never fired is zeros and a trial count of zero, not NaN from
+ *  a division nobody guarded. A reader that plots every condition should get a
+ *  flat line, and one that filters on trial_counts should get nothing. */
+TEST (AverageSessionExport, ConditionWithNoTrialsIsZerosRatherThanNaN)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    Fixture saved (2);
+    saved.addTrial (0, 5.0f); // source 1 never fires
+    writeFullSession (saved, target);
+
+    SessionReader reader (target);
+    ASSERT_TRUE (reader.isValid());
+
+    const std::vector<std::int64_t> shape { 2, numChannels, numSamples };
+    const auto averages = reader.readFloat32 ("averages", std::span (shape));
+    const auto deviations = reader.readFloat32 ("standard_deviations", std::span (shape));
+    ASSERT_TRUE (averages.has_value());
+    ASSERT_TRUE (deviations.has_value());
+
+    const auto emptySourceBase = static_cast<std::size_t> (numChannels) * numSamples;
+
+    for (std::size_t i = 0; i < emptySourceBase; ++i)
+    {
+        EXPECT_FLOAT_EQ ((*averages)[emptySourceBase + i], 0.0f) << "sample " << i;
+        EXPECT_FLOAT_EQ ((*deviations)[emptySourceBase + i], 0.0f) << "sample " << i;
+    }
+}
+
+/** The export must not change what resuming means. A session written with both
+ *  payloads restores exactly as one written with the accumulators alone. */
+TEST (AverageSessionExport, DerivedArraysAreIgnoredByARestore)
+{
+    ScratchDirectory scratch;
+    const auto target = scratch.child ("session");
+
+    Fixture saved (1);
+    saved.addTrial (0, 30.0f);
+    saved.addTrial (0, 60.0f);
+    writeFullSession (saved, target);
+
+    Fixture resumed (1);
+    SessionReader reader (target);
+    ASSERT_TRUE (AverageSession::apply (resumed.store, resumed.sources, reader));
+
+    EXPECT_EQ (resumed.trialsAt (0), 2);
+    EXPECT_FLOAT_EQ (resumed.averageAt (0, 0, 0), 45.0f);
+
+    // And the third trial still weighs one trial, not one half of the file.
+    resumed.addTrial (0, 90.0f);
+    EXPECT_EQ (resumed.trialsAt (0), 3);
+    EXPECT_FLOAT_EQ (resumed.averageAt (0, 0, 0), 60.0f);
+}
+
+TEST (AverageSessionExport, RefusesAGeometryThatCannotDescribeTheAccumulators)
+{
+    Fixture saved (1);
+    saved.addTrial (0, 1.0f);
+
+    SessionWriter noSampleRate;
+    EXPECT_FALSE (
+        AverageSession::gatherDerived (saved.store, saved.sources, 0.0, preSamples, noSampleRate));
+    EXPECT_EQ (noSampleRate.getNumArrays(), 0);
+
+    // A pre-window longer than the trial: the caller's geometry belongs to some
+    // other configuration, and every time stamp from it would be wrong.
+    SessionWriter tooMuchPre;
+    EXPECT_FALSE (AverageSession::gatherDerived (
+        saved.store, saved.sources, sampleRateHz, numSamples + 1, tooMuchPre));
+    EXPECT_EQ (tooMuchPre.getNumArrays(), 0);
+
+    SessionWriter noSources;
+    Fixture empty (0);
+    EXPECT_FALSE (AverageSession::gatherDerived (
+        empty.store, empty.sources, sampleRateHz, preSamples, noSources));
+    EXPECT_EQ (noSources.getNumArrays(), 0);
+}
+
 // --- Refusals --------------------------------------------------------------
 
 /** Folding a session recorded with a different channel count into this one would
