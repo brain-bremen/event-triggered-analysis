@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
+## [Unreleased]
+
+### Added
+
+- The Receptive Field Bar Mapper's direction generator is **configurable**. Besides
+  the number of directions it now takes the TTL line (fixed, or one line per
+  direction counting up from a base) and the arm message it writes — text before
+  the number, the number for the first direction, and text after it — so
+  `VSTIM: TRIALTYPE `, `200`, ` TIMESEQUENCE` generates
+  `VSTIM: TRIALTYPE 200 TIMESEQUENCE`, `… 201 …`, and so on. A preview line shows
+  the first and last pattern before REPLACE writes them, and the settings are
+  saved with the signal chain
+
+### Changed
+
+- **`pendingTimeoutMs` now defaults to 5000 ms**, up from 2000. The old default
+  was shorter than the gap between a sweep's TTL edge and the trial-end message
+  that commits it in a typical mapping run, so the last trials of a block were
+  dropped. Sources in an existing signal chain keep whatever they were saved with
+
 ## [0.3.0]
 
 TriggeredAvg merged into the Triggered Spectra repository, which becomes

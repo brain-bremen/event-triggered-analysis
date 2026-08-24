@@ -79,8 +79,34 @@ A direction reaches the plugin through three mechanisms, deliberately kept apart
 
 So the plugin parses no messages and knows no message grammar. It does own the angle table, under
 **SWEEPS**: one row per trigger source, showing what arms it and what angle it means, with a
-*Generate N directions* button that replaces the sources with evenly spaced directions bound to
-consecutive trial types. Angles are entered in the stimulus program's own convention — a zero
+generator that replaces the sources with evenly spaced directions.
+
+The generator is configured to your stimulus program, because the message form is its business
+and not the plugin's:
+
+| Field | What it sets |
+|---|---|
+| *Generate* | how many directions, evenly spaced around the circle |
+| *Trigger* | the TTL line carrying sweep onset, numbered as in the trigger table |
+| *one line per direction* | off: every direction is armed on that one line and told apart by its message; on: line, line+1, line+2, ... |
+| *Arm msg* | the text before the number, the number for the first direction, and the text after it |
+
+The number steps up by one per direction whether or not the TTL line does, so
+`VSTIM: TRIALTYPE `, `200`, ` TIMESEQUENCE` generates `VSTIM: TRIALTYPE 200 TIMESEQUENCE`,
+`… 201 …`, `… 202 …`. A preview line under the fields shows the first and last pattern the
+current settings would produce, and REPLACE repeats it in the confirmation, because these are
+patterns matched against messages the plugin cannot see — a misspelling otherwise shows up only
+as a condition that never fires.
+
+**The trailing text is not decoration.** `TRIALTYPE 3` also contains-matches `TRIALTYPE 30`, and
+VStim's `TRIAL_END` repeats the trial type, so a pattern with no trailing boundary both collides
+with longer numbers and re-arms the source at trial end — which makes it fire on the *next*
+trial's edge, very likely a different direction, with nothing looking wrong. ` TIMESEQUENCE`
+appears in `TRIAL_START` and not in `TRIAL_END`, which is what makes it the right boundary.
+Clear it only if your messages carry their own. The settings are saved with the signal chain, so
+the message form is typed once.
+
+Angles are entered in the stimulus program's own convention — a zero
 direction and a rotation sense, defaulting to VStim's *0 = rightward, counter-clockwise* — and
 converted to a canonical form at the boundary, so changing the convention re-interprets the
 numbers in the table rather than rewriting them. Fiorani et al. put zero at the left, which is
@@ -146,7 +172,10 @@ Sources are configured under **TRIGGERS**, and each can carry three broadcast-me
 
 Setting a commit pattern is what makes a capture *provisional*: the trial is held until the commit
 message arrives, a cancel message discards it, or its timeout expires. That is how a trial can be
-rejected after the fact.
+rejected after the fact. **Timeout defaults to 5000 ms**, which has to outlast the longest gap
+between the TTL edge and the message that commits it. Set too short, it reads as trials going
+missing; MONITOR names that case directly when commit messages match and nothing is kept. Zero
+disables expiry.
 
 Patterns are **plain case-insensitive substring matches** — no wildcards, no regular expressions,
 no alternation. An empty pattern is disabled rather than matching everything. When one message

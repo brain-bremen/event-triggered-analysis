@@ -653,7 +653,7 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
         source->cancelPattern = sourceXml->getStringAttribute (TriggerSourceXml::cancelPattern);
         source->commitPattern = sourceXml->getStringAttribute (TriggerSourceXml::commitPattern);
         source->pendingTimeoutMs =
-            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 2000);
+            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 5000);
 
         // Through the setter, not the field: it is what leaves a gated source
         // disarmed and an ungated one live. Assigning armPattern directly would

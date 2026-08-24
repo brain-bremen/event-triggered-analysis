@@ -125,7 +125,7 @@ struct SessionSourceEntry
     juce::String armPattern;
     juce::String cancelPattern;
     juce::String commitPattern;
-    int pendingTimeoutMs = 2000;
+    int pendingTimeoutMs = 5000;
 
     /** Trials folded in by the time of the save. Diagnostic: the authoritative
         count is in the trial_counts array. */

@@ -113,14 +113,21 @@ public:
     /** Assigns an angle and asks for a recompute. */
     void setAngleForSource (TriggerSource* source, double angleDeg);
 
-    /** Replaces the current sources with `count` evenly spaced directions bound
-     *  to consecutive trial types, each with the arm pattern that matches VStim's
-     *  trial-start message for that type.
+    /** Replaces the current sources with the evenly spaced directions `spec`
+     *  describes, each with its own arm pattern.
      *
-     *  All on one line, because the trial type distinguishes them and the line
-     *  only has to carry sweep onset. */
-    void generateDirectionSources (int count, int line, int firstTrialType = 0,
-                                   double firstAngleDeg = 0.0);
+     *  Replaces rather than appends: see the comment on the implementation. */
+    void generateDirectionSources (const DirectionGeneratorSpec& spec);
+
+    /** The settings the direction generator last ran with, or would run with
+     *  next.
+     *
+     *  Kept on the node, and saved with the signal chain, because they describe
+     *  the stimulus program rather than the popup that edits them: typing the
+     *  message form once should survive closing the window and reopening the
+     *  session, not have to be retyped every time a set is regenerated. */
+    const DirectionGeneratorSpec& getDirectionGeneratorSpec() const { return m_generatorSpec; }
+    void setDirectionGeneratorSpec (const DirectionGeneratorSpec& spec) { m_generatorSpec = spec; }
 
     std::vector<Rf::AngleSetWarning> checkAngles() const;
 
@@ -263,6 +270,11 @@ private:
     /** Guarded by the DataStore lock. Declared before m_compute so it outlives
         the thread that reads it. */
     ComputeInputs m_computeInputs;
+
+    /** Message thread only: read and written by the SWEEPS popup, and by
+        save/load. The compute thread has no interest in it. */
+    DirectionGeneratorSpec m_generatorSpec;
+
     /** Gives a source the colour of the direction it stands for. Used where this
      *  plugin creates the sources -- the direction generator -- so a fresh set
      *  does not arrive as eight identical line colours. */

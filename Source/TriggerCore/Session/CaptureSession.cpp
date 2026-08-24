@@ -111,7 +111,7 @@ std::vector<SessionSourceEntry> sourcesFromSettingsXml (const juce::XmlElement& 
         source.cancelPattern = sourceXml->getStringAttribute (TriggerSourceXml::cancelPattern);
         source.commitPattern = sourceXml->getStringAttribute (TriggerSourceXml::commitPattern);
         source.pendingTimeoutMs =
-            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 2000);
+            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 5000);
 
         sources.push_back (source);
     }

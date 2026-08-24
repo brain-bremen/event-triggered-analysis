@@ -377,16 +377,14 @@ juce::Colour BarMapperNode::paletteColourForRecolour (int index, const TriggerSo
     return TriggeredCaptureNode::paletteColourForRecolour (index, source);
 }
 
-void BarMapperNode::generateDirectionSources (int count,
-                                                   int line,
-                                                   int firstTrialType,
-                                                   double firstAngleDeg)
+void BarMapperNode::generateDirectionSources (const DirectionGeneratorSpec& spec)
 {
-    if (count <= 0)
-        return;
+    m_generatorSpec = spec;
 
-    const std::vector<GeneratedDirection> directions =
-        generateDirections (count, firstTrialType, firstAngleDeg);
+    const std::vector<GeneratedDirection> directions = generateDirections (spec);
+
+    if (directions.empty())
+        return;
 
     // Replace rather than append. A generator that added to an existing set would
     // leave the previous directions in place with their own angles, and the
@@ -396,9 +394,10 @@ void BarMapperNode::generateDirectionSources (int count,
 
     for (const GeneratedDirection& direction : directions)
     {
-        // One line for all of them: the trial type is what distinguishes the
-        // directions, and the line only has to carry sweep onset.
-        TriggerSource* source = addTriggerSource (line, TriggerType::TTL_TRIGGER);
+        // triggerNumber is 1-based, the way the trigger table shows it; a
+        // TTL event reports the line 0-based. The one conversion lives here.
+        TriggerSource* source =
+            addTriggerSource (direction.triggerNumber - 1, TriggerType::TTL_TRIGGER);
 
         if (source == nullptr)
             continue;
@@ -786,6 +785,19 @@ void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
         if (const auto angle = m_angles.getAngleDeg (sources[i]))
             angleXml->setAttribute ("angleDeg", *angle);
     }
+
+    // Saved even though it produces no state of its own: it describes the
+    // stimulus program's message form, which is a property of the rig rather
+    // than of one run of the generator, and retyping it is exactly the sort of
+    // thing that gets a character wrong.
+    auto* generatorXml = xml->createNewChildElement ("DIRECTIONGENERATOR");
+    generatorXml->setAttribute ("count", m_generatorSpec.count);
+    generatorXml->setAttribute ("firstTriggerNumber", m_generatorSpec.firstTriggerNumber);
+    generatorXml->setAttribute ("incrementTriggerNumber", m_generatorSpec.incrementTriggerNumber);
+    generatorXml->setAttribute ("armMessageBase", m_generatorSpec.armMessageBase);
+    generatorXml->setAttribute ("firstArmNumber", m_generatorSpec.firstArmNumber);
+    generatorXml->setAttribute ("armMessageSuffix", m_generatorSpec.armMessageSuffix);
+    generatorXml->setAttribute ("firstAngleDeg", m_generatorSpec.firstAngleDeg);
 }
 
 void BarMapperNode::applySweepAnglesFromXml (const juce::XmlElement* xml)
@@ -823,6 +835,36 @@ void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
     TriggeredCaptureNode::loadCustomParametersFromXml (xml);
 
     applySweepAnglesFromXml (xml);
+
+    // Restored here and not in loadSessionPayload(), unlike the angles above.
+    // The angles are what a session's accumulated trials *mean*, so the session's
+    // win; the generator settings describe how the next set of conditions would
+    // be made, which is a property of the signal chain rather than of any
+    // recording in it.
+    //
+    // Each attribute falls back to its own default, so a chain saved before the
+    // generator became configurable reloads with the message form it was
+    // generated under rather than with a half-populated spec.
+    if (const auto* generatorXml = xml != nullptr ? xml->getChildByName ("DIRECTIONGENERATOR")
+                                                  : nullptr)
+    {
+        const DirectionGeneratorSpec defaults;
+
+        m_generatorSpec.count = generatorXml->getIntAttribute ("count", defaults.count);
+        m_generatorSpec.firstTriggerNumber =
+            generatorXml->getIntAttribute ("firstTriggerNumber", defaults.firstTriggerNumber);
+        m_generatorSpec.incrementTriggerNumber =
+            generatorXml->getBoolAttribute ("incrementTriggerNumber",
+                                            defaults.incrementTriggerNumber);
+        m_generatorSpec.armMessageBase =
+            generatorXml->getStringAttribute ("armMessageBase", defaults.armMessageBase);
+        m_generatorSpec.firstArmNumber =
+            generatorXml->getIntAttribute ("firstArmNumber", defaults.firstArmNumber);
+        m_generatorSpec.armMessageSuffix =
+            generatorXml->getStringAttribute ("armMessageSuffix", defaults.armMessageSuffix);
+        m_generatorSpec.firstAngleDeg =
+            generatorXml->getDoubleAttribute ("firstAngleDeg", defaults.firstAngleDeg);
+    }
 
     requestRecompute();
 }

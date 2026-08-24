@@ -22,6 +22,8 @@
 */
 #pragma once
 
+#include "../SweepAngles.h"
+
 #include "RfMath/AngleConvention.h"
 
 #include <JuceHeader.h>
@@ -84,6 +86,19 @@ private:
     void refreshCompass();
     void applyGeneratedDirections();
 
+    /** The generator settings as the controls currently read. */
+    DirectionGeneratorSpec specFromControls() const;
+
+    /** Pushes the controls into the node and redraws the preview line.
+     *
+     *  The settings are stored on every edit rather than on REPLACE, so a message
+     *  form typed once is saved with the signal chain even if no set is generated
+     *  in this session. */
+    void generatorSettingsChanged();
+
+    /** Fills the generator controls from the node's stored settings. */
+    void syncGeneratorControls();
+
     /** One row of the angle table: which condition, and what direction it means. */
     struct Row
     {
@@ -102,9 +117,27 @@ private:
     std::unique_ptr<juce::ComboBox> m_zeroSelector;
     std::unique_ptr<juce::ComboBox> m_senseSelector;
 
+    // --- The generator ------------------------------------------------------
+
     std::unique_ptr<juce::Label> m_generateLabel;
     std::unique_ptr<juce::ComboBox> m_generateCount;
     std::unique_ptr<UtilityButton> m_generateButton;
+
+    std::unique_ptr<juce::Label> m_triggerLabel;
+    std::unique_ptr<juce::Label> m_triggerNumber;
+    std::unique_ptr<juce::ToggleButton> m_incrementTrigger;
+
+    std::unique_ptr<juce::Label> m_armLabel;
+    std::unique_ptr<juce::Label> m_armBase;
+    std::unique_ptr<juce::Label> m_armNumber;
+    std::unique_ptr<juce::Label> m_armSuffix;
+
+    /** The first and last arm pattern the current settings would produce.
+     *
+     *  The generator writes patterns the user never types, against messages this
+     *  plugin cannot see. Showing the two ends of the range is what turns "it
+     *  never fires" from a debugging session into a misspelling you can read. */
+    std::unique_ptr<juce::Label> m_previewLabel;
 
     std::unique_ptr<CompassPreview> m_compass;
     std::unique_ptr<juce::Label> m_warningLabel;
