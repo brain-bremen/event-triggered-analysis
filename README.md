@@ -214,6 +214,23 @@ messages arrive over HTTP and are unreliable in their timing, so a message-only 
 carry a trustworthy trigger sample. The extension point is kept (`TriggerType::MSG_TRIGGER`) for
 anyone who does not need alignment precision.
 
+### Copying a trigger table between plugins
+
+The TRIGGERS popup's **SAVE** and **LOAD** buttons move the whole table — names, TTL lines,
+colours, the three patterns and the timeout — as a small XML file. A rig normally runs several of
+these plugins off the same conditions, and retyping a dozen message patterns identically into four
+tables is the easiest place in these plugins to introduce a mismatch nothing would report.
+
+LOAD also accepts a **saved signal chain** (`.xml` from the GUI), whose `CUSTOM_PARAMETERS` block
+holds the same `TRIGGERSOURCE` elements, so a table can be lifted straight out of a chain someone
+else set up. It replaces the current table rather than merging into it, is disabled during
+acquisition — reloading the table reallocates every per-source accumulator — and refuses a file
+with no trigger sources in it rather than silently emptying the table.
+
+In the **Bar Mapper** the sweep angles and the direction generator's settings travel with the
+table, so a direction set arrives meaning what it meant where it was saved rather than as eight
+unlabelled conditions.
+
 The **MONITOR** popup shows what is actually happening: TTL edges and broadcast messages received,
 per-source counts for each stage (edges → queued → trials, and arm / cancel / commit → kept), the
 text of the last message, and a one-line diagnosis of the commonest failures. Its

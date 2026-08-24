@@ -25,6 +25,7 @@
 #include "TriggerSourceConfigWindow.h"
 
 #include "../TriggerSourceActions.h"
+#include "../TriggerSourceXml.h"
 #include "../TriggeredCaptureNode.h"
 #include "NestedCallOut.h"
 
@@ -51,7 +52,7 @@ namespace
     constexpr int rowHeight = 26;
     constexpr int headerHeight = 24;
     constexpr int addRowHeight = 34;
-    constexpr int windowWidth = 780;
+    constexpr int windowWidth = 800;
     constexpr int maxVisibleRows = 12;
 
     /** Cell that edits a juce::String field of a TriggerSource in place. */
@@ -469,6 +470,19 @@ TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node
     m_recolourButton->addListener (this);
     addAndMakeVisible (m_recolourButton.get());
 
+    m_saveButton = std::make_unique<UtilityButton> ("SAVE");
+    m_saveButton->setTooltip ("Write this trigger table to a file, to load into another plugin");
+    m_saveButton->addListener (this);
+    addAndMakeVisible (m_saveButton.get());
+
+    m_loadButton = std::make_unique<UtilityButton> ("LOAD");
+    m_loadButton->setTooltip (
+        "Replace this trigger table with one from a file or a saved signal chain");
+    // Same rule as ADD and CLEAR ALL, and for a stronger reason: loading
+    // reallocates every per-source accumulator underneath the capture worker.
+    m_loadButton->setEnabled (! acquisitionIsActive);
+    addAndMakeVisible (m_loadButton.get());
+
     update();
 }
 
@@ -528,12 +542,101 @@ void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
     {
         recolourAllFromPalette();
     }
+    else if (button == m_saveButton.get() || button == m_loadButton.get())
+    {
+        // Deferred, and with nothing of this window captured but a SafePointer:
+        // the file dialog dismisses the call-out we are sitting in. See the
+        // declarations of these two.
+        auto* node = m_node;
+
+        if (button == m_saveButton.get())
+        {
+            juce::MessageManager::callAsync ([node] { chooseAndSaveSettings (node); });
+        }
+        else
+        {
+            juce::Component::SafePointer<TriggerSourceConfigWindow> safeThis (this);
+            juce::MessageManager::callAsync ([node, safeThis]
+                                             { chooseAndLoadSettings (node, safeThis); });
+        }
+
+        return;
+    }
     else
     {
         return;
     }
 
     update();
+}
+
+juce::File TriggerSourceConfigWindow::defaultSettingsFile (TriggeredCaptureNode* node)
+{
+    const auto name =
+        node != nullptr ? node->getName().replaceCharacter (' ', '_') : juce::String ("plugin");
+
+    return CoreServices::getDefaultUserSaveDirectory().getChildFile (
+        name + "_triggers" + TriggerSourceXml::fileExtension);
+}
+
+void TriggerSourceConfigWindow::chooseAndSaveSettings (TriggeredCaptureNode* node)
+{
+    if (node == nullptr)
+        return;
+
+    if (node->getTriggerSources().isEmpty())
+    {
+        CoreServices::sendStatusMessage ("No trigger sources to save.");
+        return;
+    }
+
+    juce::FileChooser chooser ("Save trigger settings as...",
+                               defaultSettingsFile (node),
+                               juce::String ("*") + TriggerSourceXml::fileExtension);
+
+    if (! chooser.browseForFileToSave (true))
+        return;
+
+    const auto result = node->saveTriggerSettings (
+        chooser.getResult().withFileExtension (TriggerSourceXml::fileExtension));
+
+    CoreServices::sendStatusMessage (result.wasOk() ? "Trigger settings saved."
+                                                    : "Could not save trigger settings: "
+                                                          + result.getErrorMessage());
+}
+
+void TriggerSourceConfigWindow::chooseAndLoadSettings (
+    TriggeredCaptureNode* node,
+    juce::Component::SafePointer<TriggerSourceConfigWindow> window)
+{
+    if (node == nullptr)
+        return;
+
+    juce::FileChooser chooser ("Choose trigger settings to load...",
+                               defaultSettingsFile (node),
+                               juce::String ("*") + TriggerSourceXml::fileExtension);
+
+    if (! chooser.browseForFileToOpen())
+        return;
+
+    const auto result = node->loadTriggerSettings (chooser.getResult());
+
+    if (! result.wasOk())
+    {
+        // A dialog rather than the status bar, as with a refused session: the
+        // reason is the whole value of refusing. "Contains no trigger sources" is
+        // something the user can act on in seconds and cannot guess otherwise.
+        juce::AlertWindow::showMessageBoxAsync (juce::AlertWindow::WarningIcon,
+                                                "Trigger settings not loaded",
+                                                result.getErrorMessage());
+        return;
+    }
+
+    CoreServices::sendStatusMessage ("Trigger settings loaded.");
+
+    // Only if the popup survived the file dialog; on Windows it usually has not.
+    if (window != nullptr)
+        window->update();
 }
 
 void TriggerSourceConfigWindow::recolourAllFromPalette()
@@ -585,6 +688,17 @@ void TriggerSourceConfigWindow::resized()
 
     if (m_recolourButton != nullptr)
         m_recolourButton->setBounds (addRow.removeFromLeft (140));
+
+    // From the right, so that the two file buttons sit apart from the ones that
+    // edit the table in place — they are the only controls here that leave the
+    // plugin.
+    if (m_loadButton != nullptr)
+        m_loadButton->setBounds (addRow.removeFromRight (60));
+
+    addRow.removeFromRight (8);
+
+    if (m_saveButton != nullptr)
+        m_saveButton->setBounds (addRow.removeFromRight (60));
 }
 
 void TriggerSourceConfigWindow::paint (juce::Graphics& g)

@@ -134,6 +134,28 @@ public:
     /** Discards all accumulated data, keeping the trigger sources themselves. */
     virtual void clearAllData() = 0;
 
+    // --- Trigger settings files ---------------------------------------------
+    //
+    // Moving a trigger table from one plugin to another, which is otherwise a
+    // matter of retyping a dozen message patterns by hand into each of the four.
+    // The file is the same TRIGGERSOURCE format the signal chain and a session
+    // use, so a saved chain can be loaded here as well as a file this wrote.
+    //
+    // Both are synchronous. Unlike a session this is a few kilobytes of XML with
+    // no accumulators behind it, so there is nothing to gain from a thread and a
+    // callback, and the popup can report the outcome on the spot.
+
+    /** Writes the trigger source table, and whatever saveTriggerSettingsExtras()
+        adds, to `file`. Allowed during acquisition: nothing is modified. */
+    juce::Result saveTriggerSettings (const juce::File& file) const;
+
+    /** Replaces the trigger source table with the one in `file`.
+     *
+     *  Refused while acquiring, and refused for a file with no trigger sources in
+     *  it — emptying the table because someone picked the wrong file would be the
+     *  worst possible reading of "load". */
+    juce::Result loadTriggerSettings (const juce::File& file);
+
     // --- Analysis configuration -------------------------------------------
 
     const TrialGeometry& getTrialGeometry() const { return m_geometry; }
@@ -238,6 +260,28 @@ public:
     std::function<void (SessionCompatibility report, bool applied)> onSessionLoaded;
 
 protected:
+    // --- Trigger settings hooks for subclasses ------------------------------
+    //
+    // For per-source state a subclass keeps outside TriggerSource, so that it
+    // travels with the table instead of being silently left behind. The
+    // receptive-field mapper's sweep angles are the only case so far, and the one
+    // that shows why this cannot be skipped: a direction table restored without
+    // its angles is not a partial result but a wrong one.
+
+    /** Adds this plugin's own elements to a trigger-settings file.
+     *
+     *  Called with the TRIGGERSOURCE children already written, so anything keyed
+     *  by position matches the order they appear in. */
+    virtual void saveTriggerSettingsExtras (juce::XmlElement& /*xml*/) const {}
+
+    /** Restores what saveTriggerSettingsExtras() wrote.
+     *
+     *  Called after the trigger sources have been rebuilt, so the sources this
+     *  refers to exist. `xml` may be a saved signal chain rather than a file this
+     *  wrote, and may well contain none of these elements; leaving the state
+     *  alone is then the right answer, not clearing it. */
+    virtual void loadTriggerSettingsExtras (const juce::XmlElement& /*xml*/) {}
+
     // --- Session hooks for subclasses --------------------------------------
 
     /** Adds this plugin's own arrays and manifest keys.
@@ -391,9 +435,16 @@ private:
      *  rapid parameter edits. Never taken on the audio thread. */
     juce::CriticalSection m_configurationLock;
 
-    /** True while loadCustomParametersFromXml() is restoring trigger sources, so
+    /** True while restoreTriggerSourcesFrom() is restoring trigger sources, so
         the per-source rebuilds can be collapsed into one. */
     bool m_isLoadingState = false;
+
+    /** Rebuilds the trigger table from the TRIGGERSOURCE children of `xml` and
+     *  rebuilds the configuration once at the end. Returns how many were read.
+     *
+     *  The single path by which a stored table becomes the live one — the signal
+     *  chain, a session and a trigger-settings file all arrive here. */
+    int restoreTriggerSourcesFrom (const juce::XmlElement& xml);
 
     /** Applies a loaded session on the message thread. Split out of the callback
         because it is the half that has to run with acquisition stopped. */

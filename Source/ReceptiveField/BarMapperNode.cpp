@@ -613,11 +613,20 @@ bool BarMapperNode::processCapturedTrial (const CaptureRequest& request,
 
     const auto lock = m_dataStore.GetLock();
 
+    // A source with a commit pattern does not accumulate on the edge. The trial
+    // is parked until a commit message folds it in, a cancel discards it, or the
+    // timeout expires — which is what lets a trial be rejected after the fact.
+    //
+    // False, as in every other plugin: the return value means "the display has
+    // something new to show", and a parked trial is in no accumulator yet. This
+    // returned true, which for this plugin meant a full receptive-field recompute
+    // per parked trial — refreshDisplay() is requestRecompute() here — producing
+    // exactly the map that was already on screen.
     if (requiresCommit (request.triggerSource))
     {
         m_dataStore.storePendingCapture (
             request.triggerSource, m_narrowedTrial, request.triggerSource->pendingTimeoutMs);
-        return true;
+        return false;
     }
 
     return m_dataStore.addTrialForTriggerSource (request.triggerSource, m_narrowedTrial);
@@ -771,6 +780,22 @@ void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
     if (xml == nullptr)
         return;
 
+    writeSweepAnglesToXml (*xml);
+    writeDirectionGeneratorToXml (*xml);
+}
+
+void BarMapperNode::saveTriggerSettingsExtras (juce::XmlElement& xml) const
+{
+    // The same two blocks the signal chain gets, and for the same reason: a
+    // direction table without its angles is not a partial answer but a wrong one,
+    // and the generator spec describes the stimulus program's message form, which
+    // is precisely the thing worth copying between plugins.
+    writeSweepAnglesToXml (xml);
+    writeDirectionGeneratorToXml (xml);
+}
+
+void BarMapperNode::writeSweepAnglesToXml (juce::XmlElement& xml) const
+{
     // Written as a parallel list rather than as attributes on the TRIGGERSOURCE
     // elements, because those are the base class's to write and this plugin has
     // no business editing them. Matched back up by position on load, which is
@@ -779,18 +804,21 @@ void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
 
     for (int i = 0; i < sources.size(); ++i)
     {
-        auto* angleXml = xml->createNewChildElement ("SWEEPANGLE");
+        auto* angleXml = xml.createNewChildElement ("SWEEPANGLE");
         angleXml->setAttribute ("index", i);
 
         if (const auto angle = m_angles.getAngleDeg (sources[i]))
             angleXml->setAttribute ("angleDeg", *angle);
     }
+}
 
+void BarMapperNode::writeDirectionGeneratorToXml (juce::XmlElement& xml) const
+{
     // Saved even though it produces no state of its own: it describes the
     // stimulus program's message form, which is a property of the rig rather
     // than of one run of the generator, and retyping it is exactly the sort of
     // thing that gets a character wrong.
-    auto* generatorXml = xml->createNewChildElement ("DIRECTIONGENERATOR");
+    auto* generatorXml = xml.createNewChildElement ("DIRECTIONGENERATOR");
     generatorXml->setAttribute ("count", m_generatorSpec.count);
     generatorXml->setAttribute ("firstTriggerNumber", m_generatorSpec.firstTriggerNumber);
     generatorXml->setAttribute ("incrementTriggerNumber", m_generatorSpec.incrementTriggerNumber);
@@ -828,6 +856,39 @@ void BarMapperNode::applySweepAnglesFromXml (const juce::XmlElement* xml)
     }
 }
 
+void BarMapperNode::applyDirectionGeneratorFromXml (const juce::XmlElement* xml)
+{
+    // Absent is left alone rather than reset to defaults: this may be a file that
+    // never carried a generator spec -- a saved chain from before it became
+    // configurable, or a trigger table exported from one of the other plugins --
+    // and overwriting a working rig description with defaults would be a
+    // surprising thing for a load to do.
+    const auto* generatorXml =
+        xml != nullptr ? xml->getChildByName ("DIRECTIONGENERATOR") : nullptr;
+
+    if (generatorXml == nullptr)
+        return;
+
+    // Each attribute falls back to its own default, so a chain saved before the
+    // generator became configurable reloads with the message form it was
+    // generated under rather than with a half-populated spec.
+    const DirectionGeneratorSpec defaults;
+
+    m_generatorSpec.count = generatorXml->getIntAttribute ("count", defaults.count);
+    m_generatorSpec.firstTriggerNumber =
+        generatorXml->getIntAttribute ("firstTriggerNumber", defaults.firstTriggerNumber);
+    m_generatorSpec.incrementTriggerNumber =
+        generatorXml->getBoolAttribute ("incrementTriggerNumber", defaults.incrementTriggerNumber);
+    m_generatorSpec.armMessageBase =
+        generatorXml->getStringAttribute ("armMessageBase", defaults.armMessageBase);
+    m_generatorSpec.firstArmNumber =
+        generatorXml->getIntAttribute ("firstArmNumber", defaults.firstArmNumber);
+    m_generatorSpec.armMessageSuffix =
+        generatorXml->getStringAttribute ("armMessageSuffix", defaults.armMessageSuffix);
+    m_generatorSpec.firstAngleDeg =
+        generatorXml->getDoubleAttribute ("firstAngleDeg", defaults.firstAngleDeg);
+}
+
 void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
 {
     m_angles.clear();
@@ -841,30 +902,18 @@ void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
     // win; the generator settings describe how the next set of conditions would
     // be made, which is a property of the signal chain rather than of any
     // recording in it.
-    //
-    // Each attribute falls back to its own default, so a chain saved before the
-    // generator became configurable reloads with the message form it was
-    // generated under rather than with a half-populated spec.
-    if (const auto* generatorXml = xml != nullptr ? xml->getChildByName ("DIRECTIONGENERATOR")
-                                                  : nullptr)
-    {
-        const DirectionGeneratorSpec defaults;
+    applyDirectionGeneratorFromXml (xml);
 
-        m_generatorSpec.count = generatorXml->getIntAttribute ("count", defaults.count);
-        m_generatorSpec.firstTriggerNumber =
-            generatorXml->getIntAttribute ("firstTriggerNumber", defaults.firstTriggerNumber);
-        m_generatorSpec.incrementTriggerNumber =
-            generatorXml->getBoolAttribute ("incrementTriggerNumber",
-                                            defaults.incrementTriggerNumber);
-        m_generatorSpec.armMessageBase =
-            generatorXml->getStringAttribute ("armMessageBase", defaults.armMessageBase);
-        m_generatorSpec.firstArmNumber =
-            generatorXml->getIntAttribute ("firstArmNumber", defaults.firstArmNumber);
-        m_generatorSpec.armMessageSuffix =
-            generatorXml->getStringAttribute ("armMessageSuffix", defaults.armMessageSuffix);
-        m_generatorSpec.firstAngleDeg =
-            generatorXml->getDoubleAttribute ("firstAngleDeg", defaults.firstAngleDeg);
-    }
+    requestRecompute();
+}
+
+void BarMapperNode::loadTriggerSettingsExtras (const juce::XmlElement& xml)
+{
+    // No m_angles.clear() to match loadCustomParametersFromXml(): the base has
+    // already replaced the trigger sources, and triggerSourcesAboutToBeRemoved()
+    // dropped every angle keyed by the old ones on the way out.
+    applySweepAnglesFromXml (&xml);
+    applyDirectionGeneratorFromXml (&xml);
 
     requestRecompute();
 }

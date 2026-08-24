@@ -15,6 +15,7 @@ set(TRIGGER_CORE_SOURCES
     WorkQueue.cpp
     CaptureWorker.cpp
     TriggerSource.cpp
+    TriggerSourceXml.cpp
     TriggerMessaging.cpp
     BroadcastMessageLog.cpp
     TriggerSourceActions.cpp
@@ -36,6 +37,7 @@ set(TRIGGER_CORE_HEADERS
     WorkQueue.h
     CaptureWorker.h
     TriggerSource.h
+    TriggerSourceXml.h
     TriggerMessaging.h
     BroadcastMessageLog.h
     TriggerSourceActions.h

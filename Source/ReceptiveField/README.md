@@ -230,9 +230,10 @@ accumulators, so what is displayed matches the current settings rather than the 
 force when the file was written.
 
 The **sweep angles** travel with the session too, but not as an array of their own:
-they go through `saveCustomParametersToXml` into the bundle's `settings.xml`, the same
-call and the same format the signal chain uses, matched back up by position on load —
-one serialiser rather than two that could disagree about what a direction means.
+they go through `writeSweepAnglesToXml` into the bundle's `settings.xml`, the same call
+and the same format the signal chain and the trigger table's SAVE button use, matched
+back up by position on load — one serialiser rather than three that could disagree about
+what a direction means.
 
 **Loading applies the file's angles**, overwriting whatever is in the table. That is
 deliberate: the angles are what the loaded trials *mean*, and a session restored under a

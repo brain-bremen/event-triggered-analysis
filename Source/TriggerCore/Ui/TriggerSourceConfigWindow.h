@@ -50,6 +50,13 @@ class TriggeredCaptureNode;
  *  and a delete button. The pattern columns matter as much as the rest: the
  *  arm/cancel/commit workflow is implemented and tested, but unreachable without
  *  somewhere to type the patterns.
+ *
+ *  SAVE and LOAD move that whole table between plugins as a small XML file. A rig
+ *  typically runs several of these plugins side by side off the same conditions,
+ *  and typing a dozen message patterns identically into each of four tables is
+ *  both tedious and the easiest place in the plugin to introduce a silent
+ *  mismatch. The file is the same TRIGGERSOURCE format the signal chain stores,
+ *  so a saved chain can be loaded here too.
  */
 class TriggerSourceConfigWindow : public PopupComponent, public juce::Button::Listener
 {
@@ -82,6 +89,27 @@ private:
         lost their visual spread -- e.g. after duplicating one repeatedly, which
         carries the source colour over verbatim. */
     void recolourAllFromPalette();
+
+    /** Puts up a file chooser and writes / reads the trigger table.
+     *
+     *  Static, and never touching the window except through `window`, because a
+     *  native file dialog takes the keyboard focus away from the call-out this
+     *  popup lives in, and a call-out that loses focus dismisses itself. By the
+     *  time the chooser returns, `window` may well be gone; the node never is,
+     *  since it outlives every popup opened onto it.
+     *
+     *  Reached through MessageManager::callAsync() rather than called from
+     *  buttonClicked(), so that the click has finished being delivered — and this
+     *  window's button has finished sending it — before anything can dismiss the
+     *  popup underneath it. */
+    static void chooseAndSaveSettings (TriggeredCaptureNode* node);
+    static void
+        chooseAndLoadSettings (TriggeredCaptureNode* node,
+                               juce::Component::SafePointer<TriggerSourceConfigWindow> window);
+
+    /** Where the file chooser starts, and what a saved file is called by
+        default. */
+    static juce::File defaultSettingsFile (TriggeredCaptureNode* node);
 
     /** Table model kept inline: it needs the same node pointer and lifetime, and
         splitting it out would only add indirection. */
@@ -141,6 +169,8 @@ private:
     std::unique_ptr<UtilityButton> m_addButton;
     std::unique_ptr<UtilityButton> m_clearAllButton;
     std::unique_ptr<UtilityButton> m_recolourButton;
+    std::unique_ptr<UtilityButton> m_saveButton;
+    std::unique_ptr<UtilityButton> m_loadButton;
     std::unique_ptr<juce::Label> m_newLineLabel;
     std::unique_ptr<juce::Label> m_ttlCaptionLabel;
 

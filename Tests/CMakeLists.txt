@@ -43,6 +43,7 @@ set(TRIGGER_CORE_TEST_SOURCES
     TriggerCore/test_TriggerMessaging.cpp
     TriggerCore/test_BroadcastMessageLog.cpp
     TriggerCore/test_TriggerSources.cpp
+    TriggerCore/test_TriggerSourceXml.cpp
     TriggerCore/test_NpyCodec.cpp
     TriggerCore/test_SessionBundle.cpp
     TriggerCore/test_CaptureSession.cpp

@@ -27,6 +27,7 @@
 #include "ParameterNames.h"
 #include "PluginVersion.h"
 #include "TriggerMessaging.h"
+#include "TriggerSourceXml.h"
 #include "Ui/TriggerCountDisplay.h"
 
 #include <VisualizerEditorHeaders.h>
@@ -598,20 +599,10 @@ void TriggeredCaptureNode::saveCustomParametersToXml (XmlElement* xml)
     if (xml == nullptr)
         return;
 
-    for (auto* source : m_triggerSources.getAll())
-    {
-        // Attribute names come from TriggerSourceXml so that this writer, the
-        // loader below and the session's compatibility reader cannot drift apart.
-        auto* sourceXml = xml->createNewChildElement (TriggerSourceXml::tag);
-        sourceXml->setAttribute (TriggerSourceXml::name, source->name);
-        sourceXml->setAttribute (TriggerSourceXml::line, source->line);
-        sourceXml->setAttribute (TriggerSourceXml::type, static_cast<int> (source->type));
-        sourceXml->setAttribute (TriggerSourceXml::colour, source->colour.toString());
-        sourceXml->setAttribute (TriggerSourceXml::armPattern, source->armPattern);
-        sourceXml->setAttribute (TriggerSourceXml::cancelPattern, source->cancelPattern);
-        sourceXml->setAttribute (TriggerSourceXml::commitPattern, source->commitPattern);
-        sourceXml->setAttribute (TriggerSourceXml::pendingTimeoutMs, source->pendingTimeoutMs);
-    }
+    // Through the shared writer, not a loop of its own: this element, a session's
+    // settings.xml and a standalone trigger-settings file are all the same format,
+    // and they stay that way by having one implementation of it.
+    writeTriggerSourcesToXml (m_triggerSources, *xml);
 }
 
 void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
@@ -619,54 +610,110 @@ void TriggeredCaptureNode::loadCustomParametersFromXml (XmlElement* xml)
     if (xml == nullptr)
         return;
 
-    m_triggerSources.clear();
+    restoreTriggerSourcesFrom (*xml);
+}
 
-    // Batch the whole restore behind one rebuild; see triggerSourceAdded().
+int TriggeredCaptureNode::restoreTriggerSourcesFrom (const juce::XmlElement& xml)
+{
+    // Batch the whole restore behind one rebuild; see triggerSourceAdded(). The
+    // clear() inside the reader notifies before the flag goes up, so removal is
+    // handled normally and only the per-source additions are collapsed.
     m_isLoadingState = true;
-
-    for (auto* sourceXml : xml->getChildIterator())
-    {
-        if (! sourceXml->hasTagName (TriggerSourceXml::tag))
-            continue;
-
-        const int line = sourceXml->getIntAttribute (TriggerSourceXml::line, -1);
-
-        const int savedType = sourceXml->getIntAttribute (
-            TriggerSourceXml::type, static_cast<int> (TriggerType::TTL_TRIGGER));
-
-        // Anything that is not a value this build knows becomes a plain TTL
-        // source. That covers the retired TTL_AND_MSG (3), whose behaviour is now
-        // carried by the arm pattern restored below, so such a source keeps
-        // working rather than loading as a garbage enum.
-        const auto type = (savedType == static_cast<int> (TriggerType::MSG_TRIGGER))
-                              ? TriggerType::MSG_TRIGGER
-                              : TriggerType::TTL_TRIGGER;
-
-        auto* source = m_triggerSources.addTriggerSource (line, type);
-
-        if (source == nullptr)
-            continue;
-
-        source->name = sourceXml->getStringAttribute (TriggerSourceXml::name, source->name);
-        source->colour = juce::Colour::fromString (sourceXml->getStringAttribute (
-            TriggerSourceXml::colour, source->colour.toString()));
-        source->cancelPattern = sourceXml->getStringAttribute (TriggerSourceXml::cancelPattern);
-        source->commitPattern = sourceXml->getStringAttribute (TriggerSourceXml::commitPattern);
-        source->pendingTimeoutMs =
-            sourceXml->getIntAttribute (TriggerSourceXml::pendingTimeoutMs, 5000);
-
-        // Through the setter, not the field: it is what leaves a gated source
-        // disarmed and an ungated one live. Assigning armPattern directly would
-        // restore a gated source with canTrigger still true, so its first TTL
-        // edge would fire without ever having been armed.
-        m_triggerSources.setArmPattern (
-            source, sourceXml->getStringAttribute (TriggerSourceXml::armPattern));
-    }
-
+    const int numRead = readTriggerSourcesFromXml (xml, m_triggerSources);
     m_isLoadingState = false;
 
     rebuildConfiguration();
     triggerAsyncUpdate();
+
+    return numRead;
+}
+
+// --- Trigger settings files ------------------------------------------------
+
+juce::Result TriggeredCaptureNode::saveTriggerSettings (const juce::File& file) const
+{
+    juce::XmlElement xml (TriggerSourceXml::fileTag);
+
+    // Recorded so a file can be traced back to where it came from. Neither is
+    // read back: the whole point is that a table saved from one plugin loads into
+    // any of them.
+    xml.setAttribute (TriggerSourceXml::filePlugin, getName());
+    xml.setAttribute (TriggerSourceXml::fileSavedAt,
+                      juce::Time::getCurrentTime().toISO8601 (true));
+
+    writeTriggerSourcesToXml (m_triggerSources, xml);
+    saveTriggerSettingsExtras (xml);
+
+    // Through a FileOutputStream and a TemporaryFile rather than
+    // XmlElement::writeTo(), for the same reason the session writer does it this
+    // way: only some of JUCE is exported from the Open Ephys shared library, and
+    // the convenience calls fail at link time rather than at compile time. The
+    // temporary also means a failed write cannot leave a truncated file where a
+    // working trigger table used to be.
+    const auto text = xml.toString();
+
+    juce::TemporaryFile temporary (file);
+
+    {
+        juce::FileOutputStream stream (temporary.getFile());
+
+        if (! stream.openedOk())
+            return juce::Result::fail ("Could not open " + file.getFullPathName());
+
+        if (! stream.write (text.toRawUTF8(), text.getNumBytesAsUTF8()))
+            return juce::Result::fail ("Could not write " + file.getFullPathName());
+
+        stream.flush();
+
+        if (stream.getStatus().failed())
+            return stream.getStatus();
+    }
+
+    if (! temporary.overwriteTargetFileWithTemporary())
+        return juce::Result::fail ("Could not finalise " + file.getFullPathName());
+
+    return juce::Result::ok();
+}
+
+juce::Result TriggeredCaptureNode::loadTriggerSettings (const juce::File& file)
+{
+    // Replacing the trigger table reallocates every per-source accumulator, which
+    // is the same reason loadSession() refuses while acquiring. The popup disables
+    // the button too; this is the guarantee behind it.
+    if (CoreServices::getAcquisitionStatus())
+        return juce::Result::fail ("Stop acquisition before loading trigger settings.");
+
+    if (! file.existsAsFile())
+        return juce::Result::fail (file.getFullPathName() + " does not exist.");
+
+    // XmlDocument, not the juce::parseXML() free function: see the note in
+    // SessionBundle.cpp, and the writer above.
+    juce::XmlDocument document (file.loadFileAsString());
+    const auto xml = document.getDocumentElement();
+
+    if (xml == nullptr)
+        return juce::Result::fail (file.getFileName() + " is not readable XML.");
+
+    // A saved signal chain is accepted as well as a file this wrote: its
+    // CUSTOM_PARAMETERS block carries the very same TRIGGERSOURCE children, just
+    // further down the tree, and lifting a trigger table straight out of a chain
+    // someone else set up is the most likely way to want one. A file with no
+    // sources anywhere in it is refused rather than silently emptying the table —
+    // that is the shape a wrong file picked from the chooser takes, and emptying
+    // the table is the worst available reading of "load".
+    const auto* block = findTriggerSourceBlock (*xml);
+
+    if (block == nullptr)
+        return juce::Result::fail (file.getFileName() + " contains no trigger sources.");
+
+    restoreTriggerSourcesFrom (*block);
+
+    // The same element, not the document root: a subclass's own elements are
+    // siblings of the TRIGGERSOURCE children, so in a saved chain they are that
+    // many levels down too.
+    loadTriggerSettingsExtras (*block);
+
+    return juce::Result::ok();
 }
 
 // --- Sessions --------------------------------------------------------------

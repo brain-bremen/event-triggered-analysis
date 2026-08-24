@@ -180,6 +180,12 @@ protected:
     bool saveSessionPayload (SessionWriter& writer) override;
     bool loadSessionPayload (const SessionReader& reader) override;
 
+    /** The sweep angles and the direction generator's spec travel with a
+     *  trigger-settings file as well, so that a direction table copied into
+     *  another mapper arrives meaning the same thing it did in the first. */
+    void saveTriggerSettingsExtras (juce::XmlElement& xml) const override;
+    void loadTriggerSettingsExtras (const juce::XmlElement& xml) override;
+
     void registerAdditionalParameters() override;
     void analysisConfigurationChanged() override;
     bool isAnalysisParameter (const juce::String& parameterName) const override;
@@ -248,13 +254,24 @@ private:
                        std::vector<int>& channelIndices,
                        Rf::MappingSettings& settings);
 
-    /** Applies the SWEEPANGLE elements of a CUSTOM_PARAMETERS block to the
-     *  current sources, by position.
+    /** Writes one SWEEPANGLE element per trigger source, in list order.
      *
-     *  Shared by the signal chain's restore and the session's, so the two cannot
-     *  disagree about what a saved direction means. A block carrying none -- a
-     *  session written before angles were stored -- leaves the table alone. */
+     *  Shared by the signal chain's save, the session's and the trigger-settings
+     *  file's, so no two of them can disagree about what a direction is. */
+    void writeSweepAnglesToXml (juce::XmlElement& xml) const;
+
+    void writeDirectionGeneratorToXml (juce::XmlElement& xml) const;
+
+    /** Applies the SWEEPANGLE elements of a block to the current sources, by
+     *  position.
+     *
+     *  Shared by the signal chain's restore, the session's and the
+     *  trigger-settings file's, so none of them can disagree about what a saved
+     *  direction means. A block carrying none -- a session written before angles
+     *  were stored -- leaves the table alone. */
     void applySweepAnglesFromXml (const juce::XmlElement* xml);
+
+    void applyDirectionGeneratorFromXml (const juce::XmlElement* xml);
 
     /** Traces for one channel, for the latency scan. Message thread. */
     std::vector<Rf::DirectionTrace> gatherTracesForChannel (int channelIndex) const;

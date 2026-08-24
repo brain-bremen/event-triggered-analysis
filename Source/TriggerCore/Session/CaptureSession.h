@@ -23,6 +23,7 @@
 */
 #pragma once
 
+#include "../TriggerSourceXml.h"
 #include "SessionBundle.h"
 
 #include <JuceHeader.h>
@@ -91,29 +92,6 @@ struct SessionGeometry
     int numSamples() const { return preSamples + postSamples; }
 };
 
-/** The XML a trigger source is stored as, in a signal chain and in a session
- *  alike.
- *
- *  Named here, once, and used by all three places that touch the format:
- *  TriggeredCaptureNode::saveCustomParametersToXml() writes it,
- *  loadCustomParametersFromXml() restores from it, and sourcesFromSettingsXml()
- *  reads it for the compatibility check. Sharing the constants is what makes
- *  drift between them impossible rather than merely unlikely — a renamed
- *  attribute stops compiling instead of silently reading as its default.
- */
-namespace TriggerSourceXml
-{
-    inline constexpr auto tag = "TRIGGERSOURCE";
-    inline constexpr auto name = "name";
-    inline constexpr auto line = "line";
-    inline constexpr auto type = "type";
-    inline constexpr auto colour = "colour";
-    inline constexpr auto armPattern = "armPattern";
-    inline constexpr auto cancelPattern = "cancelPattern";
-    inline constexpr auto commitPattern = "commitPattern";
-    inline constexpr auto pendingTimeoutMs = "pendingTimeoutMs";
-} // namespace TriggerSourceXml
-
 /** One trigger source as stored in a session. */
 struct SessionSourceEntry
 {
@@ -125,7 +103,7 @@ struct SessionSourceEntry
     juce::String armPattern;
     juce::String cancelPattern;
     juce::String commitPattern;
-    int pendingTimeoutMs = 5000;
+    int pendingTimeoutMs = TriggerSourceXml::defaultPendingTimeoutMs;
 
     /** Trials folded in by the time of the save. Diagnostic: the authoritative
         count is in the trial_counts array. */
