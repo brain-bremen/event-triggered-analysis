@@ -116,6 +116,9 @@ instead of a fitted ellipse axis on purpose: back-projection is not suitable for
 A latency scan (one back-projection per candidate latency) exists in `rf_math` and on the node, but
 has no button in the editor yet.
 
+Every parameter, what it does to the map, and how to make the trial window and the sweep agree:
+[`Source/ReceptiveField/README.md`](Source/ReceptiveField/README.md).
+
 ## Design notes
 
 - **All per-trial work runs on a background thread.** `process()` only appends to a lock-free ring
