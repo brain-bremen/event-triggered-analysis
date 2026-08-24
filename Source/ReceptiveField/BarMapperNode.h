@@ -151,7 +151,12 @@ public:
      *  an explicit action. */
     Rf::LatencyScanResult estimateLatencyForChannel (int channelIndex);
 
-    void requestRecompute() { m_compute.requestRecompute(); }
+    /** Re-snapshots what the compute thread reads, then asks for a recompute.
+     *
+     *  The only way this plugin should ever ask for one: a recompute against a
+     *  stale snapshot maps the new configuration's trials with the old
+     *  configuration's angles. Message thread. */
+    void requestRecompute();
 
 protected:
     /** The per-direction accumulators, plus the finished maps.
@@ -183,11 +188,66 @@ protected:
     void discardExpiredCaptures (std::int64_t nowMs) override;
 
 private:
+    /** Everything the compute thread needs that does not live in the DataStore.
+     *
+     *  Written on the message thread under the DataStore lock, read on the
+     *  compute thread under the same lock, and the reason it exists is that the
+     *  obvious alternative is a data race. The compute thread used to read the
+     *  node's live configuration -- getSelectedChannels(), getTrialGeometry(),
+     *  m_triggerSources, m_angles, the parameters -- while holding the DataStore
+     *  lock, but none of those are written under that lock:
+     *
+     *    - m_selectedChannels and m_geometry are rewritten by
+     *      TriggeredCaptureNode::rebuildConfiguration() under m_configurationLock,
+     *      which is taken in exactly one place in this repository and therefore
+     *      excludes nothing else. A juce::Array<int> being cleared and refilled
+     *      under a reader is a read of freed memory, not a stale value.
+     *    - m_triggerSources is appended to with no lock at all. (Removal is
+     *      already safe: triggerSourcesAboutToBeRemoved() takes this lock while
+     *      the sources are still alive.)
+     *    - m_angles is a std::unordered_map written with no lock.
+     *
+     *  None of that needs acquisition to be running: the compute thread wakes on
+     *  every parameter change, which is exactly when the user is editing.
+     *
+     *  So the rule is now one sentence: the configuration is the message thread's,
+     *  and the compute thread sees only this snapshot and the DataStore. */
+    struct ComputeInputs
+    {
+        juce::Array<int> channels;
+        Rf::MappingSettings settings;
+
+        /** One entry per source that has an angle, in source order. A source with
+         *  no angle is not an error -- it is a condition the user has not said
+         *  anything about yet -- so it is left out here rather than defaulted to
+         *  zero degrees further down. */
+        struct Direction
+        {
+            TriggerSource* source = nullptr;
+            Rf::SweepGeometry sweep;
+        };
+
+        std::vector<Direction> directions;
+    };
+
+    /** Rebuilds m_computeInputs from the current configuration. Message thread;
+        takes the DataStore lock. */
+    void updateComputeInputs();
+
     /** Collects one direction-trace set per selected channel from the
-     *  accumulators. Runs on the compute thread, under the DataStore lock. */
+     *  accumulators. Runs on the compute thread, under the DataStore lock, and
+     *  touches nothing but m_computeInputs and m_dataStore. */
     bool gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& tracesPerChannel,
                        std::vector<int>& channelIndices,
                        Rf::MappingSettings& settings);
+
+    /** Applies the SWEEPANGLE elements of a CUSTOM_PARAMETERS block to the
+     *  current sources, by position.
+     *
+     *  Shared by the signal chain's restore and the session's, so the two cannot
+     *  disagree about what a saved direction means. A block carrying none -- a
+     *  session written before angles were stored -- leaves the table alone. */
+    void applySweepAnglesFromXml (const juce::XmlElement* xml);
 
     /** Traces for one channel, for the latency scan. Message thread. */
     std::vector<Rf::DirectionTrace> gatherTracesForChannel (int channelIndex) const;
@@ -195,7 +255,14 @@ private:
     double getDoubleParameter (const char* name, double fallback) const;
 
     DataStore m_dataStore;
+
+    /** Message thread only, now that gatherTraces() reads the snapshot instead.
+        The canvas's warnings, the SWEEPS table and the palette all read it there. */
     SweepAngles m_angles;
+
+    /** Guarded by the DataStore lock. Declared before m_compute so it outlives
+        the thread that reads it. */
+    ComputeInputs m_computeInputs;
     /** Gives a source the colour of the direction it stands for. Used where this
      *  plugin creates the sources -- the direction generator -- so a fresh set
      *  does not arrive as eight identical line colours. */

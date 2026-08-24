@@ -28,6 +28,7 @@
 #include "Ui/BarMapperEditor.h"
 
 #include <algorithm>
+#include <vector>
 
 namespace EventTriggered
 {
@@ -207,7 +208,7 @@ void BarMapperNode::parameterValueChanged (Parameter* parameter)
     TriggeredCaptureNode::parameterValueChanged (parameter);
 
     if (parameter != nullptr && ! isAnalysisParameter (parameter->getName()))
-        m_compute.requestRecompute();
+        requestRecompute();
 }
 
 double BarMapperNode::getDoubleParameter (const char* name, double fallback) const
@@ -314,12 +315,38 @@ std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
     return sweep;
 }
 
+// --- What the compute thread is allowed to see -----------------------------
+
+void BarMapperNode::updateComputeInputs()
+{
+    // Read the configuration here, on the message thread that owns it, and hand
+    // the compute thread a copy under the lock it already takes. See
+    // ComputeInputs for what goes wrong when it reads the live thing instead.
+    ComputeInputs inputs;
+
+    inputs.channels = getSelectedChannels();
+    inputs.settings = getMappingSettings();
+
+    for (TriggerSource* source : m_triggerSources.getAll())
+        if (const auto sweep = getSweepForSource (source))
+            inputs.directions.push_back ({ source, *sweep });
+
+    const auto lock = m_dataStore.GetLock();
+    m_computeInputs = std::move (inputs);
+}
+
+void BarMapperNode::requestRecompute()
+{
+    updateComputeInputs();
+    m_compute.requestRecompute();
+}
+
 // --- The angle table -------------------------------------------------------
 
 void BarMapperNode::setAngleForSource (TriggerSource* source, double angleDeg)
 {
     m_angles.setAngleDeg (source, angleDeg);
-    m_compute.requestRecompute();
+    requestRecompute();
 }
 
 void BarMapperNode::applyDirectionColour (TriggerSource* source, double angleDeg)
@@ -382,7 +409,7 @@ void BarMapperNode::generateDirectionSources (int count,
         applyDirectionColour (source, direction.angleDeg);
     }
 
-    m_compute.requestRecompute();
+    requestRecompute();
 }
 
 // --- Configuration ---------------------------------------------------------
@@ -403,7 +430,7 @@ void BarMapperNode::analysisConfigurationChanged()
     // all of which have just changed.
     rebuildDisplayPanels();
 
-    m_compute.requestRecompute();
+    requestRecompute();
 }
 
 void BarMapperNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSource*>& sources)
@@ -424,18 +451,31 @@ void BarMapperNode::triggerSourcesAboutToBeRemoved (const juce::Array<TriggerSou
         // direction, and produce a plausible wrong map rather than an error.
         m_angles.remove (source);
     }
+
+    // And out of the snapshot, under the same lock, while these are still alive.
+    // Filtered against the removal list rather than rebuilt from m_triggerSources,
+    // because the sources have not been erased from *that* yet -- this callback
+    // runs before the deletion, by design. Doing it here is the only thing that
+    // stops the compute thread dereferencing a pointer that is about to be freed.
+    std::erase_if (m_computeInputs.directions,
+                   [&sources] (const ComputeInputs::Direction& direction) {
+                       return sources.contains (direction.source);
+                   });
 }
 
 void BarMapperNode::clearAllData()
 {
-    const auto lock = m_dataStore.GetLock();
-    m_dataStore.ResetAllBuffers();
-    m_compute.requestRecompute();
+    {
+        const auto lock = m_dataStore.GetLock();
+        m_dataStore.ResetAllBuffers();
+    }
+
+    requestRecompute();
 }
 
 void BarMapperNode::refreshDisplay()
 {
-    m_compute.requestRecompute();
+    requestRecompute();
 }
 
 void BarMapperNode::publishResults()
@@ -450,44 +490,41 @@ bool BarMapperNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& 
                                        std::vector<int>& channelIndices,
                                        Rf::MappingSettings& settings)
 {
+    // Compute thread. Everything below comes either from the snapshot or from the
+    // DataStore, and both are covered by this one lock; nothing here reads the
+    // node's live configuration. That is the whole contract -- see ComputeInputs.
     const auto lock = m_dataStore.GetLock();
 
-    settings = getMappingSettings();
+    const ComputeInputs& inputs = m_computeInputs;
+    const int numChannels = inputs.channels.size();
 
-    const juce::Array<int> channels = getSelectedChannels();
+    settings = inputs.settings;
 
-    const juce::Array<TriggerSource*> sources = m_triggerSources.getAll();
-
-    if (channels.isEmpty() || sources.isEmpty() || ! settings.map.isValid())
+    if (numChannels == 0 || inputs.directions.empty() || ! settings.map.isValid())
         return false;
 
-    channelIndices.assign (channels.begin(), channels.end());
-    tracesPerChannel.assign (static_cast<std::size_t> (channels.size()), {});
+    channelIndices.assign (inputs.channels.begin(), inputs.channels.end());
+    tracesPerChannel.assign (static_cast<std::size_t> (numChannels), {});
 
-    for (TriggerSource* source : sources)
+    for (const ComputeInputs::Direction& source : inputs.directions)
     {
-        const auto sweep = getSweepForSource (source);
-
-        // A source with no angle is not an error: it is a condition the user has
-        // not yet said anything about. It contributes nothing to the map rather
-        // than contributing at zero degrees.
-        if (! sweep.has_value())
-            continue;
-
-        auto* average = m_dataStore.getRefToAverageBufferForTriggerSource (source);
+        // Safe to key the store with: a source is dropped from the snapshot in
+        // triggerSourcesAboutToBeRemoved(), under this lock, while it is still
+        // alive. So a pointer that is in here is a pointer that is still valid.
+        auto* average = m_dataStore.getRefToAverageBufferForTriggerSource (source.source);
 
         if (average == nullptr || average->getNumTrials() == 0)
             continue;
 
         const juce::AudioBuffer<float> mean = average->getAverage();
 
-        if (mean.getNumChannels() != channels.size())
+        if (mean.getNumChannels() != numChannels)
             continue; // Mid-resize; the next recompute will see a consistent shape.
 
-        for (int row = 0; row < channels.size(); ++row)
+        for (int row = 0; row < numChannels; ++row)
         {
             Rf::DirectionTrace direction;
-            direction.sweep = *sweep;
+            direction.sweep = source.sweep;
             direction.trialCount = average->getNumTrials();
             direction.trace.assign (mean.getReadPointer (row),
                                     mean.getReadPointer (row) + mean.getNumSamples());
@@ -702,12 +739,29 @@ bool BarMapperNode::loadSessionPayload (const SessionReader& reader)
     if (! AverageSession::apply (m_dataStore, getTriggerSources().getAll(), reader))
         return false;
 
+    // The angles come back from the session too, and on *every* accepted load --
+    // not only when the source table had to be rebuilt from the file.
+    //
+    // TriggeredCaptureNode restores the configuration from settings.xml only for
+    // a Rebuild verdict, because for an Accept verdict the current sources
+    // already match the stored ones. They match on what fires them -- line, type,
+    // arm pattern -- which is all the base class knows about and all it needs.
+    // It knows nothing about angles, so an Accept used to load a session's trials
+    // and leave them attributed to whatever angles happened to be typed in here.
+    // With none typed in, every direction dropped out of the map and the maps went
+    // blank; with different ones typed in, the map came out plausible and wrong,
+    // which is worse.
+    //
+    // The session's angles win, and that is the point: they are what its
+    // accumulated trials mean.
+    applySweepAnglesFromXml (reader.getSettingsXml());
+
     // The stored maps are deliberately ignored. They are an output, and
     // recomputing them from the restored accumulators is both cheap and the only
     // way to guarantee that what is displayed matches the current settings rather
     // than the ones in force when the file was written.
     rebuildDisplayPanels();
-    m_compute.requestRecompute();
+    requestRecompute();
     return true;
 }
 
@@ -734,12 +788,8 @@ void BarMapperNode::saveCustomParametersToXml (XmlElement* xml)
     }
 }
 
-void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
+void BarMapperNode::applySweepAnglesFromXml (const juce::XmlElement* xml)
 {
-    m_angles.clear();
-
-    TriggeredCaptureNode::loadCustomParametersFromXml (xml);
-
     if (xml == nullptr)
         return;
 
@@ -752,13 +802,29 @@ void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
 
         const int index = angleXml->getIntAttribute ("index", -1);
 
-        if (index < 0 || index >= sources.size() || ! angleXml->hasAttribute ("angleDeg"))
+        if (index < 0 || index >= sources.size())
             continue;
 
-        m_angles.setAngleDeg (sources[index], angleXml->getDoubleAttribute ("angleDeg"));
+        // A SWEEPANGLE with no angle is a direction that had none when this was
+        // written. Clearing rather than skipping, so that applying a block twice
+        // -- or applying one over a table someone has since typed into -- gives
+        // the same answer either way.
+        if (angleXml->hasAttribute ("angleDeg"))
+            m_angles.setAngleDeg (sources[index], angleXml->getDoubleAttribute ("angleDeg"));
+        else
+            m_angles.remove (sources[index]);
     }
+}
 
-    m_compute.requestRecompute();
+void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
+{
+    m_angles.clear();
+
+    TriggeredCaptureNode::loadCustomParametersFromXml (xml);
+
+    applySweepAnglesFromXml (xml);
+
+    requestRecompute();
 }
 
 } // namespace EventTriggered
