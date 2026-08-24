@@ -124,6 +124,7 @@ jobs:
             plugin/Build/${{ matrix.build-type }}/TriggeredPower.dll
             plugin/Build/${{ matrix.build-type }}/TriggeredCoherence.dll
             plugin/Build/${{ matrix.build-type }}/TriggeredAverage.dll
+            plugin/Build/${{ matrix.build-type }}/ReceptiveFieldBarMapper.dll
           if-no-files-found: error
 
   build-linux:
@@ -244,6 +245,7 @@ jobs:
             plugin/Build/TriggeredPower.so
             plugin/Build/TriggeredCoherence.so
             plugin/Build/TriggeredAverage.so
+            plugin/Build/ReceptiveFieldBarMapper.so
           if-no-files-found: error
 
   # Builds the site without deploying it, so a dead link or a missing page fails

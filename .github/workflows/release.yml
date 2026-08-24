@@ -105,6 +105,7 @@ jobs:
             plugin/Build/Release/TriggeredPower.dll
             plugin/Build/Release/TriggeredCoherence.dll
             plugin/Build/Release/TriggeredAverage.dll
+            plugin/Build/Release/ReceptiveFieldBarMapper.dll
           if-no-files-found: error
 
   build-linux:
@@ -203,6 +204,7 @@ jobs:
             plugin/Build/TriggeredPower.so
             plugin/Build/TriggeredCoherence.so
             plugin/Build/TriggeredAverage.so
+            plugin/Build/ReceptiveFieldBarMapper.so
           if-no-files-found: error
 
   create-release:

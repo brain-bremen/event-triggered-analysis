@@ -30,6 +30,7 @@ and is baked into every saved session as `plugin_version`.
         <Open Ephys GUI>/plugins/TriggeredAverage.dll
         <Open Ephys GUI>/plugins/TriggeredPower.dll
         <Open Ephys GUI>/plugins/TriggeredCoherence.dll
+        <Open Ephys GUI>/plugins/ReceptiveFieldBarMapper.dll
         ```
 
     === "Linux"
@@ -38,6 +39,7 @@ and is baked into every saved session as `plugin_version`.
         <Open Ephys GUI>/plugins/TriggeredAverage.so
         <Open Ephys GUI>/plugins/TriggeredPower.so
         <Open Ephys GUI>/plugins/TriggeredCoherence.so
+        <Open Ephys GUI>/plugins/ReceptiveFieldBarMapper.so
         ```
 
     === "macOS"
@@ -55,12 +57,6 @@ and is baked into every saved session as `plugin_version`.
    Mapper do not link FFTW at all and need nothing extra.
 5. Restart the GUI. The plugins appear in the processor list as `Triggered Avg`,
    `Triggered Power`, `Triggered Coherence` and `RF Barmapper`.
-
-!!! note "The Receptive Field Bar Mapper is not in the release archives yet"
-
-    The release workflow packages the three plugins it was written for and has not been
-    extended to `ReceptiveFieldBarMapper`. Until it is, build the mapper from source as
-    below — the CMake build produces it alongside the other three with no extra flags.
 
 ## Building from source
 

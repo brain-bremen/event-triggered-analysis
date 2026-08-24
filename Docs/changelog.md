@@ -74,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Receptive Field Bar Mapper was never released.** Every artifact list in
+  both workflows named the three plugins that existed when they were written, so
+  the mapper was built on every CI run and then dropped on the floor: it appeared
+  in no release archive and in no CI artifact, and the only way to obtain it was
+  to build it. `if-no-files-found: error` was already set on all four lists, which
+  is what will catch the next one -- it fails the job rather than shipping an
+  archive that is quietly short a plugin
+
 - Triggered Average's **options bar could place its right-hand buttons where the
   scrollbar could not reach them**. The bar was laid out at least 775 px wide while
   its controls needed nearly twice that, and the holding viewport scrolls only as
