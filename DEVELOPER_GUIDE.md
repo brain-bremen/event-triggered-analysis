@@ -25,15 +25,15 @@ Code
 
 ### Windows
 
-**Requirements:** [Visual Studio](https://visualstudio.microsoft.com/) and [CMake](https://cmake.org/install/)
+**Requirements:** [Visual Studio 2026](https://visualstudio.microsoft.com/) and [CMake](https://cmake.org/install/) 4.2.3 or later (the first release that knows the `Visual Studio 18 2026` generator)
 
 From the `Build` directory, enter:
 
 ```bash
-cmake -G "Visual Studio 17 2022" -A x64 ..
+cmake -G "Visual Studio 18 2026" -A x64 ..
 ```
 
-Next, launch Visual Studio and open the `OE_PLUGIN_TriggeredAvg.sln` file that was just created. Select the appropriate configuration (Debug/Release) and build the solution.
+Next, launch Visual Studio and open the `OE_PLUGIN_TriggeredAvg.slnx` file that was just created. Select the appropriate configuration (Debug/Release) and build the solution.
 
 Selecting the `INSTALL` project and manually building it will copy the `.dll` and any other required files into the GUI's `plugins` directory. The next time you launch the GUI from Visual Studio, the Triggered Average plugin should be available.
 

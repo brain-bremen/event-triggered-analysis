@@ -100,14 +100,14 @@ Override that with `-DGUI_BASE_DIR=<path>` or the `GUI_BASE_DIR` environment var
 
 === "Windows"
 
+    Requires Visual Studio 2026 and CMake 4.2.3 or later, which is the first
+    release that knows the `Visual Studio 18 2026` generator.
+
     ```powershell
-    cmake -S . -B Build -G "Visual Studio 17 2022" -A x64
+    cmake -S . -B Build -G "Visual Studio 18 2026" -A x64
     cmake --build Build --config Release
     cmake --install Build --config Release
     ```
-
-    CI uses the `Visual Studio 18 2026` generator, which needs CMake 4.2.3 or later.
-    The 2022 generator above works with any reasonably current CMake.
 
 === "Linux"
 
