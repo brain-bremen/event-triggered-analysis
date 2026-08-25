@@ -16,6 +16,30 @@ screenshot with a placeholder again.
 This directory is excluded from nothing — the images are committed, like
 `Resources/`.
 
+## Capturing a popup
+
+Most of the shots below are of a popup — TRIGGERS, MONITOR, ANALYSIS, PAIRS,
+DIRECTIONS... — and a popup dismisses itself the moment the GUI stops being the
+focused application. Every screenshot tool takes the focus (the GNOME Shell one
+takes a keyboard grab), so the popup is gone before the shutter, and on X11 the
+dismissal is deliberate: a call-out is an override-redirect window that no
+window manager can stack over, so a popup that outlived focus would sit on top
+of whatever you switched to.
+
+Start the GUI with
+
+```
+EVENT_TRIGGERED_KEEP_POPUPS=1 open-ephys
+```
+
+and the popups stay open across the focus change, at the price of that
+overlapping while the flag is set. Use it to take the picture, not to work in.
+
+A tool that grabs nothing is worth having either way — `maim -d 5 shot.png` or
+`scrot -d 5 shot.png` (neither is installed by default on Ubuntu) waits out the
+delay without opening a window, so you can put the focus back on the GUI before
+the capture.
+
 ## What each one should show
 
 | File | What to capture |

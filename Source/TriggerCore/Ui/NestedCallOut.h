@@ -26,6 +26,8 @@
 #include <EditorHeaders.h>
 #include <JuceHeader.h>
 
+#include <cstdlib>
+
 /** Opening a second call-out from inside a PopupComponent.
  *
  *  A PopupComponent lives in a modal CallOutBox whose window carries JUCE's
@@ -78,6 +80,29 @@ inline bool isOpenOver (const juce::Component& popupContent)
     return modal != nullptr && modal != popupContent.findParentComponentOfClass<juce::CallOutBox>();
 }
 
+/** True when EVENT_TRIGGERED_KEEP_POPUPS is set in the environment, which asks
+ *  the popups to stay open when the application goes to the background.
+ *
+ *  For documentation screenshots, and nothing else. Every screenshot tool takes
+ *  the focus -- the GNOME Shell one takes a keyboard grab -- so a popup that
+ *  dismisses itself on focus loss cannot be photographed at all, which is a
+ *  problem when half the screenshots in Docs/ are of one.
+ *
+ *  Setting it puts back the behaviour the Alt+Tab fix removed: the popup keeps
+ *  taking the keyboard focus back, so JUCE never sees the application leave the
+ *  foreground and never dismisses the call-out. That is the whole trick, and it
+ *  is also why this is not a setting -- with it on, a popup left open sits over
+ *  every other window on X11 and steals the keys meant for them.
+ *
+ *  Read once: an environment variable that changes under a running GUI would
+ *  only make the behaviour harder to explain. */
+inline bool popupsKeepFocusForScreenshots()
+{
+    static const bool keep = std::getenv ("EVENT_TRIGGERED_KEEP_POPUPS") != nullptr;
+
+    return keep;
+}
+
 /** Whether a popup that just saw the focus move away should take it back.
  *
  *  PopupComponent::focusOfChildComponentChanged answers every focus change by
@@ -99,7 +124,10 @@ inline bool isOpenOver (const juce::Component& popupContent)
  */
 inline bool shouldTakeKeyboardFocusBack (const juce::Component& popupContent)
 {
-    return juce::Process::isForegroundProcess() && ! isOpenOver (popupContent);
+    if (isOpenOver (popupContent))
+        return false;
+
+    return juce::Process::isForegroundProcess() || popupsKeepFocusForScreenshots();
 }
 
 /** Opens `content` in a call-out anchored to `anchor`, guarded the same way as
@@ -132,7 +160,8 @@ inline void show (juce::Component& anchor, std::unique_ptr<juce::Component> cont
                     // the popup would take the X input focus back from whatever
                     // the user switched to. See shouldTakeKeyboardFocusBack().
                     if (safePopup != nullptr && safePopup->isShowing()
-                        && juce::Process::isForegroundProcess())
+                        && (juce::Process::isForegroundProcess()
+                            || popupsKeepFocusForScreenshots()))
                         safePopup->grabKeyboardFocus();
                 }));
     }
