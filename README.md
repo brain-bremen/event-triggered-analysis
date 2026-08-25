@@ -44,4 +44,4 @@ in [`Docs/`](Docs/).
 
 ## Licence
 
-GPL-3.0.
+GPL-3.0. See [`LICENSE`](LICENSE).
