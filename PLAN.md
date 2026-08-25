@@ -1,5 +1,15 @@
 # Plan: switchable display units (degrees, millimetres, screen pixels)
 
+> **Status: implemented** on `feature/display-units`, all eight steps. The open
+> decision below was settled as recommended — the **linear small-angle factor**,
+> with the approximation documented in both READMEs and the parameter reference.
+>
+> Two things the plan did not anticipate, both since the map axes landed in
+> 66fd96b: step 5 covers the axis ticks and the shared corner unit as well as the
+> `RF` readout, and the ticks are chosen in the unit they are printed in (round
+> millimetres, not the conversions of round degrees). The plan's own line numbers
+> have moved.
+
 ## Where things stand
 
 Degrees are the internal unit everywhere. `RfMath/MapGeometry.h` says so explicitly:
@@ -88,3 +98,9 @@ The deg↔mm conversion is only linear near the centre of gaze.
 Recommendation: take the linear factor and document the approximation. Switch to
 the tangent version only if recordings run far enough into the periphery to need
 it; that changes step 1 only.
+
+**Decided: the linear factor.** `millimetresPerDegree` in `RfMath/DisplayUnits.h`
+is the single place it lives, and the ~4%-at-20° under-report is stated in the
+parameter reference, both READMEs and the changelog. Nothing else would have to
+change to switch: the map panels and the parameter controls both take one scale
+and know nothing about where it came from.

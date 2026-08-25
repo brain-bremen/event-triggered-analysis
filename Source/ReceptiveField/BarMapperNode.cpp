@@ -191,6 +191,34 @@ void BarMapperNode::registerAdditionalParameters()
                        "Fraction of the peak at which the receptive-field border is drawn",
                        "",
                        static_cast<float> (Rf::defaultBorderFraction), 0.1f, 0.99f, 0.01f);
+
+    // Display only. Registered here rather than kept in the canvas so they
+    // travel with the signal chain -- the rig does not change between sessions,
+    // and retyping the viewing distance every time the window is reopened is
+    // exactly the friction this feature exists to remove.
+    addCategoricalParameter (P::PROCESSOR_SCOPE,
+                             RfParameterNames::display_unit,
+                             "Show units in",
+                             "Unit for positions, extents and speeds. Display only: "
+                             "degrees remain the unit everything is computed in",
+                             { Rf::unitName (Rf::DisplayUnit::Degrees),
+                               Rf::unitName (Rf::DisplayUnit::Millimetres),
+                               Rf::unitName (Rf::DisplayUnit::ScreenPixels) },
+                             0);
+
+    addFloatParameter (P::PROCESSOR_SCOPE,
+                       RfParameterNames::viewing_distance_mm,
+                       "Viewing distance",
+                       "Eye to screen. Sets how many millimetres a degree is worth",
+                       "mm",
+                       570.0f, 10.0f, 5000.0f, 1.0f);
+
+    addFloatParameter (P::PROCESSOR_SCOPE,
+                       RfParameterNames::screen_px_per_mm,
+                       "Screen resolution",
+                       "Screen pixels per millimetre. 3.6 px/mm is about 91 ppi",
+                       "px/mm",
+                       3.6f, 0.1f, 100.0f, 0.1f);
 }
 
 bool BarMapperNode::isAnalysisParameter (const juce::String& parameterName) const
@@ -207,7 +235,20 @@ void BarMapperNode::parameterValueChanged (Parameter* parameter)
 {
     TriggeredCaptureNode::parameterValueChanged (parameter);
 
-    if (parameter != nullptr && ! isAnalysisParameter (parameter->getName()))
+    if (parameter == nullptr)
+        return;
+
+    // The guard the display units stand on. These three change how a number is
+    // written down, never what it is, so they must not reach the pipeline: a
+    // recompute here would make "switch to millimetres" a thing that can move a
+    // receptive field, which is the one outcome this feature must not have.
+    if (isDisplayParameter (parameter->getName()))
+    {
+        m_displayPublisher.triggerAsyncUpdate();
+        return;
+    }
+
+    if (! isAnalysisParameter (parameter->getName()))
         requestRecompute();
 }
 
@@ -217,6 +258,33 @@ double BarMapperNode::getDoubleParameter (const char* name, double fallback) con
         return static_cast<double> (static_cast<float> (parameter->getValue()));
 
     return fallback;
+}
+
+// --- Display units ---------------------------------------------------------
+
+Rf::DisplayUnit BarMapperNode::getDisplayUnit() const
+{
+    if (auto* parameter = getParameter (RfParameterNames::display_unit))
+        return Rf::displayUnitFromIndex (static_cast<int> (parameter->getValue()));
+
+    return Rf::DisplayUnit::Degrees;
+}
+
+Rf::ScreenGeometry BarMapperNode::getScreenGeometry() const
+{
+    Rf::ScreenGeometry geometry;
+
+    geometry.viewingDistanceMm =
+        getDoubleParameter (RfParameterNames::viewing_distance_mm, geometry.viewingDistanceMm);
+    geometry.screenPixelsPerMm =
+        getDoubleParameter (RfParameterNames::screen_px_per_mm, geometry.screenPixelsPerMm);
+
+    return geometry;
+}
+
+double BarMapperNode::getDisplayUnitsPerDegree() const
+{
+    return Rf::unitsPerDegree (getDisplayUnit(), getScreenGeometry());
 }
 
 // --- Settings --------------------------------------------------------------
@@ -483,6 +551,14 @@ void BarMapperNode::publishResults()
         m_canvas->refresh();
 }
 
+void BarMapperNode::publishDisplayUnits()
+{
+    // Not refresh(): that returns early unless the compute thread has produced a
+    // new generation, and a change of unit produces no new result by design.
+    if (m_canvas != nullptr)
+        m_canvas->displayUnitsChanged();
+}
+
 // --- Gathering -------------------------------------------------------------
 
 bool BarMapperNode::gatherTraces (std::vector<std::vector<Rf::DirectionTrace>>& tracesPerChannel,
@@ -728,6 +804,17 @@ bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
     metadata.setAttribute ("map_degrees_per_pixel", geometry.degreesPerPixel);
     metadata.setAttribute ("map_centre_x_deg", geometry.centreXDeg);
     metadata.setAttribute ("map_centre_y_deg", geometry.centreYDeg);
+
+    // The rig, so an offline analysis can convert the degrees above into screen
+    // millimetres without having to be told the distance separately. Written
+    // alongside the *_deg attributes rather than instead of them: degrees are
+    // what was computed, and a file that quietly stored millimetres would lose
+    // the ability to say which factor produced them.
+    const Rf::ScreenGeometry screen = getScreenGeometry();
+
+    metadata.setAttribute ("viewing_distance_mm", screen.viewingDistanceMm);
+    metadata.setAttribute ("screen_px_per_mm", screen.screenPixelsPerMm);
+    metadata.setAttribute ("screen_mm_per_deg", Rf::millimetresPerDegree (screen));
 
     // Names the columns of map_estimates, so a reader does not have to count
     // along a row of seven doubles and hope.

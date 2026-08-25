@@ -80,6 +80,28 @@ public:
     /** Re-reads the control from the parameter. Never fires onChange. */
     void refresh();
 
+    /** Shows a float parameter in a unit other than the one it is stored in.
+     *
+     *  Reading multiplies by `scale`, committing divides by it, and the clamp
+     *  still happens in the parameter's own units against the parameter's own
+     *  range -- so no display unit can widen or narrow what a parameter accepts,
+     *  and a value typed just outside the range comes back as the range's edge
+     *  written in the unit it was typed in.
+     *
+     *  The number of decimals adapts to the parameter's step *as displayed*:
+     *  0.1 deg is about 1 mm and about 3.6 screen pixels, so the precision that
+     *  reads well differs by unit.
+     *
+     *  `scale` must be finite and positive; anything else is ignored, since a
+     *  zero scale would make every value read as zero and be uninvertible.
+     *  `unitOverride` replaces the trailing unit label; passing an empty string
+     *  restores the parameter's own unit. A scale of exactly 1.0 with no
+     *  override restores the parameter's own formatting as well.
+     *
+     *  Only float parameters are transformed. Ints and categoricals are counts
+     *  and choices, and neither has a unit to convert. */
+    void setDisplayTransform (double scale, const juce::String& unitOverride = {});
+
     /** Greys the control and stops it being edited. Used where a parameter is
         registered but does not apply to the current mode — visible, so the panel
         still documents that it exists, but plainly not in play. */
@@ -98,7 +120,17 @@ public:
 private:
     void commit();
 
+    /** True when a transform other than the identity is in force. */
+    bool hasDisplayTransform() const;
+
+    /** How the transformed value is written: enough decimals for one step of the
+        parameter to change the number shown. */
+    juce::String formatDisplayValue (double value) const;
+
     Parameter* m_parameter = nullptr;
+
+    double m_displayScale = 1.0;
+    juce::String m_unitOverride;
 
     int m_nameWidth = 0;
     int m_controlWidth = 0;

@@ -23,6 +23,7 @@
 #pragma once
 
 #include "../RfComputeJob.h"
+#include "../RfMath/DisplayUnits.h"
 #include "../RfMath/RfPipeline.h"
 
 #include <VisualizerWindowHeaders.h>
@@ -65,6 +66,14 @@ public:
      *  results rather than guessed at here. */
     void setValueUnit (const juce::String& unit);
 
+    /** The unit the axes and the RF-diameter readout are written in.
+     *
+     *  Display only, and deliberately not part of the mapping: the map is drawn
+     *  from geometry ratios, so every pixel of it lands where it always did and
+     *  only the numbers beside it change. `unitsPerDegree` is passed in rather
+     *  than derived here so the panel needs no screen geometry of its own. */
+    void setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree);
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
@@ -90,6 +99,9 @@ private:
 
     juce::String m_channelName;
     juce::String m_valueUnit { "z" };
+
+    Rf::DisplayUnit m_displayUnit = Rf::DisplayUnit::Degrees;
+    double m_unitsPerDegree = 1.0;
     Rf::ChannelMapping m_mapping;
     juce::Image m_image;
 
@@ -120,6 +132,10 @@ public:
      *  makes a weak one visible. */
     void setSharedColourRange (bool shared);
 
+    /** Passed straight down to every panel, and kept so panels built by a later
+        setResults() start out in the unit the others are already in. */
+    void setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree);
+
     int getDesiredHeight() const;
     void resized() override;
     void paint (juce::Graphics& g) override;
@@ -130,6 +146,9 @@ private:
     juce::OwnedArray<RfMapPanel> m_panels;
     std::vector<Rf::ChannelMapping> m_mappings;
     juce::String m_valueUnit { "z" };
+
+    Rf::DisplayUnit m_displayUnit = Rf::DisplayUnit::Degrees;
+    double m_unitsPerDegree = 1.0;
 
     int m_columns = 4;
     int m_panelHeight = 220;

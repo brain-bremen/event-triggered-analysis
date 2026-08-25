@@ -23,6 +23,7 @@
 #pragma once
 
 #include "RfComputeJob.h"
+#include "RfMath/DisplayUnits.h"
 #include "SweepAngles.h"
 
 #include "AverageCore/DataCollector.h"
@@ -56,6 +57,12 @@ namespace RfParameterNames
     inline constexpr auto use_absolute_z = "use_absolute_z";
     inline constexpr auto combine_mode = "combine_mode";
     inline constexpr auto border_fraction = "border_fraction";
+
+    // Display-only. Nothing below reaches the pipeline: see
+    // BarMapperNode::isDisplayParameter.
+    inline constexpr auto display_unit = "display_unit";
+    inline constexpr auto viewing_distance_mm = "viewing_distance_mm";
+    inline constexpr auto screen_px_per_mm = "screen_px_per_mm";
 } // namespace RfParameterNames
 
 /** Maps visual receptive fields by back-projecting the per-direction trial
@@ -145,6 +152,35 @@ public:
     /** Sweep geometry for one source, combining the node-wide settings with that
         source's own angle. Returns nullopt if the source has no angle yet. */
     std::optional<Rf::SweepGeometry> getSweepForSource (const TriggerSource* source) const;
+
+    // --- Display units ------------------------------------------------------
+    //
+    // Read by the settings popup and by the map panels, and by nothing else.
+    // None of these is an input to getMappingSettings(), which is what makes the
+    // guarantee -- switching unit cannot change a map -- structural rather than a
+    // matter of remembering.
+
+    Rf::DisplayUnit getDisplayUnit() const;
+    Rf::ScreenGeometry getScreenGeometry() const;
+
+    /** Multiply a value in degrees by this to show it. Never zero. */
+    double getDisplayUnitsPerDegree() const;
+
+    /** Whether `parameterName` names one of the three display-only parameters.
+     *
+     *  The one correctness-critical predicate in this feature: everything it
+     *  returns true for is kept out of requestRecompute(), so a change of display
+     *  unit is provably incapable of reaching the pipeline.
+     *
+     *  Inline, and the only part of this class a test can reach without building
+     *  the plugin -- which is what test_RfDisplayParameters.cpp uses to check the
+     *  membership of the list against every other parameter this node has. */
+    static bool isDisplayParameter (const juce::String& parameterName)
+    {
+        return parameterName == RfParameterNames::display_unit
+               || parameterName == RfParameterNames::viewing_distance_mm
+               || parameterName == RfParameterNames::screen_px_per_mm;
+    }
 
     // --- Results ------------------------------------------------------------
 
@@ -319,7 +355,21 @@ private:
 
     ResultsPublisher m_resultsPublisher { *this };
 
+    /** Display-unit changes take the same route results do, and for the same
+     *  reason: parameterValueChanged can arrive on the audio thread during
+     *  acquisition, and the canvas is the message thread's. */
+    struct DisplayPublisher : public juce::AsyncUpdater
+    {
+        explicit DisplayPublisher (BarMapperNode& owner) : m_owner (owner) {}
+        void handleAsyncUpdate() override { m_owner.publishDisplayUnits(); }
+
+        BarMapperNode& m_owner;
+    };
+
+    DisplayPublisher m_displayPublisher { *this };
+
     void publishResults();
+    void publishDisplayUnits();
 
     RfComputeJob m_compute;
 

@@ -109,6 +109,14 @@ public:
     void setSharedColourRange (bool shared);
     void clearData();
 
+    /** Re-reads the display unit from the node and redraws the maps in it.
+     *
+     *  Separate from refresh() on purpose: refresh() returns early unless the
+     *  compute thread has published a new generation, and a change of display
+     *  unit produces no new result -- that is the guarantee, not an oversight.
+     *  The node calls this from the message thread. */
+    void displayUnitsChanged();
+
     BarMapperNode* getNode() { return m_node; }
 
     // --- Trace view, driven by the node exactly as TriggeredAverage's is -----
