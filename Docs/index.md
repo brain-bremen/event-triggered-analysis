@@ -3,12 +3,12 @@
 Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that analyse
 continuous data in windows locked to an event — a TTL edge or a broadcast message.
 
-| Plugin                                                              | Appears in the GUI as | What it shows                                                                                     |
-| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
-| [**Triggered Average**](plugins/triggered-average.md)               | `Triggered Avg`       | Time-domain average and standard deviation, with individual trials                                |
-| [**Triggered Power**](plugins/triggered-power.md)                   | `Triggered Power`     | Power spectra accumulated across trials and split by condition                                    |
-| [**Triggered Coherence**](plugins/triggered-coherence.md)           | `Triggered Coherence` | Magnitude-squared coherence and coherency phase for configured channel pairs, not yet implemented |
-| [**Receptive Field Bar Mapper**](plugins/receptive-field-mapper.md) | `RF Barmapper`        | Visual receptive fields, back-projected from the per-direction trial averages of a sweeping bar   |
+| Plugin                                                              | Appears in the GUI as | What it does                                                                                     |
+| ------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
+| [**Triggered Average**](plugins/triggered-average.md)               | `Triggered Avg`       | Time-domain average and standard deviation, with individual trials                               |
+| [**Receptive Field Bar Mapper**](plugins/receptive-field-mapper.md) | `RF Barmapper`        | Visual receptive fields, back-projected from the per-direction trial averages of a sweeping bar  |
+| [**Triggered Power**](plugins/triggered-power.md)                   | `Triggered Power`     | Power spectra accumulated across trials and split by condition                                   |
+| [**Triggered Coherence**](plugins/triggered-coherence.md)           | `Triggered Coherence` | Work-in-progress: Magnitude-squared coherence and coherency phase for configured channel pairs   |
 
 !!! warning "Triggered Coherence is work in progress"
 
