@@ -66,5 +66,5 @@ All four sit on the same capture layer:
 
 ## Licence
 
-GPL-3.0. Copyright © 2025–2026 Joscha Schmiedt, Universität Bremen; parts © 2022 Open
-Ephys.
+GPL-3.0-or-later. Copyright © 2025–2026 Joscha Schmiedt, Universität Bremen; parts
+© 2022 Open Ephys.
