@@ -408,7 +408,7 @@ juce::Component* PairConfigWindow::Model::refreshComponentForCell (int row,
 PairConfigWindow::PairConfigWindow (TriggeredCoherenceNode* node,
                                     bool acquisitionIsActive,
                                     juce::Component* anchor)
-    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+    : PopupWindow (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
 {
     jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor
 
@@ -512,17 +512,6 @@ void PairConfigWindow::update()
 }
 
 void PairConfigWindow::updatePopup() { update(); }
-
-void PairConfigWindow::focusOfChildComponentChanged (juce::Component::FocusChangeType cause)
-{
-    // While the colour picker is up it must keep the keyboard focus it took on
-    // opening; the base class would grab it straight back and the picker would
-    // then close itself on the first click. See NestedCallOut.h.
-    if (NestedCallOut::isOpenOver (*this))
-        return;
-
-    PopupComponent::focusOfChildComponentChanged (cause);
-}
 
 void PairConfigWindow::buttonClicked (juce::Button* button)
 {

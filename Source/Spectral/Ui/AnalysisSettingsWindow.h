@@ -23,6 +23,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/NestedCallOut.h"
 #include "TriggerCore/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
@@ -59,7 +60,7 @@ class TriggeredSpectraNode;
  *  settings in Spectrum mode, taper settings in Spectrogram mode — rather than
  *  hidden, so the window also documents which estimator is actually running.
  */
-class AnalysisSettingsWindow : public PopupComponent
+class AnalysisSettingsWindow : public PopupWindow
 {
 public:
     /** @param anchor  the component the popup is shown from. PopupComponent

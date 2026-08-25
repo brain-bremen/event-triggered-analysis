@@ -30,7 +30,7 @@ namespace EventTriggered
 AvgAnalysisSettingsWindow::AvgAnalysisSettingsWindow (TriggeredAvgNode* node,
                                                       bool acquisitionIsActive,
                                                       juce::Component* anchor)
-    : PopupComponent (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
+    : PopupWindow (anchor), m_node (node), m_acquisitionIsActive (acquisitionIsActive)
 {
     jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor
 

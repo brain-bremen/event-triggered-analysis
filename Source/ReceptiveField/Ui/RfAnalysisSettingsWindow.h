@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/NestedCallOut.h"
 #include "TriggerCore/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
@@ -56,7 +57,7 @@ class CompassPreview;
  *  enough to justify staying visible at a glance; the rest earns its own
  *  call-out.
  */
-class RfAnalysisSettingsWindow : public PopupComponent, public juce::Button::Listener
+class RfAnalysisSettingsWindow : public PopupWindow, public juce::Button::Listener
 {
 public:
     RfAnalysisSettingsWindow (BarMapperNode* node,
@@ -70,10 +71,6 @@ public:
     void resized() override;
 
     void buttonClicked (juce::Button* button) override;
-
-    /** Suppressed while the DIRECTIONS... call-out is open, so that its editable
-        labels keep the keyboard focus. See NestedCallOut.h. */
-    void focusOfChildComponentChanged (juce::Component::FocusChangeType cause) override;
 
 private:
     void addControl (const char* parameterName);

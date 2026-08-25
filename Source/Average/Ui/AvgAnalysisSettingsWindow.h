@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/NestedCallOut.h"
 #include "TriggerCore/Ui/ParameterControl.h"
 
 #include <JuceHeader.h>
@@ -43,7 +44,7 @@ class TriggeredAvgNode;
  *  editor row, so all three plugins share the same editor shape: TRIGGERS /
  *  MONITOR / ANALYSIS on top, channels below.
  */
-class AvgAnalysisSettingsWindow : public PopupComponent
+class AvgAnalysisSettingsWindow : public PopupWindow
 {
 public:
     /** @param anchor  the component the popup is shown from. PopupComponent

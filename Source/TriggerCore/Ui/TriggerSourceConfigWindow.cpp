@@ -412,7 +412,7 @@ juce::Component*
 TriggerSourceConfigWindow::TriggerSourceConfigWindow (TriggeredCaptureNode* node,
                                                       bool acquisitionIsActive,
                                                       juce::Component* anchor)
-    : PopupComponent (anchor),
+    : PopupWindow (anchor),
       m_node (node),
       m_acquisitionIsActive (acquisitionIsActive)
 {
@@ -503,18 +503,6 @@ void TriggerSourceConfigWindow::update()
 }
 
 void TriggerSourceConfigWindow::updatePopup() { update(); }
-
-void TriggerSourceConfigWindow::focusOfChildComponentChanged (
-    juce::Component::FocusChangeType cause)
-{
-    // While the colour picker is up it must keep the keyboard focus it took on
-    // opening; the base class would grab it straight back and the picker would
-    // then close itself on the first click. See NestedCallOut.h.
-    if (NestedCallOut::isOpenOver (*this))
-        return;
-
-    PopupComponent::focusOfChildComponentChanged (cause);
-}
 
 void TriggerSourceConfigWindow::buttonClicked (juce::Button* button)
 {

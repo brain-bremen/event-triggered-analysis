@@ -27,6 +27,7 @@
 #pragma once
 
 #include "../TriggerSource.h"
+#include "NestedCallOut.h"
 
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
@@ -58,7 +59,7 @@ class TriggeredCaptureNode;
  *  mismatch. The file is the same TRIGGERSOURCE format the signal chain stores,
  *  so a saved chain can be loaded here too.
  */
-class TriggerSourceConfigWindow : public PopupComponent, public juce::Button::Listener
+class TriggerSourceConfigWindow : public PopupWindow, public juce::Button::Listener
 {
 public:
     /** @param anchor  the component the popup is shown from, usually the button that
@@ -73,10 +74,6 @@ public:
     void update();
 
     void updatePopup() override;
-
-    /** Suppressed while a nested call-out (the colour picker) is open, so that
-        the picker keeps the keyboard focus. See NestedCallOut.h. */
-    void focusOfChildComponentChanged (juce::Component::FocusChangeType cause) override;
 
     void resized() override;
     void paint (juce::Graphics& g) override;

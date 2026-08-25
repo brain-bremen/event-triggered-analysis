@@ -78,6 +78,30 @@ inline bool isOpenOver (const juce::Component& popupContent)
     return modal != nullptr && modal != popupContent.findParentComponentOfClass<juce::CallOutBox>();
 }
 
+/** Whether a popup that just saw the focus move away should take it back.
+ *
+ *  PopupComponent::focusOfChildComponentChanged answers every focus change by
+ *  calling grabKeyboardFocus() on itself, which is right while the popup is the
+ *  only thing on screen and wrong in two cases:
+ *
+ *   - something the popup opened is on top of it (isOpenOver, above);
+ *   - the window manager has just given the focus to another application.
+ *
+ *  The second one is what makes a call-out survive Alt+Tab on X11. A call-out is
+ *  an override-redirect window, so the window manager cannot stack anything over
+ *  it; JUCE's answer is CallOutBoxCallback's timer, which dismisses the box as
+ *  soon as Process::isForegroundProcess() goes false. But the focus-out that
+ *  should make it go false arrives as a focus change here first, and the grab
+ *  puts the X input focus straight back -- LinuxComponentPeer::grabFocus() then
+ *  sets isActiveApplication = true again, so JUCE never sees the application
+ *  leave the foreground and the box stays up, painted over whatever the user
+ *  switched to. Declining to grab lets the dismissal happen.
+ */
+inline bool shouldTakeKeyboardFocusBack (const juce::Component& popupContent)
+{
+    return juce::Process::isForegroundProcess() && ! isOpenOver (popupContent);
+}
+
 /** Opens `content` in a call-out anchored to `anchor`, guarded the same way as
  *  the class comment above describes: the call-out's window never takes the
  *  keyboard focus, so a click inside it cannot be misread as a click outside
@@ -104,7 +128,11 @@ inline void show (juce::Component& anchor, std::unique_ptr<juce::Component> cont
             juce::ModalCallbackFunction::create (
                 [safePopup = juce::Component::SafePointer<juce::Component> (popup)] (int)
                 {
-                    if (safePopup != nullptr && safePopup->isShowing())
+                    // Not if the application is on its way to the background:
+                    // the popup would take the X input focus back from whatever
+                    // the user switched to. See shouldTakeKeyboardFocusBack().
+                    if (safePopup != nullptr && safePopup->isShowing()
+                        && juce::Process::isForegroundProcess())
                         safePopup->grabKeyboardFocus();
                 }));
     }
@@ -254,3 +282,31 @@ inline void showColourPicker (juce::Component& anchor,
 }
 
 } // namespace EventTriggered::NestedCallOut
+
+namespace EventTriggered
+{
+
+/** PopupComponent with NestedCallOut::shouldTakeKeyboardFocusBack() applied.
+ *
+ *  Every popup in this repo derives from this rather than from PopupComponent
+ *  directly, because the base class's unconditional grab is wrong for all of
+ *  them in the same two ways -- see shouldTakeKeyboardFocusBack() -- and a guard
+ *  that has to be remembered per window is a guard that gets forgotten. It was:
+ *  the trigger table and the pair table had it for their colour pickers, the
+ *  other four did not, and all six kept themselves on top of whatever the user
+ *  Alt+Tabbed to. */
+class PopupWindow : public PopupComponent
+{
+public:
+    using PopupComponent::PopupComponent;
+
+    void focusOfChildComponentChanged (FocusChangeType cause) override
+    {
+        if (! NestedCallOut::shouldTakeKeyboardFocusBack (*this))
+            return;
+
+        PopupComponent::focusOfChildComponentChanged (cause);
+    }
+};
+
+} // namespace EventTriggered

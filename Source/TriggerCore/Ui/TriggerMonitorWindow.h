@@ -23,6 +23,8 @@
 */
 #pragma once
 
+#include "NestedCallOut.h"
+
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
 #include <memory>
@@ -51,7 +53,7 @@ class TriggeredCaptureNode;
  *
  *  Read-only apart from RESET, so it never has to take the data lock.
  */
-class TriggerMonitorWindow : public PopupComponent, public juce::Timer
+class TriggerMonitorWindow : public PopupWindow, public juce::Timer
 {
 public:
     /** @param anchor  the component the popup is shown from. PopupComponent

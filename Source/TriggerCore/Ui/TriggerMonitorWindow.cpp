@@ -68,7 +68,7 @@ namespace
 } // namespace
 
 TriggerMonitorWindow::TriggerMonitorWindow (TriggeredCaptureNode* node, juce::Component* anchor)
-    : PopupComponent (anchor),
+    : PopupWindow (anchor),
       m_node (node)
 {
     jassert (anchor != nullptr); // PopupComponent dereferences it in its constructor

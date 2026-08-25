@@ -24,6 +24,8 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/NestedCallOut.h"
+
 #include <JuceHeader.h>
 #include <VisualizerEditorHeaders.h>
 
@@ -52,7 +54,7 @@ class TriggeredCoherenceNode;
  *  losing a pair list because the selection was narrowed for a moment would be
  *  worse than showing a row that does nothing.
  */
-class PairConfigWindow : public PopupComponent, public juce::Button::Listener
+class PairConfigWindow : public PopupWindow, public juce::Button::Listener
 {
 public:
     /** @param anchor  the component the popup is shown from. PopupComponent
@@ -66,10 +68,6 @@ public:
     void update();
 
     void updatePopup() override;
-
-    /** Suppressed while a nested call-out (the colour picker) is open, so that
-        the picker keeps the keyboard focus. See NestedCallOut.h. */
-    void focusOfChildComponentChanged (juce::Component::FocusChangeType cause) override;
 
     void resized() override;
     void paint (juce::Graphics& g) override;
