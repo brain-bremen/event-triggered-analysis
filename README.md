@@ -2,6 +2,7 @@
 
 [![Build and Test](https://github.com/brain-bremen/event-triggered-analysis/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/brain-bremen/event-triggered-analysis/actions/workflows/build-and-test.yml)
 [![Latest release](https://img.shields.io/github/v/release/brain-bremen/event-triggered-analysis)](https://github.com/brain-bremen/event-triggered-analysis/releases/latest)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue)](https://brain-bremen.github.io/event-triggered-analysis/)
 
 Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that analyse
 continuous data in windows locked to an event: a TTL edge, optionally conditioned (setup, commited or cancelled) by a broadcast message.
