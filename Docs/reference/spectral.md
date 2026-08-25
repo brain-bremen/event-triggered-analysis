@@ -13,8 +13,8 @@ reshapes the accumulators, so changing any of it discards what has accumulated.
 |---|---|---|---|---|---|---|
 | `mode` | Mode | categorical | `Spectrogram` | `Spectrogram`, `Spectrum` | `PROCESSOR` | **yes** |
 
-Time-resolved spectrogram, or one spectrum per trial window. This is what every other
-group's applicability depends on, so it is first and never greyed.
+Time-resolved spectrogram, or one spectrum per trial window. Every other group's
+applicability depends on it, so it is first and never greyed.
 
 ## Frequency axis
 
@@ -47,7 +47,7 @@ get frequency resolution. Fewer cycles means a shorter wavelet: better time reso
 worse frequency resolution.
 
 The ramp runs across the **grid index**, not across frequency, so a log-spaced grid gets
-an even progression rather than one crammed into its top octave.
+an even progression.
 
 ## Spectrogram — Hann STFT
 
@@ -73,10 +73,9 @@ Applies in Spectrum mode.
 | `n_tapers` | Tapers | int | `5` | `1` – `19` | — | **yes** |
 
 `nw` is the time-bandwidth product for the DPSS tapers. `n_tapers` is how many of the
-resulting sequences are used — **`2·NW − 1` is the usual choice**, which is why the
-defaults pair NW 3 with 5 tapers. More tapers means less variance and worse frequency
-resolution; asking for more than `2·NW − 1` adds tapers with poor spectral concentration
-and mostly adds bias.
+resulting sequences are used — **`2·NW − 1` is the usual choice**, hence the defaults of
+NW 3 and 5 tapers. More tapers means less variance and worse frequency resolution; more
+than `2·NW − 1` mostly adds bias.
 
 `Hann` is the single-taper fallback.
 
@@ -90,8 +89,7 @@ and mostly adds bias.
 
 Per-trial spectra retained in Spectrum mode, for the individual lines the display draws
 behind the average. Note the different default and range from
-[Triggered Average's `max_trials`](triggered-average.md) — same name, different plugin,
-different job.
+[Triggered Average's `max_trials`](triggered-average.md).
 
 ### Baseline — canvas
 
@@ -108,8 +106,7 @@ Both bounds are relative to the trigger, so the default window is the pre-trigge
 
 !!! note "In Spectrum mode this does change what is estimated"
 
-    It splits the trial window. It stays on the canvas because that is where it is used,
-    and the canvas says so rather than hiding it.
+    It splits the trial window. It stays on the canvas because that is where it is used.
 
 ### Whitening — canvas
 
@@ -127,9 +124,7 @@ Display-time, and not locked. 1/f removal.
   divides it out, also reporting the fitted exponent.
 - `whitening_exponent` is read only by `Fixed exponent`.
 - `whitening_overlay` plots the **un-whitened** spectrum with the aperiodic background
-  drawn over it, **Spectrum mode only**. It is the tuning view for the exponent: setting
-  one by hand against an already-whitened spectrum is guesswork, because the background
-  you are trying to match has been divided out.
+  drawn over it, **Spectrum mode only**. It is the tuning view for the exponent.
 
 ## Triggered Coherence only
 
@@ -142,12 +137,9 @@ Display-time, and not locked. 1/f removal.
 Also accumulate the trial-shifted null: channel A of each trial against channel B of the
 previous one.
 
-**Defaults to on.** It doubles the accumulator memory for a pair, which is small, and
-without it there is no way to tell coherence driven by a shared evoked response or a
-common reference from a real interaction — both look identical on the plot.
-
-It is under ANALYSIS rather than on the canvas because it accumulates a second estimate as
-trials arrive and cannot be reconstructed afterwards from what the display holds.
+**Defaults to on.** Without it there is no way to tell coherence driven by a shared
+evoked response or a common reference from a real interaction. It is under ANALYSIS
+because it accumulates a second estimate as trials arrive.
 
 ### Display — canvas
 
@@ -167,7 +159,7 @@ sums. Wavelets give one estimate per trial, so with few trials the coherence est
 badly biased upwards; pooling buys degrees of freedom at the cost of resolution, and is
 **the main stabiliser in Spectrogram mode**.
 
-There is deliberately **no whitening control** here: coherence is a normalised ratio, so a
+There is **no whitening control** here: coherence is a normalised ratio, so a
 per-frequency gain cancels exactly.
 
 ## Canvas display controls
@@ -184,6 +176,5 @@ Not registered parameters, in either plugin.
 
 ## Sessions
 
-Neither spectral plugin writes sessions. The canvases carry no SAVE / LOAD buttons and the
-node's session payload hooks return failure rather than writing a session with no spectra
-in it. See [Saved sessions](../sessions/index.md).
+Neither spectral plugin writes sessions; the canvases carry no SAVE / LOAD buttons. See
+[Saved sessions](../sessions/index.md).

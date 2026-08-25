@@ -1,7 +1,7 @@
 # Loading a session in MATLAB
 
 MATLAB reads the XML half natively. It has no built-in `.npy` reader, so this page gives
-a short one — about forty lines, no toolbox, no MEX, no download.
+a short one — no toolbox, no MEX, no download.
 
 Save the two functions below as `readNPY.m` and `loadEventTriggeredSession.m` somewhere on
 your path.
@@ -9,13 +9,9 @@ your path.
 !!! warning "C order versus column-major"
 
     NumPy arrays are **row-major**; MATLAB is **column-major**. Reading the bytes straight
-    into a `reshape` of the stored shape silently transposes the array — and a
-    `(sources, channels, samples)` array read that way is not obviously wrong, it just has
-    the wrong trace in it. `readNPY` below reshapes into the *reversed* shape and then
-    permutes, which is the correction.
-
-    After it, an array documented as `(sources, channels, samples)` is
-    `(sources, channels, samples)` in MATLAB too, indexed `a(source, channel, sample)`.
+    into a `reshape` of the stored shape silently transposes the array. `readNPY` below
+    reshapes into the *reversed* shape and then permutes, so an array documented as
+    `(sources, channels, samples)` is indexed `a(source, channel, sample)`.
 
 ## `readNPY.m`
 
@@ -61,8 +57,7 @@ function [data, shape] = readNPY(filename)
         error('readNPY:header', 'Could not parse the .npy header of %s', filename);
     end
 
-    % Fortran order is rejected rather than treated as C order: nothing here
-    % writes it, and reading one as C order transposes the array.
+    % Fortran order is rejected: reading one as C order would transpose the array.
     if ~isempty(order) && strcmpi(order{1}, 'True')
         error('readNPY:fortran', '%s is Fortran-ordered', filename);
     end
@@ -119,8 +114,6 @@ function session = loadEventTriggeredSession(directory)
 %
 %   Uses xmlread rather than readstruct so it works on any MATLAB release.
 
-    % char() rather than an arguments block, so a "double-quoted" string works
-    % too and the function loads on releases before R2019b.
     directory = char(directory);
 
     manifest = fullfile(directory, 'session.xml');
@@ -171,8 +164,7 @@ function session = loadEventTriggeredSession(directory)
     end
 
     % --- conditions, in the arrays' first-axis order -----------------------
-    % Sweep angles (Bar Mapper) are a parallel list matched by position, not
-    % attributes on the sources, so they are collected separately and zipped.
+    % Sweep angles (Bar Mapper) are a parallel list matched by position.
     angleNodes = elements(root, 'SWEEPANGLE');
     angles = nan(1, numel(angleNodes));
     for i = 1:numel(angleNodes)
@@ -264,7 +256,7 @@ end
 ### Standard error of the mean
 
 `standard_deviations` is the **population** standard deviation over trials. Divide by the
-square root of the trial count — and guard against a condition with no trials, which is
+square root of the trial count, guarding against a condition with no trials, which is
 written as zeros rather than NaN:
 
 ```matlab
@@ -391,14 +383,12 @@ title(sprintf('%s — RF %.2f deg', s.channels(channel).name, estimate.equivalen
 !!! warning "Rows run top to bottom, visual-field *y* runs upwards"
 
     The flip is applied once, when the map is built. `imagesc` already draws the first row
-    at the top (`YDir` is `'reverse'` by default for images), so the picture matches the
-    canvas — the explicit `set` above is only there to survive a figure whose default was
-    changed.
+    at the top, so the picture matches the canvas; the explicit `set` above only guards
+    against a figure whose default was changed.
 
 ### The per-direction traces behind the map
 
-The map is a combination of the direction averages, and when the map looks wrong the cause
-is usually visible in those:
+When the map looks wrong the cause is usually visible in the direction averages:
 
 ```matlab
 angles = [s.conditions.angleDeg];
@@ -415,7 +405,7 @@ end
 ```
 
 A direction with **no angle contributes nothing** to the map — `angleDeg` is `NaN`, not
-`0`, and that distinction is the point.
+`0`.
 
 ## Alternatives to `xmlread`
 
@@ -436,6 +426,6 @@ naming depends on the release, which is why the loader above uses `xmlread` inst
 |---|---|
 | **C order versus column-major** | `readNPY` permutes for you. A reader that does not will transpose the array without complaining. |
 | **A condition with no trials is zeros, not NaN** | `trial_counts` is what distinguishes it from a real zero. Check it before dividing. |
-| **`demo_data="1"` means simulated data** | `s.isDemoData`. It exists so demo data can never be mistaken for a recording. |
+| **`demo_data="1"` means simulated data** | `s.isDemoData`. |
 | **The parameter values are not in the session** | Only the trial geometry, the channel list, the trigger table and — for the Bar Mapper — the map geometry and sweep angles. See [Format](format.md#custom_parameters). |
 | **`readNPY` returns the stored integer type** | `trial_counts` comes back as `int32`. Cast with `double()` before arithmetic, or integer division will bite. |

@@ -14,8 +14,7 @@ it needs the [FFTW runtime](../installation.md#installing-a-release) in the GUI'
 
     - **No pre-trigger baseline**
       ([#16](https://github.com/brain-bremen/event-triggered-analysis/issues/16)), so it
-      cannot show change-from-baseline. Unlike whitening, this is meaningful for
-      coherence.
+      cannot show change-from-baseline.
     - **Pair edits are not undoable**
       ([#14](https://github.com/brain-bremen/event-triggered-analysis/issues/14)), and
       removing a pair discards its accumulated cross-spectra.
@@ -46,13 +45,12 @@ locked to the trigger rather than to an interaction between the channels — a s
 evoked response, or a common reference. Without it, those look identical to a real
 interaction on the plot.
 
-It costs a second accumulator per pair (small) and holding the previous trial back. It is
-an **analysis** parameter, not a display one: it cannot be reconstructed afterwards from
-what the display holds, so it is locked during acquisition.
+It costs a second accumulator per pair and holding the previous trial back. It is an
+**analysis** parameter — it cannot be reconstructed afterwards — so it is locked during
+acquisition.
 
-A trial parked awaiting its commit message is kept out of the shift predictor: its null
-pairs consecutive *kept* trials, and a trial later discarded must not become the partner
-of the one after it.
+A trial parked awaiting its commit message is kept out of the shift predictor: the null
+pairs consecutive *kept* trials.
 
 ## PAIRS
 
@@ -65,15 +63,10 @@ from the editor's `CH PAIRS` button.
 {: .placeholder }
 
 Columns are name, the two channels, colour, resolution status and a delete button.
+**Seed mode** pairs one channel against every other selected one in a single step.
 
-**Seed mode** is the one non-obvious control: pairing one channel against every other
-selected one is how these are used in practice, and doing that a pair at a time is
-tedious enough that people give up.
-
-Channels are chosen from the **selected** channel list rather than by typing an index,
-because a pair naming a channel that is not being analysed can never produce anything.
-Pairs whose channels later leave the selection stay configured and are shown as inactive
-rather than being silently deleted.
+Channels are chosen from the **selected** channel list rather than by typing an index.
+Pairs whose channels later leave the selection stay configured and are shown as inactive.
 
 !!! danger "Pair edits are not undoable"
 
@@ -114,7 +107,7 @@ Defaults and ranges: [Parameter reference → Spectral](../reference/spectral.md
 All display-time: they are applied when the display reads the accumulators and discard
 nothing.
 
-### Why the two smoothing controls exist
+### The two smoothing controls
 
 Wavelets give one estimate per trial, so with few trials the coherence estimate is badly
 biased upwards. Pooling neighbouring time-frequency bins into the cross-spectrum sums
@@ -122,16 +115,13 @@ buys degrees of freedom at the cost of resolution, and is **the main stabiliser 
 Spectrogram mode**. In Spectrum mode the multitaper estimator already provides the
 degrees of freedom, and these matter much less.
 
-There is deliberately **no whitening control** here: coherence is a normalised ratio, so
-a per-frequency gain cancels exactly, and whitening would be a no-op dressed up as a
-setting.
+There is **no whitening control** here: coherence is a normalised ratio, so a
+per-frequency gain cancels exactly.
 
 ## Sessions
 
-**Not implemented**, for the same reason as
-[Triggered Power](triggered-power.md#sessions): the shared machinery is in place, the
-gather/apply for the cross-spectral accumulators is not. There are no SAVE / LOAD buttons
-on this canvas.
+**Not implemented**, as for [Triggered Power](triggered-power.md#sessions). There are no
+SAVE / LOAD buttons on this canvas.
 
 ## Parameters
 

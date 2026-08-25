@@ -33,30 +33,21 @@ accumulated data is drawn.
 
 ## The rule behind where a control lives
 
-Stated once in the code, and worth knowing when hunting for a control:
-
 > **Anything that changes what is collected or computed belongs to the editor; anything
-> that changes only how the result is drawn belongs to the canvas, beside the plot it
-> changes.**
+> that changes only how the result is drawn belongs to the canvas.**
 
-A test asserts that every registered parameter appears in exactly one group of the layout
-— which is what stops a parameter being added, wired up, tested, and then left with no
-control anywhere.
-
-There are two deliberate departures, both documented where they occur:
+Two departures, both documented where they occur:
 
 - Triggered Power's **baseline** is on the canvas although in Spectrum mode it does
-  change what is estimated. It stays there because that is where it is used, and the
-  canvas says so rather than hiding it.
+  change what is estimated.
 - Triggered Coherence's **shift predictor** is under ANALYSIS although it looks like a
-  display choice. It accumulates a second estimate as trials arrive and cannot be
-  reconstructed afterwards.
+  display choice: it accumulates a second estimate as trials arrive.
 
 ## Parameters with no user control
 
-`trigger_line` and `trigger_type` are registered but deliberately not user-facing: they
-are the backing store the trigger table writes through. **The table is the UI for these.**
+`trigger_line` and `trigger_type` are registered but not user-facing: they are the
+backing store the trigger table writes through. **The table is the UI for these.**
 
-`trigger_type` no longer has anything to choose — `TTL_AND_MSG_TRIGGER` was removed in
-0.3.0, and `MSG_TRIGGER` is declared but not implemented. See
+`trigger_type` has nothing to choose — `TTL_AND_MSG_TRIGGER` was removed in 0.3.0, and
+`MSG_TRIGGER` is declared but not implemented. See
 [Triggers and messages](../triggers.md).
