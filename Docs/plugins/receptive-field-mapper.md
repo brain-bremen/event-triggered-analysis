@@ -7,8 +7,7 @@ paper.
 
 One map per selected channel, updated while the run continues.
 
-Appears in the GUI processor list as **`RF Barmapper`**. Links `average_core`, so it
-needs no FFTW runtime.
+Appears in the GUI processor list as **`RF Barmapper`**. It needs no FFTW runtime.
 
 [^fiorani]: Fiorani, Azzi, Soares & Gattass (2014), *Automatic mapping of visual cortex
 receptive fields: a fast and precise algorithm*, J. Neurosci. Methods 221, 112–126.
@@ -298,21 +297,14 @@ up by position on load.
 
 ## Cost
 
-A recompute runs off the message thread and coalesces requests, so dragging a slider
-produces a stream of maps rather than a backlog. For one channel with eight directions
+A recompute runs in the background and coalesces requests, so dragging a slider produces
+a stream of maps rather than a backlog. For one channel with eight directions
 over a 1.5 s window at 30 kHz and a 201² map: about 4 ms, near enough flat in the
 smoothing sigma. Everything is linear in the channel count.
-
-## The implementation
-
-`Source/ReceptiveField/README.md` in the repository is the implementation's own notes:
-which section of Fiorani et al. each step follows, and how to make the trial window and
-the sweep agree.
 
 ## Not wired up yet
 
 - **The latency scan** (one back-projection per candidate latency) is implemented and
-  tested in `rf_math` and on the node, but has no button in the editor. Set *Latency* by
-  hand for now.
+  tested, but has no button in the editor. Set *Latency* by hand for now.
 - **Direction- and orientation-selectivity indices** are computed on every recompute and
   are neither displayed nor saved.

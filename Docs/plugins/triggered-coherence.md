@@ -3,9 +3,8 @@
 Magnitude-squared coherence and coherency phase for configured channel pairs, accumulated
 across trials and split by condition.
 
-Appears in the GUI processor list as **`Triggered Coherence`**. Links `spectra_core`, so
-it needs the [FFTW runtime](../installation.md#installing-a-release) in the GUI's
-`shared` directory.
+Appears in the GUI processor list as **`Triggered Coherence`**. It needs the
+[FFTW runtime](../installation.md#installing-a-release) in the GUI's `shared` directory.
 
 !!! warning "Work in progress — do not rely on this for results yet"
 

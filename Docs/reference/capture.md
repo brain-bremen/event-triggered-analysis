@@ -77,7 +77,7 @@ UI for these**; setting them directly moves the most recently added source.
 ## Which of these count as analysis parameters
 
 Only the three that decide the shape of a trial window — `channels`, `pre_ms`, `post_ms`
-— are analysis parameters in the base class. Each plugin adds its own:
+— are analysis parameters in every plugin. Each plugin adds its own:
 
 | Plugin | Adds to the analysis set |
 |---|---|

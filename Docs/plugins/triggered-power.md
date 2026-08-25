@@ -3,9 +3,8 @@
 Power spectra locked to TTL or message triggers, accumulated across trials and split by
 condition.
 
-Appears in the GUI processor list as **`Triggered Power`**. Links `spectra_core`, so it
-needs the [FFTW runtime](../installation.md#installing-a-release) in the GUI's `shared`
-directory.
+Appears in the GUI processor list as **`Triggered Power`**. It needs the
+[FFTW runtime](../installation.md#installing-a-release) in the GUI's `shared` directory.
 
 ![Triggered Power: the editor](../assets/screenshots/power-editor.png)
 

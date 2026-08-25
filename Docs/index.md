@@ -55,14 +55,13 @@ All four sit on the same capture layer:
 
 ## Notes
 
-- All per-trial work runs on a background thread; `process()` only appends to a lock-free
-  ring buffer and enqueues a capture request.
+- All per-trial work runs in the background, off the data-acquisition path.
 - There is no decimation here. Put a downsampling plugin upstream if you want to analyse
   a reduced sample rate.
 - Coherence is only meaningful pooled over trials — a single trial has coherence 1 by
   construction.
-- The receptive-field mapping runs on its own compute thread, so map settings can be
-  changed and the map recomputed without recapturing anything.
+- The receptive-field mapping is recomputed in the background, so map settings can be
+  changed without recapturing anything.
 
 ## Licence
 

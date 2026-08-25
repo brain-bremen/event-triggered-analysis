@@ -3,8 +3,7 @@
 Time-domain average of continuous data around each trigger, split by condition, with the
 standard deviation and the individual trials.
 
-Appears in the GUI processor list as **`Triggered Avg`**. Links `average_core`, so it
-needs no FFTW runtime.
+Appears in the GUI processor list as **`Triggered Avg`**. It needs no FFTW runtime.
 
 ![Triggered Average: the editor](../assets/screenshots/average-editor.png)
 

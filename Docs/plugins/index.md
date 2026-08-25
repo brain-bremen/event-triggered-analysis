@@ -1,30 +1,17 @@
 # The plugins
 
-Four plugins, built from one repository over four shared static cores. Each builds and
-installs as its own binary; you can install one without the others.
+Four plugins, built from one repository and sharing the same capture layer. Each installs
+as its own binary; you can install one without the others.
 
-| Plugin | In the GUI | Binary | Links |
+| Plugin | In the GUI | Binary | Needs FFTW |
 |---|---|---|---|
-| [Triggered Average](triggered-average.md) | `Triggered Avg` | `TriggeredAverage` | `average_core` → `trigger_core` |
-| [Triggered Power](triggered-power.md) | `Triggered Power` | `TriggeredPower` | `spectra_core` → `trigger_core` |
-| [Triggered Coherence](triggered-coherence.md) | `Triggered Coherence` | `TriggeredCoherence` | `spectra_core` → `trigger_core` |
-| [Receptive Field Bar Mapper](receptive-field-mapper.md) | `RF Barmapper` | `ReceptiveFieldBarMapper` | `average_core` → `trigger_core` |
+| [Triggered Average](triggered-average.md) | `Triggered Avg` | `TriggeredAverage` | no |
+| [Triggered Power](triggered-power.md) | `Triggered Power` | `TriggeredPower` | yes |
+| [Triggered Coherence](triggered-coherence.md) | `Triggered Coherence` | `TriggeredCoherence` | yes |
+| [Receptive Field Bar Mapper](receptive-field-mapper.md) | `RF Barmapper` | `ReceptiveFieldBarMapper` | no |
 
-## The shared layers
-
-- **`trigger_core`** — the ring buffer, trigger sources, work queue, capture worker and
-  the whole broadcast-message path, plus the trigger configuration and monitor windows.
-  No FFTW, no DSP: everything about *getting* a trial window, and nothing about what is
-  computed from it.
-- **`average_core`** — the single-trial ring, the running mean/SD accumulator, the
-  per-source data store and the trace display widgets. Layered on `trigger_core`, no
-  FFTW. Used by Triggered Average and the Bar Mapper.
-- **`spectra_core`** — FFTW, DPSS tapers, Morlet wavelets, the accumulators and the
-  spectral display widgets. Used by the two frequency-domain plugins only.
-- **`rf_math`** — the receptive-field back-projection: response profiles, the map, the
-  metrics. No JUCE, no Open Ephys, no FFTW.
-
-That split is why Triggered Average and the Bar Mapper need no FFTW runtime.
+The two frequency-domain plugins need the [FFTW runtime](../installation.md#installing-a-release)
+in the GUI's `shared` directory; the other two need nothing beyond the plugin binary.
 
 ## The editor, in every plugin
 

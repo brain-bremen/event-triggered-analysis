@@ -88,69 +88,8 @@ saved session as `plugin_version`.
 
 ## Building from source
 
-The build expects a **built** `plugin-GUI` checkout as a sibling directory:
-
-```
-<root>/
-  plugin-GUI/
-  plugins/event-triggered-analysis/
-```
-
-Override that with `-DGUI_BASE_DIR=<path>` or the `GUI_BASE_DIR` environment variable.
-
-=== "Windows"
-
-    Requires Visual Studio 2026 and CMake 4.2.3 or later, which is the first
-    release that knows the `Visual Studio 18 2026` generator.
-
-    ```powershell
-    cmake -S . -B Build -G "Visual Studio 18 2026" -A x64
-    cmake --build Build --config Release
-    cmake --install Build --config Release
-    ```
-
-=== "Linux"
-
-    ```sh
-    cmake -S . -B Build -DCMAKE_BUILD_TYPE=Release
-    cmake --build Build -j"$(nproc)"
-    cmake --install Build
-    ```
-
-    Build dependencies beyond a C++20 compiler and CMake:
-    `libgl1-mesa-dev libx11-dev libxext-dev libxinerama-dev libasound2-dev
-    libfreetype6-dev libcurl4-openssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev`.
-
-=== "macOS"
-
-    ```sh
-    cmake -S . -B Build -G Xcode
-    cmake --build Build --config Release
-    cmake --install Build --config Release
-    ```
-
-The install step copies the plugin binaries into `plugin-GUI/Build/<config>/plugins` and
-the vendored FFTW runtime into `plugin-GUI/Build/<config>/shared`.
-
-### Tests
-
-One binary per layer, plus one for the receptive-field node:
-
-```sh
-cmake -S . -B Build -DBUILD_TESTS=ON
-cmake --build Build --config Release --target trigger_core_tests spectra_tests \
-  average_tests rf_node_tests rf_math_tests
-ctest --test-dir Build/Tests -C Release
-```
-
-Enabling tests pulls the GUI in as a subproject to reuse its `gui_testable_source` and
-`test_helpers` targets, so the first configure is slow.
-
-## FFTW
-
-FFTW3 (double precision) is vendored under `libs/`. It is discovered and installed by
-`Source/Spectral` rather than at the top level, so a plugin that links only
-`trigger_core` never asks for it.
+Building the plugins yourself needs a C++ toolchain and a built copy of the GUI's source.
+The steps are in [Development → Building from source](development.md#building-from-source).
 
 ## Troubleshooting
 
