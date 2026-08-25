@@ -303,6 +303,12 @@ produces a stream of maps rather than a backlog. For one channel with eight dire
 over a 1.5 s window at 30 kHz and a 201² map: about 4 ms, near enough flat in the
 smoothing sigma. Everything is linear in the channel count.
 
+## The implementation
+
+`Source/ReceptiveField/README.md` in the repository is the implementation's own notes:
+which section of Fiorani et al. each step follows, and how to make the trial window and
+the sweep agree.
+
 ## Not wired up yet
 
 - **The latency scan** (one back-projection per candidate latency) is implemented and
