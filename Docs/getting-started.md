@@ -10,9 +10,6 @@ whatever produces your continuous data.
 
 ![A signal chain with a triggered plugin in it](assets/screenshots/signal-chain.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 Nothing here decimates or filters: what the plugin sees is what it averages. Put a
 downsampling or filtering plugin upstream if you need one.
 
@@ -37,9 +34,6 @@ and, optionally, three broadcast-message patterns.
 
 ![TRIGGERS: the trigger source table](assets/screenshots/triggers-window.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 For a first run, one row with a TTL line and no message patterns is enough: it fires on
 every rising edge of that line. The message patterns — arming a condition on a trial-type
 message, committing or rejecting a trial on its outcome — are the subject of
@@ -56,9 +50,6 @@ Start acquisition. Trials accumulate and the canvas fills in. If nothing appears
 **MONITOR**.
 
 ![MONITOR: per-source counters](assets/screenshots/monitor-window.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 **The stage where the count stops advancing is the stage that is broken:**
 
@@ -78,9 +69,6 @@ against real message text.
 Open the visualizer (the tab or window button on the editor).
 
 ![Triggered Average: the canvas](assets/screenshots/average-canvas.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 One panel per selected channel, with each condition in its own colour. The options bar
 sets the plot type, grid layout, overlay and axis limits — all display controls, none of

@@ -1,17 +1,15 @@
 # Screenshots
 
-Every PNG in this directory is currently a **placeholder** — a grey striped
-rectangle written by `../make_placeholders.py`. They exist so the site builds:
-`mkdocs.yml` sets `strict: true`, and a reference to a file that is not there
-fails the build rather than shipping a broken image.
+Most PNGs in this directory are real screenshots. The remaining few are grey
+striped **placeholders**, which exist so the site builds: `mkdocs.yml` sets
+`strict: true`, and a reference to a file that is not there fails the build
+rather than shipping a broken image.
 
 ## Replacing one
 
 Overwrite the PNG **in place, keeping the file name**. Nothing in the markdown
 refers to a size, so any resolution works; 2× the on-screen size reads best on a
-high-DPI display. Then delete that name from the `SHOTS` dictionary in
-`../make_placeholders.py`, so re-running the script cannot overwrite a real
-screenshot with a placeholder again.
+high-DPI display.
 
 This directory is excluded from nothing — the images are committed, like
 `Resources/`.

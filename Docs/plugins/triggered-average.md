@@ -8,9 +8,6 @@ needs no FFTW runtime.
 
 ![Triggered Average: the editor](../assets/screenshots/average-editor.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 ## What it computes
 
 For each condition, a running mean and population standard deviation over trials, per
@@ -47,9 +44,6 @@ changing it discards what has accumulated.
 ## Canvas
 
 ![Triggered Average: the canvas](../assets/screenshots/average-canvas.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 One panel per selected channel, with each condition drawn in its own colour. Nothing in
 the options bar discards data: these are display controls, applied when the display reads

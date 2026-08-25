@@ -3,12 +3,12 @@
 Plugins for the [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) that analyse
 continuous data in windows locked to an event — a TTL edge or a broadcast message.
 
-| Plugin | Appears in the GUI as | What it shows |
-|---|---|---|
-| [**Triggered Average**](plugins/triggered-average.md) | `Triggered Avg` | Time-domain average and standard deviation, with individual trials |
-| [**Triggered Power**](plugins/triggered-power.md) | `Triggered Power` | Power spectra accumulated across trials and split by condition |
-| [**Triggered Coherence**](plugins/triggered-coherence.md) | `Triggered Coherence` | Magnitude-squared coherence and coherency phase for configured channel pairs |
-| [**Receptive Field Bar Mapper**](plugins/receptive-field-mapper.md) | `RF Barmapper` | Visual receptive fields, back-projected from the per-direction trial averages of a sweeping bar |
+| Plugin                                                              | Appears in the GUI as | What it shows                                                                                     |
+| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| [**Triggered Average**](plugins/triggered-average.md)               | `Triggered Avg`       | Time-domain average and standard deviation, with individual trials                                |
+| [**Triggered Power**](plugins/triggered-power.md)                   | `Triggered Power`     | Power spectra accumulated across trials and split by condition                                    |
+| [**Triggered Coherence**](plugins/triggered-coherence.md)           | `Triggered Coherence` | Magnitude-squared coherence and coherency phase for configured channel pairs, not yet implemented |
+| [**Receptive Field Bar Mapper**](plugins/receptive-field-mapper.md) | `RF Barmapper`        | Visual receptive fields, back-projected from the per-direction trial averages of a sweeping bar   |
 
 !!! warning "Triggered Coherence is work in progress"
 
@@ -20,14 +20,11 @@ continuous data in windows locked to an event — a TTL edge or a broadcast mess
 
 ![A signal chain with a triggered plugin in it](assets/screenshots/signal-chain.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 ## What they have in common
 
 All four sit on the same capture layer:
 
-- **The same trigger model.** A *trigger source* is one experimental condition. It names
+- **The same trigger model.** A _trigger source_ is one experimental condition. It names
   a TTL line and, optionally, three broadcast-message patterns — arm, cancel and commit.
   See [Triggers and messages](triggers.md).
 - **The same trial window.** `Pre` and `Post` milliseconds around the trigger, plus a

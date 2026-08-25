@@ -114,10 +114,9 @@ lockfile and `pyproject.toml` have drifted apart. `Docs/.venv` is gitignored.
 
 ### Screenshots
 
-Every image the site references exists as a file. Grey striped rectangles are
-placeholders written by `Docs/assets/make_placeholders.py`; replace one by overwriting
-the PNG in place, keeping its name, and removing that name from the script's `SHOTS`
-dictionary. `Docs/assets/screenshots/README.md` says what each should show.
+Every image the site references exists as a file. A few are still grey striped
+placeholders; replace one by overwriting the PNG in place, keeping its name.
+`Docs/assets/screenshots/README.md` says what each should show.
 
 ## Releasing
 

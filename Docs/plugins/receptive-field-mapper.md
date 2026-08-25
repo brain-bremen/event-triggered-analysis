@@ -15,9 +15,6 @@ receptive fields: a fast and precise algorithm*, J. Neurosci. Methods 221, 112�
 
 ![Receptive Field Bar Mapper: the editor](../assets/screenshots/rf-editor.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 ## What it does
 
 A bar sweeps across the screen at constant speed, in *N* directions. For one direction:
@@ -66,9 +63,6 @@ field — and elsewhere they do not.
 ## DIRECTIONS...
 
 ![Receptive Field Bar Mapper: DIRECTIONS...](../assets/screenshots/rf-directions.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 One row per trigger source, showing what arms it and what angle it means, plus a
 generator that replaces the sources with evenly spaced directions.
@@ -140,9 +134,6 @@ all three are more often a typo in the angle column:
 ## ANALYSIS
 
 ![Receptive Field Bar Mapper: ANALYSIS](../assets/screenshots/rf-analysis.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 !!! success "No parameter in this plugin discards data"
 
@@ -229,9 +220,6 @@ Two views.
 
     ![Receptive Field Bar Mapper: Map view](../assets/screenshots/rf-canvas-map.png)
 
-    *Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-    {: .placeholder }
-
     Each panel is one channel:
 
     - **Top left** — the channel name.
@@ -260,9 +248,6 @@ Two views.
 === "Traces"
 
     ![Receptive Field Bar Mapper: Traces view](../assets/screenshots/rf-canvas-traces.png)
-
-    *Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-    {: .placeholder }
 
     The per-direction averages themselves, overlaid per channel, drawn by the same
     widgets Triggered Average uses.

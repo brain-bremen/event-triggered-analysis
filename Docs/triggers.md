@@ -12,9 +12,6 @@ Sources are configured under the editor's **TRIGGERS** button.
 
 ![TRIGGERS: the trigger source table](assets/screenshots/triggers-window.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 | Column | What it is |
 |---|---|
 | **Name** | The condition's label in the display. Cosmetic — nothing matches against it. |
@@ -138,9 +135,6 @@ the table.
 The **MONITOR** popup shows what is actually happening.
 
 ![MONITOR: per-source counters](assets/screenshots/monitor-window.png)
-
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
 
 | Counter | Counts |
 |---|---|

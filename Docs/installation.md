@@ -21,39 +21,68 @@ saved session as `plugin_version`.
    `event-triggered-analysis-windows-vX.Y.Z.zip` or
    `event-triggered-analysis-linux-vX.Y.Z.tar.gz`.
 2. Unpack it.
-3. Copy the plugin binaries into the GUI's `plugins` directory, next to the GUI
-   executable:
+3. Copy the four plugin binaries into a directory the GUI scans for plugins. Two are
+   scanned: the **user plugin directory**, which the GUI creates on first launch and
+   which needs no write access to the installation, and the `plugins` directory **next
+   to the GUI executable**, which is what `cmake --install` uses for a local build.
+   Either works; the user directory survives reinstalling the GUI.
 
     === "Windows"
 
+        Binaries: `TriggeredAverage.dll`, `TriggeredPower.dll`,
+        `TriggeredCoherence.dll`, `ReceptiveFieldBarMapper.dll`.
+
         ```
-        <Open Ephys GUI>/plugins/TriggeredAverage.dll
-        <Open Ephys GUI>/plugins/TriggeredPower.dll
-        <Open Ephys GUI>/plugins/TriggeredCoherence.dll
-        <Open Ephys GUI>/plugins/ReceptiveFieldBarMapper.dll
+        %LOCALAPPDATA%\Open Ephys\plugins-api10\    # user directory
+        <Open Ephys GUI>\plugins\                   # next to the executable
         ```
 
     === "Linux"
 
+        Binaries: `TriggeredAverage.so`, `TriggeredPower.so`,
+        `TriggeredCoherence.so`, `ReceptiveFieldBarMapper.so`.
+
         ```
-        <Open Ephys GUI>/plugins/TriggeredAverage.so
-        <Open Ephys GUI>/plugins/TriggeredPower.so
-        <Open Ephys GUI>/plugins/TriggeredCoherence.so
-        <Open Ephys GUI>/plugins/ReceptiveFieldBarMapper.so
+        ~/.config/open-ephys/plugins-api10/         # user directory
+        <Open Ephys GUI>/plugins/                   # next to the executable
         ```
 
     === "macOS"
 
+        Binaries: `TriggeredAverage.bundle`, `TriggeredPower.bundle`,
+        `TriggeredCoherence.bundle`, `ReceptiveFieldBarMapper.bundle`.
+
         ```
-        ~/Library/Application Support/open-ephys/plugins-api10/
+        ~/Library/Application Support/open-ephys/plugins-api10/   # user directory
+        open-ephys.app/Contents/PlugIns/                          # inside the bundle
         ```
 
-4. **The two spectral plugins also need FFTW3** (double precision) in the GUI's `shared`
-   directory — `<Open Ephys GUI>/shared/libfftw3-3.dll` on Windows,
-   `shared/libfftw3.so.3` on Linux, or
-   `~/Library/Application Support/open-ephys/shared-api10/` on macOS. Building from
-   source with `cmake --install` puts it there for you. Triggered Average and the Bar
-   Mapper need nothing extra.
+    !!! note "A GUI you built yourself"
+
+        On Windows and Linux the user directory is skipped when the executable sits
+        inside a `plugin-GUI/Build/` tree, so a development build loads only from the
+        `plugins` directory beside it. That is the path `cmake --install` writes to.
+
+4. **The two spectral plugins also need FFTW3** (double precision) in the `shared`
+   directory that matches the plugin directory you chose. Building from source with
+   `cmake --install` puts it there for you. Triggered Average and the Bar Mapper need
+   nothing extra.
+
+    === "Windows"
+
+        `libfftw3-3.dll` in `%LOCALAPPDATA%\Open Ephys\shared-api10\` or
+        `<Open Ephys GUI>\shared\`.
+
+    === "Linux"
+
+        `libfftw3.so.3` in `~/.config/open-ephys/shared-api10/` or
+        `<Open Ephys GUI>/shared/`.
+
+    === "macOS"
+
+        `libfftw3.3.dylib` in
+        `~/Library/Application Support/open-ephys/shared-api10/`.
+
 5. Restart the GUI. The plugins appear in the processor list as `Triggered Avg`,
    `Triggered Power`, `Triggered Coherence` and `RF Barmapper`.
 

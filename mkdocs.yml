@@ -20,12 +20,10 @@ copyright: Copyright &copy; 2025–2026 Joscha Schmiedt, Universität Bremen —
 docs_dir: Docs
 site_dir: Build/site
 
-# Not pages: the screenshot note, the placeholder script, and the uv project
-# that builds this site. (Docs/.venv needs no entry — dot-directories are
-# already ignored.)
+# Not pages: the screenshot note and the uv project that builds this site.
+# (Docs/.venv needs no entry — dot-directories are already ignored.)
 exclude_docs: |
   assets/screenshots/README.md
-  assets/make_placeholders.py
   pyproject.toml
   uv.lock
 

@@ -9,9 +9,6 @@ directory.
 
 ![Triggered Power: the editor](../assets/screenshots/power-editor.png)
 
-*Screenshot placeholder — see `Docs/assets/screenshots/README.md`.*
-{: .placeholder }
-
 ## Two display modes, two estimators
 
 The **Mode** parameter picks between a time-resolved spectrogram and a single spectrum
