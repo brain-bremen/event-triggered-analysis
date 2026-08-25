@@ -71,6 +71,10 @@ public:
 
     void buttonClicked (juce::Button* button) override;
 
+    /** Suppressed while the DIRECTIONS... call-out is open, so that its editable
+        labels keep the keyboard focus. See NestedCallOut.h. */
+    void focusOfChildComponentChanged (juce::Component::FocusChangeType cause) override;
+
 private:
     void addControl (const char* parameterName);
     void addSectionBreak();

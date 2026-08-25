@@ -110,6 +110,130 @@ inline void show (juce::Component& anchor, std::unique_ptr<juce::Component> cont
     }
 }
 
+/** A yes/no question drawn inside a nested call-out, for use from a component
+ *  that already lives in one.
+ *
+ *  AlertWindow (showOkCancelBox and friends) is the obvious way to ask, and it
+ *  is the wrong one here. A call-out goes onto the desktop with JUCE's
+ *  `windowIsTemporary` flag, which on X11 makes it an override-redirect window:
+ *  the window manager does not stack it, so it sits above the ordinary managed
+ *  window an AlertWindow creates no matter which of the two is modal. The alert
+ *  ends up *behind* the call-out that asked the question -- readable only where
+ *  the call-out does not cover it, and on Ubuntu/GNOME that is most of it. It
+ *  happens to look right on Windows, where the alert is raised above the popup,
+ *  which is why the arrangement survived this long.
+ *
+ *  Asking from another call-out keeps the question in the same class of window
+ *  as the thing that asked it, so the stacking is settled on every platform.
+ */
+class ConfirmationCallOut : public juce::Component
+{
+public:
+    ConfirmationCallOut (juce::String title,
+                         juce::String message,
+                         const juce::String& confirmText,
+                         const juce::String& cancelText,
+                         std::function<void()> onConfirm)
+        : m_title (std::move (title)),
+          m_message (std::move (message)),
+          m_onConfirm (std::move (onConfirm))
+    {
+        m_confirmButton = std::make_unique<UtilityButton> (confirmText);
+        m_confirmButton->onClick = [this] { dismissThen (m_onConfirm); };
+        addAndMakeVisible (m_confirmButton.get());
+
+        m_cancelButton = std::make_unique<UtilityButton> (cancelText);
+        m_cancelButton->onClick = [this] { dismissThen ({}); };
+        addAndMakeVisible (m_cancelButton.get());
+
+        setSize (width, titleHeight + measureMessageHeight() + buttonRow + margin);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (findColour (ThemeColours::componentBackground));
+
+        g.setColour (findColour (ThemeColours::defaultText));
+        g.setFont (juce::FontOptions (14.0f));
+        g.drawText (m_title,
+                    margin,
+                    margin,
+                    width - 2 * margin,
+                    titleHeight - margin,
+                    juce::Justification::centredLeft);
+
+        g.setFont (juce::FontOptions (12.0f));
+        g.drawFittedText (m_message,
+                          margin,
+                          titleHeight,
+                          width - 2 * margin,
+                          getHeight() - titleHeight - buttonRow,
+                          juce::Justification::topLeft,
+                          maxMessageLines);
+    }
+
+    void resized() override
+    {
+        auto row = getLocalBounds().removeFromBottom (buttonRow).reduced (margin, 4);
+
+        m_cancelButton->setBounds (row.removeFromRight (80));
+        row.removeFromRight (6);
+        m_confirmButton->setBounds (row.removeFromRight (80));
+    }
+
+private:
+    /** Exits this call-out first, then runs `action` on the next message, so the
+        action is free to rebuild -- or dismiss -- whatever opened this. */
+    void dismissThen (std::function<void()> action)
+    {
+        if (auto* box = findParentComponentOfClass<juce::CallOutBox>())
+            box->exitModalState (0);
+
+        if (action)
+            juce::MessageManager::callAsync (std::move (action));
+    }
+
+    int measureMessageHeight() const
+    {
+        juce::AttributedString text;
+        text.append (m_message, juce::FontOptions (12.0f));
+
+        juce::TextLayout layout;
+        layout.createLayout (text, static_cast<float> (width - 2 * margin));
+
+        return juce::jlimit (32, maxMessageLines * 16, static_cast<int> (layout.getHeight()) + 8);
+    }
+
+    static constexpr int width = 320;
+    static constexpr int margin = 10;
+    static constexpr int titleHeight = 34;
+    static constexpr int buttonRow = 34;
+    static constexpr int maxMessageLines = 10;
+
+    const juce::String m_title;
+    const juce::String m_message;
+    std::function<void()> m_onConfirm;
+
+    std::unique_ptr<UtilityButton> m_confirmButton;
+    std::unique_ptr<UtilityButton> m_cancelButton;
+};
+
+/** Asks `message` in a call-out anchored to `anchor`, running `onConfirm` only
+ *  if the confirm button is clicked. Clicking away is a cancel, as it is for
+ *  every other call-out. See ConfirmationCallOut for why this is not an
+ *  AlertWindow. */
+inline void showConfirmation (juce::Component& anchor,
+                              const juce::String& title,
+                              const juce::String& message,
+                              const juce::String& confirmText,
+                              const juce::String& cancelText,
+                              std::function<void()> onConfirm)
+{
+    show (anchor,
+          std::make_unique<ConfirmationCallOut> (
+              title, message, confirmText, cancelText, std::move (onConfirm)));
+}
+
 /** Opens a colour picker anchored to `anchor`, reporting changes to `listener`.
  *
  *  Deliberately no `editableColour` option: the hex field it adds is a Label

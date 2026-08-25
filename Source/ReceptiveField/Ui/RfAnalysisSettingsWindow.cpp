@@ -172,6 +172,21 @@ void RfAnalysisSettingsWindow::buttonClicked (Button* button)
     NestedCallOut::show (*button, std::move (panel));
 }
 
+void RfAnalysisSettingsWindow::focusOfChildComponentChanged (
+    juce::Component::FocusChangeType cause)
+{
+    // The direction panel is a separate window, so this popup sees the focus
+    // moving to it as its own child losing focus -- and the base class answers
+    // that by taking the focus straight back. Every editable label in the
+    // call-out then loses its editor the moment it opens, which is exactly the
+    // "cannot type in the generator fields" report. Same guard the trigger
+    // table uses for its colour picker; see NestedCallOut.h.
+    if (NestedCallOut::isOpenOver (*this))
+        return;
+
+    PopupComponent::focusOfChildComponentChanged (cause);
+}
+
 void RfAnalysisSettingsWindow::paint (Graphics& g)
 {
     g.fillAll (findColour (ThemeColours::componentBackground));

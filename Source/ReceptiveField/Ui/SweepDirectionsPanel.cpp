@@ -25,6 +25,7 @@
 #include "../BarMapperNode.h"
 
 #include "TriggerCore/TriggerSource.h"
+#include "TriggerCore/Ui/NestedCallOut.h"
 
 #include <cmath>
 #include <utility>
@@ -458,8 +459,11 @@ void SweepDirectionsPanel::buttonClicked (Button* button)
     // appended instead would leave the previous set in place with its own angles
     // and silently mix two stimulus sets into one map -- which is why it replaces,
     // and why replacing has to be deliberate.
-    AlertWindow::showOkCancelBox (
-        MessageBoxIconType::QuestionIcon,
+    //
+    // A call-out rather than an AlertWindow, because an alert opened from inside
+    // a call-out is drawn behind it on X11; see NestedCallOut.h.
+    NestedCallOut::showConfirmation (
+        *m_generateButton,
         "Replace all conditions?",
         "This removes the current trigger sources and their accumulated trials, and "
         "creates "
@@ -467,16 +471,14 @@ void SweepDirectionsPanel::buttonClicked (Button* button)
             + m_previewLabel->getText(),
         "Replace",
         "Cancel",
-        this,
         // SafePointer, not `this`: the popup this lives in can be dismissed while
-        // the alert is still up -- clicking away from it is enough -- and the
+        // the question is still up -- clicking away from it is enough -- and the
         // callback then fires against a destroyed component.
-        ModalCallbackFunction::create (
-            [safe = Component::SafePointer<SweepDirectionsPanel> (this)] (int result)
-            {
-                if (result != 0 && safe != nullptr)
-                    safe->applyGeneratedDirections();
-            }));
+        [safe = Component::SafePointer<SweepDirectionsPanel> (this)]
+        {
+            if (safe != nullptr)
+                safe->applyGeneratedDirections();
+        });
 }
 
 void SweepDirectionsPanel::paint (Graphics& g)
