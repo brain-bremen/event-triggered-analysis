@@ -22,14 +22,14 @@ channel:
 - alongside them, a bounded ring of the most recent trials, kept for display only.
 
 The accumulators are sums rather than averages, so folding a trial in is exact and a
-resumed session continues the same estimate rather than an average of averages.
+resumed session continues the same estimate.
 
 ## Editor
 
 | Control | Notes |
 |---|---|
 | **TRIGGERS** | The condition table — see [Triggers and messages](../triggers.md). |
-| **MONITOR** | Per-source counters. Reads correctly for every stage; the double-counting fixed in 0.3.0 affected only this plugin. |
+| **MONITOR** | Per-source counters. |
 | **ANALYSIS** | One parameter: **Max Trials**. |
 | **Channels** | Locked during acquisition. |
 | **Pre / Post** | 500 ms and 1000 ms by default. Locked during acquisition. |
@@ -67,22 +67,16 @@ the accumulators.
 
 ### AXES
 
-Four numbers and two toggles that are set once and then left alone, so they live behind a
-button rather than taking a third of the options bar away from the controls that are used
-constantly.
-
 | Control | Effect |
 |---|---|
-| **X-Axis (ms)** | `AUTO` fits the whole captured window; `MANUAL` uses the min and max typed beside it. The range is clamped to `[-pre_ms, post_ms]`, and the popout shows what that window currently is — a value outside it would otherwise produce a blank plot. |
-| **Y-Axis (uV/V)** | `AUTO` scales each panel to its own data; `MANUAL` pins every panel to the range typed beside it. With it off, the average and the individual trials are normalised to the same range, so the average cannot appear to swing wider than the traces it was computed from. |
+| **X-Axis (ms)** | `AUTO` fits the whole captured window; `MANUAL` uses the min and max typed beside it. The range is clamped to `[-pre_ms, post_ms]`, and the popout shows what that window currently is. |
+| **Y-Axis (uV/V)** | `AUTO` scales each panel to its own data; `MANUAL` pins every panel to the range typed beside it. With it off, the average and the individual trials are normalised to the same range. |
 
-A range typed with its ends the wrong way round is not applied — an inverted axis draws an
-empty panel, which looks exactly like a condition that never fired. Both ranges are kept
+A range typed with its ends the wrong way round is not applied. Both ranges are kept
 whether or not they are in use, so switching an axis back to `MANUAL` finds the numbers
-last typed rather than the defaults.
+last typed.
 
-The six axis-limit parameters are deliberately **not** analysis parameters: nudging an
-axis must not throw away the session.
+The axis-limit parameters are display-only and never discard accumulated data.
 
 ## Sessions
 
@@ -98,19 +92,12 @@ SAVE writes the accumulators plus what the canvas draws:
 | `time_ms` | (samples,) | float64 | The time axis, trigger at 0 |
 
 The derived three are outputs, not state: LOAD ignores them and rebuilds the averages
-from the sums. They are saved anyway because a session is also how the data leaves this
-program, and someone reading it in Python or MATLAB should get the mean trace the canvas
-drew without first working out that it is `sums / trial_counts` with the trigger at
-sample `pre_samples`. The time axis in particular is the part that is easy to get quietly
-wrong by one sample.
+from the sums. They are written anyway so that a reader gets the mean trace and the time
+axis without recomputing them.
 
-A condition with no trials is written as zeros rather than NaN, and `trial_counts` is
-what says so.
-
-**The single-trial ring is deliberately not saved.** It is a bounded ring of the most
-recent trials kept for display, not part of the estimate: the averages do not depend on
-it, and a resumed session whose ring held trials from before the break would show a
-"recent trials" view spanning a gap of hours.
+A condition with no trials is written as zeros rather than NaN; `trial_counts` is what
+says so. The single-trial ring is **not** saved — it is a display buffer, not part of the
+estimate.
 
 See [Saved sessions](../sessions/index.md).
 

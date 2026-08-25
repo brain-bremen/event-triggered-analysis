@@ -39,8 +39,7 @@ In the Bar Mapper this is what limits how far along its axis the bar is followed
 !!! note "The ring buffer is sized from these"
 
     Capacity is twice the trial window, or a minimum number of seconds, whichever is
-    larger — so a trigger can be serviced while the next trial is already streaming in.
-    Triggers arriving faster than the window is long therefore show up in MONITOR as
+    larger. Triggers arriving faster than the window is long show up in MONITOR as
     `QUEUED` advancing while `CAPTURED` does not.
 
 ## The trigger table
@@ -61,10 +60,9 @@ session, and in a standalone trigger-settings file. See
 | Commit pattern | `commitPattern` | empty | Empty = captures accumulate immediately |
 | Pending timeout | `pendingTimeoutMs` | `5000` | Milliseconds. `0` disables expiry |
 
-`pendingTimeoutMs` **defaults to 5000 ms**, up from 2000 in 0.2.x. The old default was
-shorter than the gap between a sweep's TTL edge and the trial-end message that commits it
-in a typical mapping run, so the last trials of a block were dropped. Sources in an
-existing signal chain keep whatever they were saved with.
+`pendingTimeoutMs` **defaults to 5000 ms**, up from 2000 in 0.2.x. It has to outlast the
+gap between the TTL edge and the message that commits it. Sources in an existing signal
+chain keep whatever they were saved with.
 
 ## Registered but not user-facing
 
@@ -74,14 +72,12 @@ existing signal chain keep whatever they were saved with.
 | `trigger_type` | Trigger type | int | `1` | `1` – `3` | `PROCESSOR` |
 
 The backing store for the trigger-source popup's currently edited row. **The table is the
-UI for these** — they exist so the popup has somewhere to write through, and setting them
-directly moves the most recently added source.
+UI for these**; setting them directly moves the most recently added source.
 
 ## Which of these count as analysis parameters
 
 Only the three that decide the shape of a trial window — `channels`, `pre_ms`, `post_ms`
-— are analysis parameters in the base class. Everything else is the subclass's to declare,
-and each plugin's reference page says what it adds:
+— are analysis parameters in the base class. Each plugin adds its own:
 
 | Plugin | Adds to the analysis set |
 |---|---|

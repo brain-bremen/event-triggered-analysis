@@ -1,9 +1,8 @@
 # Loading a session in Python
 
-No dependency on this repository, and nothing to install beyond NumPy: `.npy` is
-`numpy.load`, and `session.xml` is `xml.etree.ElementTree` from the standard library.
-
-Matplotlib is used only for the plots at the end.
+Nothing to install beyond NumPy: `.npy` is `numpy.load`, and `session.xml` is
+`xml.etree.ElementTree` from the standard library. Matplotlib is used only for the plots
+at the end.
 
 ## The short version
 
@@ -36,7 +35,7 @@ elements appear; the channel axis is in the order the `<CHANNEL>` elements appea
 
 ## A reusable loader
 
-Enough to work with, and small enough to paste into an analysis script.
+Small enough to paste into an analysis script.
 
 ```python
 """Read an Event-Triggered Analysis session directory."""
@@ -143,7 +142,7 @@ class Session:
             return []
 
         # Sweep angles are a parallel list matched by position, not attributes on
-        # the sources — so collect them first and zip.
+        # the sources.
         angles: dict[int, float] = {}
         for element in settings.findall("SWEEPANGLE"):
             if "angleDeg" in element.attrib:
@@ -165,11 +164,7 @@ class Session:
 
     @property
     def time_ms(self) -> np.ndarray:
-        """Trial time axis in milliseconds, trigger at 0.
-
-        Read from the file rather than recomputed: getting it wrong by one sample
-        is the easy mistake, and the writer already did it right.
-        """
+        """Trial time axis in milliseconds, trigger at 0, read from the file."""
         if "time_ms" in self.array_names:
             return self.array("time_ms")
 
@@ -223,9 +218,9 @@ t = s.time_ms
 
 ### Standard error of the mean
 
-`standard_deviations` is the **population** standard deviation over trials, exactly as the
-canvas computes it. Divide by the square root of the trial count for the SEM — and guard
-against a condition with no trials, which is written as zeros:
+`standard_deviations` is the **population** standard deviation over trials. Divide by the
+square root of the trial count for the SEM, guarding against a condition with no trials,
+which is written as zeros:
 
 ```python
 sd = s["standard_deviations"]                       # (sources, channels, samples)
@@ -251,8 +246,8 @@ with np.errstate(invalid="ignore", divide="ignore"):
 averages[n == 0] = 0.0   # the convention the writer uses
 ```
 
-Population SD from `sum_squares`, the same way the plugin does it. The `maximum` is not
-decoration: `E[x²] − E[x]²` goes slightly negative in float32 for a nearly flat trace.
+Population SD from `sum_squares`. The `maximum` matters: `E[x²] − E[x]²` goes slightly
+negative in float32 for a nearly flat trace.
 
 ```python
 with np.errstate(invalid="ignore", divide="ignore"):
@@ -362,8 +357,8 @@ plt.show()
 
 ### The per-direction traces behind the map
 
-The map is a combination of the direction averages, and when the map looks wrong the cause
-is usually visible in those. The angle each condition stands for is on the `Condition`:
+When the map looks wrong the cause is usually visible in the direction averages. The angle
+each condition stands for is on the `Condition`:
 
 ```python
 directions = [(c.angle_deg, i) for i, c in enumerate(s.conditions) if c.angle_deg is not None]
@@ -373,14 +368,14 @@ for angle, i in sorted(directions):
 ```
 
 A direction with **no angle contributes nothing** to the map — `angle_deg` is `None`, not
-`0.0`, and that distinction is the point.
+`0.0`.
 
 ## Things worth knowing
 
 | | |
 |---|---|
 | **A condition with no trials is zeros, not NaN** | `trial_counts` is what distinguishes it from a real zero. Check it before dividing. |
-| **`demo_data="1"` means simulated data** | `Session.is_demo_data`. It exists so demo data can never be mistaken for a recording. |
+| **`demo_data="1"` means simulated data** | `Session.is_demo_data`. |
 | **The parameter values are not in the session** | Only the trial geometry, the channel list, the trigger table and — for the Bar Mapper — the map geometry and sweep angles. See [Format](format.md#custom_parameters). |
-| **The single-trial ring is not saved** | Only the accumulators. Individual trials live in the GUI's display and are not part of the estimate. |
+| **The single-trial ring is not saved** | Only the accumulators; individual trials are a display buffer. |
 | **Maps are an output** | The Bar Mapper recomputes them from the accumulators on load rather than using the stored ones. |

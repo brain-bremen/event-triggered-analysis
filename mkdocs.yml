@@ -1,13 +1,8 @@
 # MkDocs configuration for the Event-Triggered Analysis documentation.
 #
-# The markdown lives in ./Docs rather than the conventional ./docs, so that the
-# directory reads as a sibling of Source/ and Tests/ in a repository that is
-# primarily a C++ project. docs_dir below is the only thing that depends on that
-# choice.
-#
-# Built and deployed by .github/workflows/release.yml on a version tag; built
-# without deploying by .github/workflows/build-and-test.yml, so a broken link or
-# a missing page fails a pull request rather than a release.
+# The markdown lives in ./Docs (see docs_dir below). Built and deployed by
+# .github/workflows/release.yml on a version tag; built without deploying by
+# .github/workflows/build-and-test.yml.
 
 site_name: Event-Triggered Analysis
 site_description: >-
@@ -25,11 +20,9 @@ copyright: Copyright &copy; 2025–2026 Joscha Schmiedt, Universität Bremen —
 docs_dir: Docs
 site_dir: Build/site
 
-# Not pages: the note to whoever replaces the placeholders, the script that
-# writes them, and the uv project that builds this site. Excluded rather than
-# left out of the nav, so they are not built into the site at all.
-#
-# Docs/.venv needs no entry — MkDocs already ignores dot-directories.
+# Not pages: the screenshot note, the placeholder script, and the uv project
+# that builds this site. (Docs/.venv needs no entry — dot-directories are
+# already ignored.)
 exclude_docs: |
   assets/screenshots/README.md
   assets/make_placeholders.py
@@ -107,13 +100,10 @@ extra:
 extra_css:
   - assets/extra.css
 
-# Warnings become errors: a link to a page that was renamed, or a reference to a
-# screenshot that was never added, fails the build here rather than shipping a
-# dead link to the site.
+# Warnings become errors, so a dead link or a missing screenshot fails the build.
 strict: true
 
-# Anchors are checked too, not only page paths. A #heading link that a later edit
-# renamed is exactly the kind of rot that survives a build otherwise.
+# Anchors are checked too, not only page paths.
 validation:
   omitted_files: warn
   absolute_links: warn

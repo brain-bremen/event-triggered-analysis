@@ -14,10 +14,8 @@ directory.
 
 ## Two display modes, two estimators
 
-The **Mode** parameter picks between two genuinely different estimators behind a common
-interface. Morlet wavelets are the right tool for the time-resolved view but wasteful
-when collapsing to a single spectrum, which is why this is not one estimator with a
-switch.
+The **Mode** parameter picks between a time-resolved spectrogram and a single spectrum
+per trial window, each with its own estimator.
 
 === "Spectrogram"
 
@@ -42,8 +40,8 @@ switch.
 
     **DPSS multitaper** (default) or a single **Hann** taper. Multitaper trades frequency
     resolution for variance: `NW` is the time-bandwidth product, and `Tapers` is how many
-    of the resulting DPSS sequences are used — `2·NW − 1` is the usual choice, which is
-    why the defaults are NW 3 and 5 tapers.
+    of the resulting DPSS sequences are used. `2·NW − 1` is the usual choice; the
+    defaults are NW 3 and 5 tapers.
 
     ![Triggered Power: spectrum mode](../assets/screenshots/power-canvas-spectrum.png)
 
@@ -69,7 +67,7 @@ acquisition** and changing any of it discards what has accumulated.
 | **Spectrum — line** | Line method, NW, Tapers | Spectrum mode |
 | **Per-trial storage** | Max trials | Spectrum mode |
 
-A greyed group says what would have to change for it to apply, rather than disappearing.
+A greyed group says what would have to change for it to apply.
 
 Defaults and ranges: [Parameter reference → Spectral](../reference/spectral.md).
 
@@ -94,11 +92,9 @@ There are no SAVE / LOAD buttons here: this plugin does not write sessions — s
 `Base start` and `Base end` are relative to the trigger, so the default window is
 −500 ms to 0 ms: the pre-trigger stretch.
 
-!!! note "Baseline is the one honest exception to 'canvas controls are display-only'"
+!!! note "In Spectrum mode the baseline does change what is estimated"
 
-    In **Spectrum** mode it splits the trial window and so does change what is estimated.
-    It stays on the canvas because that is where it is used, and the canvas says so
-    rather than hiding it.
+    It splits the trial window. It stays on the canvas because that is where it is used.
 
 ### Whitening
 
@@ -106,17 +102,13 @@ Removes the aperiodic 1/f background. `Fixed exponent` multiplies by `f^exponent
 is cheap and predictable when the exponent is known. `Fitted 1/f` fits the aperiodic
 component (`log10 P = offset − exponent · log10 f`) and divides it out.
 
-**Turn `Show 1/f` on while tuning the exponent.** Setting one by hand against an
-already-whitened spectrum is guesswork: the background you are trying to match has been
-divided out. With the overlay on, the panel plots the raw spectrum and draws the line
-that would be removed, so the slider has something to aim at.
+**Turn `Show 1/f` on while tuning the exponent.** The panel then plots the raw spectrum
+with the line that would be removed drawn over it, so the slider has something to aim at.
 
 ## Sessions
 
-**Not implemented.** The canvas carries no SAVE / LOAD buttons, and the node's session
-payload hooks return failure rather than writing a session with no spectra in it. The
-session machinery — the manifest, the compatibility check, the `.npy` codec — is shared
-and ready; what is missing is the gather/apply for the spectral accumulators.
+**Not implemented.** The canvas carries no SAVE / LOAD buttons. The shared session
+machinery is in place; the gather/apply for the spectral accumulators is not.
 
 Triggered Average and the Bar Mapper do write sessions; see
 [Saved sessions](../sessions/index.md).

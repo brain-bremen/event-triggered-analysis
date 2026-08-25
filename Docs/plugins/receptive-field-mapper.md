@@ -33,38 +33,30 @@ A bar sweeps across the screen at constant speed, in *N* directions. For one dir
    offset, nothing more.
 
 That gives one *spatial profile* per direction: response as a function of how far the bar
-had travelled. The bar is long, so a profile says nothing about where along the bar the
-response came from — it is a one-dimensional projection of the receptive field.
+had travelled. The bar is long, so a profile is a one-dimensional projection of the
+receptive field.
 
 **Back-projection** intersects those projections. A map point **x** is crossed by the bar
 when the bar's centre has travelled `x · u`, where **u** is the unit vector along the
-direction of motion. So the value that direction contributes at **x** is simply its
-profile read at `x · u`, and the map is the combination of those readings over
-directions. There is no Radon transform and no image rotation: the rotation is applied to
-the coordinate grid.
-
-With enough directions the profiles intersect in one place — the receptive field — and
-elsewhere they do not.
+direction of motion, so the value that direction contributes at **x** is its profile read
+at `x · u`. With enough directions the profiles intersect in one place — the receptive
+field — and elsewhere they do not.
 
 ## How a direction reaches the plugin
 
-Three mechanisms, deliberately kept apart:
-
 | | |
 |---|---|
-| the trial-type **broadcast message** | **arms** the matching trigger source, using the arm-pattern machinery every plugin here has — see [Triggers and messages](../triggers.md) |
-| a hardware **TTL edge at sweep onset** | provides the **alignment**, because a message cannot carry a trustworthy trigger sample |
+| the trial-type **broadcast message** | **arms** the matching trigger source — see [Triggers and messages](../triggers.md) |
+| a hardware **TTL edge at sweep onset** | provides the **alignment** |
 | the **angle** each source stands for | is **typed in by the user**, and is the one thing nothing can verify |
-
-So the plugin parses no messages and knows no message grammar.
 
 ## Getting a first map
 
 1. **Select channels** in the editor.
 2. **ANALYSIS → DIRECTIONS... → Generate → REPLACE.** This replaces the trigger sources
    with *N* evenly spaced directions, each armed by a trial-type message.
-3. **Check the compass** under ANALYSIS. The angle each condition stands for is the one
-   thing in this plugin that nothing can verify.
+3. **Check the compass** under ANALYSIS: the angles are the one thing nothing can
+   verify.
 4. **ANALYSIS → set the speed, sweep start and latency** to match the stimulus program,
    then check that Pre/Post actually cover the sweep — see
    [Making the window and the sweep agree](#making-the-window-and-the-sweep-agree). The
@@ -83,8 +75,7 @@ generator that replaces the sources with evenly spaced directions.
 
 ### The generator
 
-Configured to your stimulus program, because the message form is its business and not the
-plugin's:
+Configure it to match the messages your stimulus program sends:
 
 | Field | Default | What it sets |
 |---|---|---|
@@ -95,31 +86,26 @@ plugin's:
 | *Arm msg* — first number | `0` | The number for the first direction |
 | *Arm msg* — text after | ` TIMESEQUENCE` | The text after it |
 
-The number steps up by one per direction whether or not the TTL line does, so
+The number steps up by one per direction whether or not the TTL line does. For example,
 `VSTIM: TRIALTYPE `, `200`, ` TIMESEQUENCE` generates `VSTIM: TRIALTYPE 200 TIMESEQUENCE`,
-`… 201 …`, `… 202 …`.
+`… 201 …`, `… 202 …` — substitute whatever your own stimulus program sends.
 
 A **preview line** under the fields shows the first and last pattern the current settings
-would produce, and REPLACE repeats it in the confirmation — because these are patterns
-matched against messages the plugin cannot see, and a misspelling otherwise shows up only
-as a condition that never fires.
+would produce, and REPLACE repeats it in the confirmation.
 
-The generator **replaces** rather than appends. A generator that added to an existing set
-would leave the previous directions in place with their own angles, and the resulting map
-would silently mix two stimulus sets.
+The generator **replaces** rather than appends, so a generated set cannot silently mix
+with directions left over from a previous one.
 
 !!! danger "The trailing text is not decoration"
 
-    `TRIALTYPE 3` also contains-matches `TRIALTYPE 30`, and VStim's `TRIAL_END` repeats
-    the trial type — so a pattern with no trailing boundary both collides with longer
-    numbers **and** re-arms the source at trial end, which makes it fire on the *next*
-    trial's edge, very likely a different direction, with nothing looking wrong.
+    `TRIALTYPE 3` also contains-matches `TRIALTYPE 30`, and a trial-end message that
+    repeats the trial type would re-arm the source at trial end — making it fire on the
+    *next* trial's edge, very likely a different direction, with nothing looking wrong.
 
-    ` TIMESEQUENCE` appears in `TRIAL_START` and not in `TRIAL_END`, which is what makes
-    it the right boundary. Clear it only if your messages carry their own.
+    Pick trailing text that appears in the trial-start message and not in the trial-end
+    one. Clear it only if your messages carry their own boundary.
 
-The generator settings are saved with the signal chain, so the message form is typed
-once.
+The generator settings are saved with the signal chain.
 
 ### Angles
 
@@ -130,24 +116,20 @@ once.
 | **Angle**, per condition | unset | Direction of motion for that condition, **in the convention above** |
 
 Angles are stored exactly as typed and converted to a canonical form (0 = right,
-counter-clockwise) only where they are used. So changing the convention **re-interprets**
-the table rather than rewriting it, and the table keeps showing the numbers the stimulus
-program uses.
+counter-clockwise) only where they are used, so changing the convention **re-interprets**
+the table rather than rewriting it.
 
-!!! danger "This matters more than it looks"
+!!! danger "Check the convention against your stimulus program"
 
-    VStim's `LinearSweepThroughCenter` documents itself as *ccw, 0.0 = rightward*;
-    Fiorani et al.'s Appendix A says *zero at left, counterclockwise*. Those differ by
-    exactly 180°, which is the one error that produces a perfectly plausible and entirely
-    wrong map. Hence the compass preview, which redraws when the convention changes.
+    Conventions that differ by 180° — Fiorani et al.'s Appendix A uses *zero at left,
+    counterclockwise* — produce a perfectly plausible and entirely wrong map. The compass
+    preview redraws when the convention changes.
 
 A condition with **no angle contributes nothing** to the map — it is not treated as 0°.
-An angle left blank shows in orange in the table, and as a gap in the compass preview,
-which is how you see that a direction was never filled in.
+An angle left blank shows in orange in the table, and as a gap in the compass preview.
 
-Three warnings are raised and shown across the top of the canvas. All three are
-legitimate — the paper itself uses odd direction counts — and all three are more often a
-typo in the angle column:
+Three warnings are shown across the top of the canvas. All three can be legitimate, and
+all three are more often a typo in the angle column:
 
 - **duplicate angles** — two conditions claim the same direction;
 - **uneven spacing** — the gaps around the circle are not all 360/*N*;
@@ -164,29 +146,51 @@ typo in the angle column:
 
 !!! success "No parameter in this plugin discards data"
 
-    Everything under ANALYSIS is re-read from the accumulated trials whenever it changes.
-    Nudging the map resolution re-renders; it does not throw away the session. That is
-    why they all stay **editable during acquisition** — they are read-time parameters, and
-    tuning them against a live map is what they are for.
+    Everything under ANALYSIS is re-read from the accumulated trials whenever it changes,
+    so all of it stays **editable during acquisition**.
 
     The exceptions are the two capture parameters — Channels and Pre/Post — which *do*
-    rebuild the accumulators, and are therefore locked while acquiring.
+    rebuild the accumulators and are locked while acquiring.
 
-Three groups: stimulus geometry (speed, sweep start, latency), how the response is read
-(smoothing, absolute z, combine), and the map itself (size, resolution, centre, border).
-Two defaults are worth knowing:
+Four groups: display units (unit, viewing distance, screen resolution), stimulus geometry
+(speed, sweep start, latency), how the response is read (smoothing, absolute z, combine),
+and the map itself (size, resolution, centre, border). Two defaults are worth knowing:
 
 - **Latency 60 ms.** Without it each direction's response is displaced *along its own
   direction of motion*, so opposite directions are displaced opposite ways and the
   combined field is inflated (their Fig. 3). Too large a latency inflates it the same
   way, in the other direction.
-- **Border at 0.76 of the peak**, not half. Smoothing and the back-projection both
-  enlarge the mapped field, and 0.76 is the correction the paper measured empirically on
-  its own population (§3.1.1) so that the mapped field matched the extent of the response
-  at half height.
+- **Border at 0.76 of the peak**, not half — the correction the paper measured (§3.1.1)
+  for the enlargement smoothing and back-projection introduce.
 
 Full list with defaults, ranges and what each one does to the map:
 [Parameter reference → Receptive Field](../reference/receptive-field.md).
+
+### Degrees, millimetres or screen pixels
+
+**Show units in** at the top of ANALYSIS sets the unit for every linear quantity the
+plugin shows or takes: Speed, Sweep start, Resolution, Map centre X/Y, the map axes and
+the `RF` readout on each panel. Fill in **Viewing distance** and, for screen pixels,
+**Screen resolution** — they are what the conversion needs, and they are saved with the
+signal chain so the rig is typed in once.
+
+!!! info "Display only, by construction"
+
+    Degrees of visual angle remain the unit everything is computed, saved and exported
+    in. The conversion happens in the parameter fields and the panel readouts, and the
+    display parameters are the only ones in this plugin that do **not** trigger a
+    recompute — switching to millimetres cannot move a receptive field or change a map
+    pixel. What is typed is converted back to degrees and clamped against the
+    parameter's own range, so the range does not change with the unit either.
+
+    The factor is the small-angle one, `mm/deg = distance × π/180` — 9.95 mm/deg at the
+    default 570 mm. It under-reports *position* by about 4% at 20° eccentricity; see the
+    [parameter reference](../reference/receptive-field.md#display-units-analysis) for
+    why one factor is used rather than a tangent for positions.
+
+    A saved session keeps the `*_deg` arrays and attributes exactly as before, and now
+    also carries `viewing_distance_mm`, `screen_px_per_mm` and `screen_mm_per_deg`, so
+    an offline analysis can convert without being told the rig separately.
 
 ## Making the window and the sweep agree
 
@@ -231,33 +235,27 @@ Two views.
     Each panel is one channel:
 
     - **Top left** — the channel name.
-    - **Top right** — `RF 2.4°` is the **equivalent diameter** of the mapped receptive
-      field: the diameter of a circle with the same area as the supra-threshold region
-      (the pixels at or above *Border* × peak). It is reported instead of a fitted
-      ellipse axis because it makes no shape assumption, and the paper is explicit that
-      back-projection is not suitable for receptive-field *structure*, only for its
-      position and extent. `n = 12` is the **smallest trial count across directions** —
-      not the total. A map is only as trustworthy as its least-sampled direction, and an
-      unevenly sampled set is exactly what a run stopped part-way through produces.
-    - **The map** — jet colour scale, blue (low) through cyan, green and yellow to red
-      (high), the paper's own scale. Rows run top to bottom while visual-field *y* runs
-      upwards; the flip is applied once.
-    - **The degree axes**, along the bottom and down the left — ticks on round
-      multiples of degrees in *visual-field* coordinates, not fractions of the map, so
-      a map that covers the origin has a tick on it and a receptive-field centre can be
-      read straight off. The unit sits once in the corner the two gutters share. The
-      numbers thin out on a small panel while the ticks stay; the axes disappear
-      entirely below roughly 110 px of map, where they would cost more than they tell.
-    - **The colour scale**, to the right — the numeric ends and midpoint of the range
-      currently in force, with a caption naming the unit: `z` for the arithmetic or
-      geometric mean of per-direction z-scores, `|z|` when *Absolute z* is on, `z^n` for
-      the plain product.
+    - **Top right** — `RF 2.4°` (or `RF 24.2 mm`, `RF 87 px`, following **Show units
+      in**) is the **equivalent diameter**: the diameter of a circle
+      with the same area as the supra-threshold region (pixels at or above
+      *Border* × peak). `n = 12` is the **smallest trial count across directions**, not
+      the total.
+    - **The map** — jet colour scale, blue (low) to red (high), the paper's own scale.
+      Rows run top to bottom while visual-field *y* runs upwards; the flip is applied
+      once.
+    - **The axes**, along the bottom and down the left — ticks on round multiples in
+      *visual-field* coordinates, with the unit in the shared corner. Ticks are chosen
+      in whichever unit is being shown, so millimetres get round millimetres rather than
+      the conversions of round degrees. The numbers thin out on a small panel, and the
+      axes disappear entirely below roughly 110 px of map.
+    - **The colour scale**, to the right — the ends and midpoint of the range in force,
+      captioned with the unit: `z` for the arithmetic or geometric mean of per-direction
+      z-scores, `|z|` when *Absolute z* is on, `z^n` for the plain product.
     - **Black circle and white cross** — the equivalent-diameter circle centred on the
       peak pixel.
     - **Polargram** (bottom right, toggled by **POLAR**) — each direction's profile
-      sampled at the receptive-field centre, i.e. the response to a bar crossing the
-      field from that direction (their Figs. 5E, 5F). Drawn flipped to match the map
-      above it.
+      sampled at the receptive-field centre (their Figs. 5E, 5F). Drawn flipped to match
+      the map above it.
 
 === "Traces"
 
@@ -269,29 +267,25 @@ Two views.
     The per-direction averages themselves, overlaid per channel, drawn by the same
     widgets Triggered Average uses.
 
-    **It is not a lesser view.** A back-projection turns *N* time courses into one
-    picture, and when the picture is wrong the cause is almost always visible in the time
-    courses — a direction with no trials, a response at the wrong latency, a baseline
-    that never settled. Without it the only diagnostic available is the map itself, which
-    is the thing under suspicion.
+    This is the diagnostic view: when a map looks wrong the cause is usually visible in
+    the time courses — a direction with no trials, a response at the wrong latency, a
+    baseline that never settled.
 
 ### Canvas controls
 
 | Control | Effect |
 |---|---|
 | **View** | *Map* or *Traces*. |
-| **Columns**, **Size** | Grid layout. Cells are square and sized from *Size*, so maps stay adjacent rather than spreading across a wide window. |
+| **Columns**, **Size** | Grid layout. Cells are square and sized from *Size*. |
 | **POLAR** | Show the polargram inset. |
-| **SAME SCALE** | One colour range across every panel, so a strong channel and a weak one look different. Off by default: when hunting for any response at all, per-panel scaling is what makes a weak one visible. |
+| **SAME SCALE** | One colour range across every panel, so a strong channel and a weak one look different. Off by default. |
 | **CLEAR** | Discards accumulated trials, keeps the conditions. |
 | **SAVE / LOAD** | [Sessions](../sessions/index.md), shared with the other triggered plugins. |
 
 ## Sessions
 
-SAVE writes the accumulators — the resumable state, the same three arrays Triggered
-Average writes — plus the finished maps and their measurements. The maps are derived and
-saved anyway, so that reading a session in Python or MATLAB does not mean reimplementing
-the pipeline:
+SAVE writes the accumulators — the same three arrays Triggered Average writes — plus the
+finished maps and their measurements:
 
 | Array | Shape | dtype | Contents |
 |---|---|---|---|
@@ -301,32 +295,28 @@ the pipeline:
 | `map_channel_indices` | (channels,) | int32 | Global channel indices |
 
 The map geometry (`map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
-`map_centre_y_deg`) is in the manifest.
+`map_centre_y_deg`) is in the manifest, along with the viewing geometry the display units
+use — `viewing_distance_mm`, `screen_px_per_mm` and the derived `screen_mm_per_deg`.
+Everything else stays in degrees whatever unit is on screen, so a file does not depend on
+what the window happened to be showing when it was written.
 
-**LOAD deliberately ignores the stored maps** and recomputes from the restored
-accumulators, so what is displayed matches the current settings rather than the ones in
-force when the file was written.
+**LOAD ignores the stored maps** and recomputes from the restored accumulators, so what
+is displayed matches the current settings.
 
-The **sweep angles** travel with the session too, but not as an array of their own: they
-go into the bundle's settings block, the same call and the same format the signal chain
-and the trigger table's SAVE button use, matched back up by position on load.
+The **sweep angles** travel with the session in the bundle's settings block, matched back
+up by position on load.
 
 !!! warning "Loading applies the file's angles, overwriting whatever is in the table"
 
-    That is deliberate: the angles are what the loaded trials *mean*, and a session
-    restored under a different angle assignment produces a map that looks entirely
-    plausible and is wrong.
+    The angles are what the loaded trials *mean*; a session restored under a different
+    angle assignment produces a plausible and wrong map.
 
 ## Cost
 
 A recompute runs off the message thread and coalesces requests, so dragging a slider
-produces a stream of maps rather than a backlog.
-
-Measured, for one channel with eight directions over a 1.5 s window at 30 kHz and a 201²
-map: **about 4 ms**, near enough flat in the smoothing sigma. The back-projection is
-`pixels² × directions` profile lookups — about 320 k — and is most of that.
-
-The remaining lever is the channel count, which everything is linear in.
+produces a stream of maps rather than a backlog. For one channel with eight directions
+over a 1.5 s window at 30 kHz and a 201² map: about 4 ms, near enough flat in the
+smoothing sigma. Everything is linear in the channel count.
 
 ## Not wired up yet
 

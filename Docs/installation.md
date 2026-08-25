@@ -11,8 +11,8 @@ by hand, or build from source.
 | **Open Ephys GUI** | v1.0.2 or later, **plugin API 10**. A plugin built for a different API version will not load. |
 | **Platforms** | Windows (x64) and Linux (x86-64) are built and released. macOS builds from source but is not covered by CI. |
 
-The version this documentation describes is shown in the GUI under each plugin's info,
-and is baked into every saved session as `plugin_version`.
+The plugin version is shown in the GUI under each plugin's info, and is recorded in every
+saved session as `plugin_version`.
 
 ## Installing a release
 
@@ -48,13 +48,12 @@ and is baked into every saved session as `plugin_version`.
         ~/Library/Application Support/open-ephys/plugins-api10/
         ```
 
-4. **The two spectral plugins also need FFTW.** `TriggeredPower` and
-   `TriggeredCoherence` link a vendored FFTW3 (double precision), which must be in the
-   GUI's `shared` directory — `<Open Ephys GUI>/shared/libfftw3-3.dll` on Windows,
+4. **The two spectral plugins also need FFTW3** (double precision) in the GUI's `shared`
+   directory — `<Open Ephys GUI>/shared/libfftw3-3.dll` on Windows,
    `shared/libfftw3.so.3` on Linux, or
    `~/Library/Application Support/open-ephys/shared-api10/` on macOS. Building from
    source with `cmake --install` puts it there for you. Triggered Average and the Bar
-   Mapper do not link FFTW at all and need nothing extra.
+   Mapper need nothing extra.
 5. Restart the GUI. The plugins appear in the processor list as `Triggered Avg`,
    `Triggered Power`, `Triggered Coherence` and `RF Barmapper`.
 
@@ -115,25 +114,14 @@ cmake --build Build --config Release --target trigger_core_tests spectra_tests \
 ctest --test-dir Build/Tests -C Release
 ```
 
-`trigger_core_tests` links `trigger_core` and *not* `spectra_core`, which is what keeps
-the core split honest: the day something FFTW-dependent is put on the wrong side of the
-line, that target stops linking. `rf_math_tests` goes further and links neither JUCE nor
-the GUI at all, so the mapping maths is tested as plain C++.
-
 Enabling tests pulls the GUI in as a subproject to reuse its `gui_testable_source` and
 `test_helpers` targets, so the first configure is slow.
 
 ## FFTW
 
-FFTW3 (double precision) is vendored under `libs/`, copied from the `OpenEphysFFTW`
-common library. It is discovered and installed by `Source/Spectral` rather than at the
-top level, so a plugin that links only `trigger_core` never asks for it. The wrapper in
-`Source/Spectral/Fftw.h` is local rather than reusing `OpenEphysFFTW`, which still uses
-`ScopedPointer` (removed in JUCE 8) and has no batched-plan API.
-
-Both spectral plugins load the *same* `libfftw3-3`, and this build does **not** export
-`fftw_make_planner_thread_safe`, so planning is serialised with a process-wide named
-lock. Plan execution is thread-safe and is not serialised.
+FFTW3 (double precision) is vendored under `libs/`. It is discovered and installed by
+`Source/Spectral` rather than at the top level, so a plugin that links only
+`trigger_core` never asks for it.
 
 ## Troubleshooting
 

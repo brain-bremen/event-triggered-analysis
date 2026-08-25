@@ -10,27 +10,10 @@ session/
   figures/<name>.png     optional
 ```
 
-### Why one XML rather than XML plus a JSON manifest
-
-Because a session is one thing, and reading it should need one parser. The configuration
-has to be XML — it is produced by the GUI's own serialiser, the same one a saved signal
-chain uses — and duplicating it into a second format is exactly the drift this design
-refuses elsewhere. Given that, putting the provenance in JSON beside it would mean every
-consumer, in every language, needed an XML parser *and* a JSON parser to understand one
-directory.
-
-So: **everything textual is XML, and everything numeric is `.npy`.** Both halves are
-native in Python (`xml.etree`, `numpy.load`) and reachable in MATLAB (`readstruct`, plus a
-short `.npy` reader — see [Loading in MATLAB](matlab.md)).
-
-The arrays stay `.npy` rather than being inlined as text for the obvious reason: a
-201×201 map per channel is not something to base64 into an attribute, and `.npy` is
-self-describing, so dtype and shape survive even if `session.xml` does not.
-
-### Why a directory and not one archive
-
-The figures are the point of the figures. A container you have to unpack before you can
-look at a PNG is a container that gets unpacked once and left lying around in two states.
+**Everything textual is XML, and everything numeric is `.npy`.** Both halves are native
+in Python (`xml.etree`, `numpy.load`) and reachable in MATLAB (`readstruct`, plus a short
+`.npy` reader — see [Loading in MATLAB](matlab.md)). `.npy` is self-describing, so dtype
+and shape survive even if `session.xml` does not.
 
 ## `session.xml`
 
@@ -77,7 +60,7 @@ look at a PNG is a container that gets unpacked once and left lying around in tw
 |---|---|---|
 | `format_version` | int | Bumped when the layout changes in a way an older reader cannot cope with. Currently `1` |
 | `plugin` | string | The processor's name, e.g. `Triggered Avg`. Sessions are refused across plugins |
-| `plugin_version` | string | The plugin version at the time of writing. Recorded for your benefit; `format_version` does the enforcing |
+| `plugin_version` | string | The plugin version at the time of writing; `format_version` is what is enforced |
 | `saved_at` | string | ISO-8601, **local time** |
 | `demo_data` | `0` / `1` | `1` when the accumulators held simulated data |
 | `sample_rate_hz` | double | |
@@ -92,9 +75,8 @@ The Bar Mapper adds `map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
 One `<CHANNEL index="..." name="..."/>` per channel, **in the order the accumulators store
 them**, which is the order of the channel axis in every array.
 
-`index` is the global channel index in the stream; `name` is for your benefit and for the
-mismatch message. A channel renamed upstream is not a reason to refuse a load; a differing
-*count* is.
+`index` is the global channel index in the stream. A channel renamed upstream is not a
+reason to refuse a load; a differing *count* is.
 
 ### `<ARRAYS>`
 
@@ -107,20 +89,14 @@ The array index. One `<ARRAY>` per file:
 | `shape` | Comma-separated dimensions, C order |
 | `file` | Path relative to the session directory |
 
-The same information is in each `.npy` header, so a reader can ignore this index entirely
-and still get dtype and shape right. It is here so a session can be summarised, or an
-array refused as too large, without opening any of them.
+The same information is in each `.npy` header, so a reader can ignore this index and
+still get dtype and shape right. It is here so a session can be summarised without
+opening every array.
 
 ### `<CUSTOM_PARAMETERS>`
 
 The processor's own configuration, **verbatim** — the same element a saved signal chain
-stores, produced by the same call.
-
-It is kept as XML rather than translated into attributes on purpose: the trigger source
-table, the arm patterns and whatever else a plugin persists already have exactly one
-serialiser, and a second one that wrote the same fields differently would be free to
-drift from it. The drift would show up as a session that restores subtly different
-conditions from the ones the chain restores.
+stores, produced by the same call, so there is only ever one serialiser for it.
 
 !!! warning "This block holds the trigger table, not the parameter values"
 
@@ -138,9 +114,8 @@ conditions from the ones the chain restores.
 ## Arrays
 
 Every array is C-ordered, little-endian, and complete (no Fortran order, no streaming
-headers). Names are plain identifiers: slashes, dots and separators are rejected on write
-rather than silently sanitised, because a name that changes on write cannot be found on
-read.
+headers). Names are plain identifiers: slashes, dots and separators are rejected on
+write.
 
 ### Written by Triggered Average and the Bar Mapper
 
@@ -157,21 +132,15 @@ post_samples`.
 | `time_ms` | (N,) | float64 | Time axis, trigger at 0 |
 
 **`sums`, `sum_squares` and `trial_counts` are the resumable state.** The rest are
-outputs: LOAD ignores them and rebuilds the averages from the sums, so a session remains
-resumable whether or not they were written.
-
-The sums rather than the averages, because folding a trial into a sum is exact and folding
-one into an average is not — and a resumed session must continue the same estimate rather
-than average an average.
+outputs: LOAD ignores them and rebuilds the averages from the sums. Sums rather than
+averages, because folding a trial into a sum is exact.
 
 - `standard_deviations` is the **population** SD over trials. Divide by
   `sqrt(trial_counts)` for the standard error.
 - A source with no trials is written as **zeros**, not NaN. `trial_counts` is what says
   so.
-- The **single-trial ring is deliberately not saved.** It is a bounded ring of the most
-  recent trials kept for display, not part of the estimate, and a resumed session whose
-  ring held trials from before the break would show a "recent trials" view spanning a gap
-  of hours.
+- The **single-trial ring is not saved.** It is a display buffer, not part of the
+  estimate.
 
 ### Added by the Receptive Field Bar Mapper
 
@@ -188,16 +157,13 @@ Let `K` = number of mapped channels, `P` = `map_pixels`.
 — read it from the manifest rather than hard-coding the order.
 
 **Map rows run top to bottom while visual-field *y* runs upwards.** The flip is applied
-once, when the map is built; a reader plotting `maps[k]` with an image function gets the
-same orientation the canvas shows if the origin is at the top.
+once, when the map is built; a reader plotting `maps[k]` with the origin at the top gets
+the orientation the canvas shows.
 
 The map export is all-or-nothing: if one channel's map came out a different size, the
-whole map export is skipped rather than written ragged. The accumulators are unaffected —
-they are the state that matters.
+whole map export is skipped rather than written ragged. The accumulators are unaffected.
 
-Maps are an **output**. LOAD deliberately ignores them and recomputes from the restored
-accumulators, so what is displayed matches the current settings rather than the ones in
-force when the file was written.
+Maps are an **output**: LOAD ignores them and recomputes from the restored accumulators.
 
 ## Figures
 

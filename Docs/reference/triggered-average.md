@@ -17,9 +17,7 @@ the analysis set: changing it discards what has accumulated.
 
 ## Canvas — axis limits
 
-All six are **display-only**. They are deliberately kept out of the analysis set: a
-rebuild stops the worker, resizes the ring buffer and discards every accumulated trial,
-which is not what nudging an axis should do.
+All six are **display-only** and never discard accumulated data.
 
 | Name | Label | Type | Default | Range | Step | Scope |
 |---|---|---|---|---|---|---|
@@ -32,8 +30,7 @@ which is not what nudging an axis should do.
 
 !!! note "X limits are clamped to the collection window"
 
-    `x_min` and `x_max` are clamped to `[-pre_ms, post_ms]`. Without that clamp, a value
-    outside the window silently produces a blank plot.
+    `x_min` and `x_max` are clamped to `[-pre_ms, post_ms]`.
 
 All four axis values are honoured when set programmatically — from a loaded XML chain or
 a configuration message — not only when typed into the canvas.
