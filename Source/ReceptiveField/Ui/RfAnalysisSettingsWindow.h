@@ -72,8 +72,21 @@ public:
     void buttonClicked (juce::Button* button) override;
 
 private:
-    void addControl (const char* parameterName);
+    /** Returns the control, so the caller can wire it up. Null if the node has no
+        such parameter. */
+    ParameterControl* addControl (const char* parameterName);
     void addSectionBreak();
+
+    ParameterControl* controlFor (const char* parameterName) const;
+
+    /** Pushes the current display unit onto every control that shows a linear
+     *  quantity, and greys the two viewing-geometry rows when the unit is
+     *  degrees and they therefore do nothing.
+     *
+     *  Called when one of the three display parameters changes and whenever the
+     *  popup is reopened. It writes to the controls only -- no parameter this
+     *  touches is an input to a map. */
+    void applyDisplayUnits();
 
     /** Rebuilds the compass arrows and the warning line from the node.
         SweepDirectionsPanel::onChanged calls this while its call-out is open,

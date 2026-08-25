@@ -23,6 +23,7 @@
 #include "RfAnalysisSettingsWindow.h"
 
 #include "../BarMapperNode.h"
+#include "../RfMath/DisplayUnits.h"
 #include "SweepDirectionsPanel.h"
 #include "TriggerCore/Ui/NestedCallOut.h"
 
@@ -41,6 +42,14 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
     if (m_node == nullptr)
         return;
 
+    // The unit selector first, because it changes how every number below is
+    // written -- including the ones typed in -- and reading a speed without
+    // knowing its unit is worse than not showing it.
+    addControl (RfParameterNames::display_unit);
+    addControl (RfParameterNames::viewing_distance_mm);
+    addControl (RfParameterNames::screen_px_per_mm);
+    addSectionBreak();
+
     // Stimulus geometry first: these describe the experiment, and everything
     // below describes how it is read.
     addControl (RfParameterNames::speed_deg_per_sec);
@@ -58,6 +67,8 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
     addControl (RfParameterNames::map_centre_x);
     addControl (RfParameterNames::map_centre_y);
     addControl (RfParameterNames::border_fraction);
+
+    applyDisplayUnits();
 
     m_compass = std::make_unique<CompassPreview>();
     addAndMakeVisible (m_compass.get());
@@ -86,12 +97,12 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
 
 RfAnalysisSettingsWindow::~RfAnalysisSettingsWindow() = default;
 
-void RfAnalysisSettingsWindow::addControl (const char* parameterName)
+ParameterControl* RfAnalysisSettingsWindow::addControl (const char* parameterName)
 {
     auto* parameter = m_node->getParameter (parameterName);
 
     if (parameter == nullptr)
-        return;
+        return nullptr;
 
     auto control = std::make_unique<ParameterControl> (parameter, nameWidth, controlWidth, unitWidth);
 
@@ -99,9 +110,67 @@ void RfAnalysisSettingsWindow::addControl (const char* parameterName)
     // are read-time parameters, and tuning them against a live map is what they
     // are for.
     control->setActive (true);
+
+    // Editing a display parameter has to rewrite every other row in this window,
+    // since they are all shown in the unit it selects. The node is told
+    // separately, by parameterValueChanged, and repaints the canvas; this hook is
+    // only about the popup being self-consistent the moment the value lands.
+    if (BarMapperNode::isDisplayParameter (parameterName))
+        control->onChange = [this] { applyDisplayUnits(); };
+
     addAndMakeVisible (control.get());
 
+    ParameterControl* raw = control.get();
     m_controls.push_back (std::move (control));
+
+    return raw;
+}
+
+ParameterControl* RfAnalysisSettingsWindow::controlFor (const char* parameterName) const
+{
+    for (const auto& control : m_controls)
+        if (control != nullptr && control->getParameter() != nullptr
+            && control->getParameter()->getName() == parameterName)
+            return control.get();
+
+    return nullptr;
+}
+
+void RfAnalysisSettingsWindow::applyDisplayUnits()
+{
+    if (m_node == nullptr)
+        return;
+
+    const Rf::DisplayUnit unit = m_node->getDisplayUnit();
+    const double scale = m_node->getDisplayUnitsPerDegree();
+    const String suffix (Rf::unitSuffix (unit));
+
+    // The five fields that carry a linear visual-angle quantity, and the unit
+    // each of them is written in. Latency and smoothing are times, the border
+    // fraction is a ratio and the map size is a count of map pixels -- none of
+    // them changes with the ruler.
+    if (auto* control = controlFor (RfParameterNames::speed_deg_per_sec))
+        control->setDisplayTransform (scale, suffix + "/s");
+
+    for (const char* name : { RfParameterNames::sweep_start_deg,
+                              RfParameterNames::deg_per_pixel,
+                              RfParameterNames::map_centre_x,
+                              RfParameterNames::map_centre_y })
+        if (auto* control = controlFor (name))
+            control->setDisplayTransform (scale, suffix);
+
+    // Greyed rather than hidden when the unit is degrees: the rig is still worth
+    // documenting, and a row that vanishes takes with it the explanation of what
+    // the other two units would mean.
+    const bool geometryApplies = unit != Rf::DisplayUnit::Degrees;
+
+    if (auto* control = controlFor (RfParameterNames::viewing_distance_mm))
+        control->setActive (geometryApplies);
+
+    // Millimetres need only the distance; the pixel pitch is what turns them
+    // into screen pixels.
+    if (auto* control = controlFor (RfParameterNames::screen_px_per_mm))
+        control->setActive (unit == Rf::DisplayUnit::ScreenPixels);
 }
 
 void RfAnalysisSettingsWindow::addSectionBreak()
@@ -111,6 +180,10 @@ void RfAnalysisSettingsWindow::addSectionBreak()
 
 void RfAnalysisSettingsWindow::updatePopup()
 {
+    // Units before values: the transform decides how each value is written, and
+    // setDisplayTransform refreshes the control it is applied to anyway.
+    applyDisplayUnits();
+
     for (auto& control : m_controls)
         if (control != nullptr)
             control->refresh();

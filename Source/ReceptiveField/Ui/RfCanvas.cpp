@@ -235,6 +235,14 @@ void RfCanvas::clearData()
 
 void RfCanvas::refreshState() {}
 
+void RfCanvas::displayUnitsChanged()
+{
+    if (m_node == nullptr)
+        return;
+
+    m_mapGrid->setDisplayUnit (m_node->getDisplayUnit(), m_node->getDisplayUnitsPerDegree());
+}
+
 void RfCanvas::updateSettings()
 {
     if (m_node != nullptr)
@@ -269,6 +277,10 @@ void RfCanvas::refresh()
         const ContinuousChannel* info = m_node->getContinuousChannel (channel);
         names.add (info != nullptr ? info->getName() : "CH " + String (channel + 1));
     }
+
+    // Before setResults, so panels created by it are built in the current unit
+    // rather than being redrawn a frame later.
+    m_mapGrid->setDisplayUnit (m_node->getDisplayUnit(), m_node->getDisplayUnitsPerDegree());
 
     m_mapGrid->setResults (results, names);
     m_mapGrid->setSize (m_mapViewport->getWidth(), m_mapGrid->getDesiredHeight());
