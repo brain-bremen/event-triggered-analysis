@@ -82,6 +82,7 @@ set(AVERAGE_TEST_SOURCES
 # neither the GUI nor any core in this repository.
 set(RF_MATH_TEST_SOURCES
     ReceptiveField/test_AngleConvention.cpp
+    ReceptiveField/test_DisplayUnits.cpp
     ReceptiveField/test_StimulusGeometry.cpp
     ReceptiveField/test_ResponseProfile.cpp
     ReceptiveField/test_BackProjection.cpp
@@ -178,6 +179,7 @@ oe_add_test_binary(average_tests      average_core OFF ${AVERAGE_TEST_SOURCES})
 # strings), which is why it cannot live in rf_math_tests.
 set(RF_NODE_TEST_SOURCES
     ReceptiveField/test_SweepAngles.cpp
+    ReceptiveField/test_RfDisplayParameters.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../Source/ReceptiveField/SweepAngles.cpp
 )
 

@@ -88,10 +88,13 @@ namespace
     /** A round tick step giving roughly four intervals across the span.
      *
      *  1, 2 or 5 times a power of ten, so the numbers printed are ones people read
-     *  off an axis rather than whatever the span divided by four happened to be. */
-    double axisTickStepDeg (double spanDeg)
+     *  off an axis rather than whatever the span divided by four happened to be.
+     *
+     *  Takes the span in whatever unit the axis is drawn in: a map 20 units wide
+     *  wants the same ticks whether those units are degrees or millimetres. */
+    double axisTickStep (double span)
     {
-        const double raw = std::max (1e-6, spanDeg / 4.0);
+        const double raw = std::max (1e-6, span / 4.0);
         const double magnitude = std::pow (10.0, std::floor (std::log10 (raw)));
         const double normalised = raw / magnitude;
 
@@ -104,9 +107,9 @@ namespace
     }
 
     /** Just enough decimals for one step to change the number printed. */
-    String formatDegrees (double value, double stepDeg)
+    String formatTickValue (double value, double step)
     {
-        const int decimals = stepDeg >= 1.0 ? 0 : (stepDeg >= 0.1 ? 1 : 2);
+        const int decimals = step >= 1.0 ? 0 : (step >= 0.1 ? 1 : 2);
 
         // Ticks are multiples of the step, so the one at the origin can carry a
         // -0.0 out of the arithmetic and print as "-0" under a "0" beside it.
@@ -120,6 +123,23 @@ namespace
         source file's encoding is not something a build should have to be right
         about. Same reasoning as SweepAngles::generateDirections. */
     String degreeSign() { return String::charToString (static_cast<juce_wchar> (0x00B0)); }
+
+    /** What to write beside a converted number.
+     *
+     *  Degrees keep the sign they have always had, tight against the number;
+     *  millimetres and screen pixels get their suffix spelled out, because "24mm"
+     *  and "24 mm" read the same but "2.4°" and "2.4 deg" do not. */
+    String unitLabel (Rf::DisplayUnit unit)
+    {
+        return unit == Rf::DisplayUnit::Degrees ? degreeSign() : String (Rf::unitSuffix (unit));
+    }
+
+    /** The gap between a number and its unit: none before a degree sign, one
+        space before a word. */
+    String unitGap (Rf::DisplayUnit unit)
+    {
+        return unit == Rf::DisplayUnit::Degrees ? String() : String (" ");
+    }
 
     /** What one map value is, given how it was made.
      *
@@ -161,6 +181,24 @@ void RfMapPanel::setSharedColourRange (bool shared, float low, float high)
     m_sharedLow = low;
     m_sharedHigh = high;
     rebuildImage();
+    repaint();
+}
+
+void RfMapPanel::setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree)
+{
+    // Guarded rather than trusted: a zero or negative scale would put every tick
+    // at the origin, and the panel is not the place to find that out.
+    if (! std::isfinite (unitsPerDegree) || unitsPerDegree <= 0.0)
+        return;
+
+    if (m_displayUnit == unit && juce::approximatelyEqual (m_unitsPerDegree, unitsPerDegree))
+        return;
+
+    m_displayUnit = unit;
+    m_unitsPerDegree = unitsPerDegree;
+
+    // No rebuildImage(): the raster is the map's own pixels, and which ruler is
+    // held against them changes nothing about it.
     repaint();
 }
 
@@ -231,7 +269,15 @@ void RfMapPanel::paint (Graphics& g)
     {
         g.setColour (Colours::lightgrey);
         g.setFont (FontOptions (11.0f));
-        g.drawText ("RF " + String (m_mapping.estimate.equivalentDiameterDeg, 1) + degreeSign()
+        const double diameter = m_mapping.estimate.equivalentDiameterDeg * m_unitsPerDegree;
+
+        // One decimal, as it has always been in degrees -- except where the unit
+        // makes the number big enough that the decimal is noise rather than
+        // precision, which is what happens at ~36 screen pixels per degree.
+        const int decimals = std::abs (diameter) >= 100.0 ? 0 : 1;
+
+        g.drawText ("RF " + String (diameter, decimals) + unitGap (m_displayUnit)
+                        + unitLabel (m_displayUnit)
                         + "   n = " + String (m_mapping.minimumTrialCount),
                     labelArea,
                     Justification::centredRight,
@@ -390,18 +436,24 @@ void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
     if (! geometry.isValid())
         return;
 
-    const double step = axisTickStepDeg (geometry.spanDeg());
+    // Everything from here on is in display units, and mapToScreen is given
+    // degrees again on the way out. Ticks are chosen in the unit they are
+    // *printed* in, so millimetres get round millimetre ticks rather than the
+    // conversions of round degree ones -- 9.95, 19.90, 29.85 is not an axis.
+    const double scale = m_unitsPerDegree;
+    const double step = axisTickStep (geometry.spanDeg() * scale);
 
     // Ticks land on multiples of the step in visual-field coordinates rather than
     // on fractions of the map, so there is one at the origin whenever the map
-    // covers it -- and that is what a centre gets read against.
+    // covers it -- and that is what a centre gets read against. The origin is the
+    // origin in every unit, since the conversion is a pure scaling.
     const auto firstTickAtOrAbove = [step] (double from)
     { return std::ceil (from / step - 1e-6) * step; };
 
-    const double leftDeg = geometry.xDegAtColumn (0);
-    const double rightDeg = geometry.xDegAtColumn (geometry.pixels - 1);
-    const double topDeg = geometry.yDegAtRow (0);
-    const double bottomDeg = geometry.yDegAtRow (geometry.pixels - 1);
+    const double leftDeg = geometry.xDegAtColumn (0) * scale;
+    const double rightDeg = geometry.xDegAtColumn (geometry.pixels - 1) * scale;
+    const double topDeg = geometry.yDegAtRow (0) * scale;
+    const double bottomDeg = geometry.yDegAtRow (geometry.pixels - 1) * scale;
 
     g.setFont (FontOptions (10.0f));
 
@@ -414,7 +466,7 @@ void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
 
     for (double x = firstTickAtOrAbove (leftDeg); x <= rightDeg + 1e-6; x += step)
     {
-        const float screenX = mapToScreen (mapArea, x, geometry.centreYDeg).x;
+        const float screenX = mapToScreen (mapArea, x / scale, geometry.centreYDeg).x;
 
         g.setColour (Colours::grey);
         g.drawLine (screenX,
@@ -430,7 +482,7 @@ void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
             continue;
 
         g.setColour (Colours::lightgrey);
-        g.drawText (formatDegrees (x, step), box, Justification::centredTop, false);
+        g.drawText (formatTickValue (x, step), box, Justification::centredTop, false);
         lastLabelRight = box.getRight();
     }
 
@@ -440,7 +492,7 @@ void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
 
     for (double y = firstTickAtOrAbove (bottomDeg); y <= topDeg + 1e-6; y += step)
     {
-        const float screenY = mapToScreen (mapArea, geometry.centreXDeg, y).y;
+        const float screenY = mapToScreen (mapArea, geometry.centreXDeg, y / scale).y;
 
         g.setColour (Colours::grey);
         g.drawLine (static_cast<float> (mapArea.getX() - axisTickLength),
@@ -458,14 +510,14 @@ void RfMapPanel::paintAxes (Graphics& g, Rectangle<int> mapArea) const
             continue;
 
         g.setColour (Colours::lightgrey);
-        g.drawText (formatDegrees (y, step), box, Justification::centredRight, false);
+        g.drawText (formatTickValue (y, step), box, Justification::centredRight, false);
         lastLabelBottom = box.getY();
     }
 
     // The unit, once, in the corner the two gutters share -- rather than on every
     // tick, where it would cost more width than the numbers themselves.
     g.setColour (Colours::grey);
-    g.drawText (degreeSign(),
+    g.drawText (unitLabel (m_displayUnit),
                 Rectangle<int> (labelLeft, labelTop, labelWidthBeside, labelHeightBelow),
                 Justification::centredRight,
                 false);
@@ -550,11 +602,21 @@ void RfMapGrid::setResults (const RfResults& results, const StringArray& channel
         m_panels[i]->setChannelName (i < channelNames.size() ? channelNames[i]
                                                              : "CH " + String (i + 1));
         m_panels[i]->setShowPolargram (m_showPolargram);
+        m_panels[i]->setDisplayUnit (m_displayUnit, m_unitsPerDegree);
         m_panels[i]->setValueUnit (m_valueUnit);
         m_panels[i]->setMapping (m_mappings[static_cast<std::size_t> (i)]);
     }
 
     applyColourRange();
+}
+
+void RfMapGrid::setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree)
+{
+    m_displayUnit = unit;
+    m_unitsPerDegree = unitsPerDegree;
+
+    for (auto* panel : m_panels)
+        panel->setDisplayUnit (unit, unitsPerDegree);
 }
 
 void RfMapGrid::applyColourRange()
