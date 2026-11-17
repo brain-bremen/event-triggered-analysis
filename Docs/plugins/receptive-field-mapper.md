@@ -200,20 +200,20 @@ first sample of the profile:  (−pre − latency) · speed + sweep start
 last  sample of the profile:  (post − latency) · speed + sweep start
 ```
 
-The bar reaches the map centre at `t = latency − sweep start / speed`.
+The bar reaches the sweep centre at `t = latency − sweep start / speed`.
 
 !!! warning "The stock defaults do not get there"
 
-    At 10 deg/s from −15° with Post = 1000 ms, the profile covers −20.6° to −5.6° along
-    the axis, while the default map covers ±10.05°. Everything outside the swept range is
+    At 100 mm/s from −150 mm with Post = 1000 ms, the profile covers −206 mm to −56 mm
+    along the axis, while the default map covers ±100.5 mm. Everything outside the swept range is
     padded with zero — no evidence either way, which is what zero means once the traces
     are z-scored — so the map comes out flat or edge-heavy.
 
 For a sweep that starts at −*S* and is followed symmetrically past the centre:
 
 ```
-post_ms  ≥  2 · S / speed · 1000          (3000 ms for S = 15°, speed = 10 deg/s)
-S        ≥  map size × resolution / 2     (10.05° for the default map)
+post_ms  ≥  2 · S / speed · 1000          (3000 ms for S = 150 mm, speed = 100 mm/s)
+S        ≥  map size × resolution / 2     (100.5 mm for the default map)
 ```
 
 If long windows are impractical, shrink the map instead — the map only has to cover the

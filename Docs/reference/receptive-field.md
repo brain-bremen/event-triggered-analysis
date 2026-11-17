@@ -58,7 +58,7 @@ maps. They can be *shown* and typed in any display unit.
 
 | Name | Label | Type | Default | Range | Step | What it does |
 |---|---|---|---|---|---|---|
-| `smoothing_sigma_ms` | Smoothing | float, ms | `100` | `0` – `2000` | `1` | Gaussian sigma applied to the z-scored trace, kernel truncated at 4σ (§2.4.3). Too narrow and high-frequency noise displaces the peak; too wide and the mapped field is inflated. A rule of thumb is a quarter of the time the bar takes to cross the expected receptive field. At 10 deg/s, 100 ms is 1 degree of travel. |
+| `smoothing_sigma_ms` | Smoothing | float, ms | `100` | `0` – `2000` | `1` | Gaussian sigma applied to the z-scored trace, kernel truncated at 4σ (§2.4.3). Too narrow and high-frequency noise displaces the peak; too wide and the mapped field is inflated. A rule of thumb is a quarter of the time the bar takes to cross the expected receptive field. At 100 mm/s, 100 ms is 10 mm of travel (about 1° at 570 mm). |
 | `use_absolute_z` | Absolute z | bool | `false` | — | — | Rectifies the profile, so suppression counts as a response (§2.4.4). Turn it on to map an inhibitory receptive field. The map's sign then becomes meaningless, and the colour scale is relabelled `\|z\|`. |
 | `combine_mode` | Combine | categorical | `Arithmetic` | `Arithmetic`, `Geometric`, `Product` | — | How the *N* directions are combined at each map pixel. See below. |
 
