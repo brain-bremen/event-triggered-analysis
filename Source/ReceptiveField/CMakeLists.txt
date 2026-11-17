@@ -45,6 +45,8 @@ oe_add_plugin(ReceptiveFieldBarMapper average_core
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/BarMapperEditor.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapPanel.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapAreaPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfMapAreaPanel.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/RfAnalysisSettingsWindow.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Ui/SweepDirectionsPanel.cpp

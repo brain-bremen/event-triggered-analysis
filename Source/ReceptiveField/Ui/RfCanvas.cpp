@@ -25,7 +25,9 @@
 #include <PluginVersion.h>
 
 #include "AverageCore/DataCollector.h"
+#include "RfMapAreaPanel.h"
 #include "TriggerCore/TriggerSource.h"
+#include "TriggerCore/Ui/NestedCallOut.h"
 
 #include <algorithm>
 #include <cmath>
@@ -84,6 +86,12 @@ RfOptionsBar::RfOptionsBar (RfCanvas* canvas) : m_canvas (canvas)
     m_polargramButton->addListener (this);
     addAndMakeVisible (m_polargramButton.get());
 
+    m_mapAreaButton = std::make_unique<UtilityButton> ("MAP AREA...");
+    m_mapAreaButton->setClickingTogglesState (false);
+    m_mapAreaButton->setTooltip ("Map size, resolution and centre: the part of the visual field the maps show");
+    m_mapAreaButton->addListener (this);
+    addAndMakeVisible (m_mapAreaButton.get());
+
     m_zeroLinesButton = std::make_unique<UtilityButton> ("X/Y = 0");
     m_zeroLinesButton->setClickingTogglesState (true);
     m_zeroLinesButton->setTooltip ("White lines through x = 0 and y = 0 of the visual field");
@@ -123,6 +131,8 @@ void RfOptionsBar::buttonClicked (Button* button)
 {
     if (button == m_polargramButton.get())
         m_canvas->setShowPolargram (button->getToggleState());
+    else if (button == m_mapAreaButton.get())
+        NestedCallOut::show (*m_mapAreaButton, std::make_unique<RfMapAreaPanel> (m_canvas->getNode()));
     else if (button == m_zeroLinesButton.get())
         m_canvas->setShowZeroLines (button->getToggleState());
     else if (button == m_sharedScaleButton.get())
@@ -162,6 +172,8 @@ void RfOptionsBar::resized()
     place (m_columnsLabel.get(), m_columnsSelector.get(), 52, 56);
     place (m_heightLabel.get(), m_heightSelector.get(), 30, 70);
 
+    m_mapAreaButton->setBounds (area.removeFromLeft (90).reduced (2, 0));
+    area.removeFromLeft (6);
     m_polargramButton->setBounds (area.removeFromLeft (60).reduced (2, 0));
     area.removeFromLeft (6);
     m_zeroLinesButton->setBounds (area.removeFromLeft (70).reduced (2, 0));

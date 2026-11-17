@@ -146,7 +146,8 @@ all three are more often a typo in the angle column:
 
 Four groups: display units (unit, viewing distance, screen resolution), stimulus geometry
 (speed, sweep start, sweep centre, latency), how the response is read (smoothing, absolute z, combine),
-and the map itself (size, resolution, centre, border). Two defaults are worth knowing:
+and the RF border. The map area — size, resolution and centre — is on the canvas behind
+**MAP AREA...**, next to the mouse zoom that edits it. Two defaults are worth knowing:
 
 - **Latency 60 ms.** Without it each direction's response is displaced *along its own
   direction of motion*, so opposite directions are displaced opposite ways and the
@@ -263,6 +264,7 @@ Two views.
 |---|---|
 | **View** | *Map* or *Traces*. |
 | **Columns**, **Size** | Grid layout. Cells are square and sized from *Size*. |
+| **MAP AREA...** | Map size, Resolution and Map centre X/Y — the part of the visual field the maps show. Follows the mouse zoom while open; changing a value recomputes the maps, never the trials. |
 | **POLAR** | Show the polargram inset. |
 | **X/Y = 0** | White lines through visual-field x = 0 and y = 0 — fixation, once Sweep centre is set. Off by default. |
 | **SAME SCALE** | One colour range across every panel, so a strong channel and a weak one look different. Off by default. |
@@ -281,7 +283,7 @@ always zoom together, so a round receptive field stays round.
 
 **Double-click** fits the map to the swept area: centred on **Sweep centre**, wide enough
 to cover `2 × |Sweep start|`. All maps share one geometry, so zooming any of them zooms
-them all, and the new values are in ANALYSIS and saved with the chain like a typed
+them all, and the new values are in MAP AREA... and saved with the chain like a typed
 edit. In the *Traces* view the wheel zooms time, as in Triggered Average.
 
 ## Sessions

@@ -65,7 +65,13 @@ they are not free parameters.
 | **Geometric** | The *n*th root of the product, with the sign restored | Sharper, but easily destroyed by one direction that responded near zero |
 | **Product** | The plain product | Values are in *z*ⁿ, not *z*, and the colour scale says so |
 
-## The map itself — ANALYSIS
+## The map area — canvas, MAP AREA...
+
+Which part of the visual field the maps show. On the canvas rather than in ANALYSIS,
+because they choose what is looked at — the mouse zoom and pan edit the same four
+values. They never touch the trials, but changing one recomputes the maps for the new
+window, and the RF estimate is measured on that map. Border is the one map setting left
+in ANALYSIS, since it changes what is measured rather than what is shown.
 
 | Name | Label | Type | Default | Range | Step | What it does |
 |---|---|---|---|---|---|---|
@@ -73,7 +79,7 @@ they are not free parameters.
 | `deg_per_pixel` | Resolution | float, deg | `0.1` | `0.01` – `2.0` | `0.01` | Degrees of visual angle per map pixel. Together with Map size this fixes the extent: **span = size × resolution**, 20.1° square by default. Finer than the smoothing width buys nothing but pixels. |
 | `map_centre_x` | Map centre X | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *x* of the map's centre pixel, relative to fixation, in the same frame the sweep angles are in (+x right, +y up). Only chooses which part of the visual field is drawn — where the stimulus was is Sweep centre. Usually set to the sweep centre, or to where the receptive field turned out to be. |
 | `map_centre_y` | Map centre Y | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *y* of the map's centre pixel. **Move the map to where the receptive field is rather than enlarging it** — cost is quadratic in size, and free in centre. |
-| `border_fraction` | Border | float | `0.76` | `0.1` – `0.99` | `0.01` | Fraction of the map peak at which the receptive-field border is drawn, and therefore what the reported area, equivalent diameter and bounding box mean. **Not 0.5** — 0.76 is the paper's empirical correction (§3.1.1) for the enlargement smoothing and back-projection introduce. Changing it changes the reported sizes, not the map. |
+| `border_fraction` | Border *(ANALYSIS)* | float | `0.76` | `0.1` – `0.99` | `0.01` | Fraction of the map peak at which the receptive-field border is drawn, and therefore what the reported area, equivalent diameter and bounding box mean. **Not 0.5** — 0.76 is the paper's empirical correction (§3.1.1) for the enlargement smoothing and back-projection introduce. Changing it changes the reported sizes, not the map. |
 
 ## Display units — ANALYSIS
 

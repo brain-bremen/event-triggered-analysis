@@ -64,10 +64,9 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
     addControl (RfParameterNames::combine_mode);
     addSectionBreak();
 
-    addControl (RfParameterNames::map_pixels);
-    addControl (RfParameterNames::deg_per_pixel);
-    addControl (RfParameterNames::map_centre_x);
-    addControl (RfParameterNames::map_centre_y);
+    // Map size, resolution and centre are not here: they choose what is looked
+    // at, and live on the canvas behind MAP AREA, beside the mouse zoom that
+    // edits them. The border stays -- it changes what is measured.
     addControl (RfParameterNames::border_fraction);
 
     applyDisplayUnits();
@@ -147,19 +146,16 @@ void RfAnalysisSettingsWindow::applyDisplayUnits()
     const double scale = m_node->getDisplayUnitsPerDegree();
     const String suffix (Rf::unitSuffix (unit));
 
-    // The seven fields that carry a linear visual-angle quantity, and the unit
-    // each of them is written in. Latency and smoothing are times, the border
-    // fraction is a ratio and the map size is a count of map pixels -- none of
-    // them changes with the ruler.
+    // The fields here that carry a linear visual-angle quantity, and the unit
+    // each of them is written in. Latency and smoothing are times and the border
+    // fraction is a ratio -- none of them changes with the ruler. The map's own
+    // lengths are converted by RfMapAreaPanel, on the canvas.
     if (auto* control = controlFor (RfParameterNames::speed_deg_per_sec))
         control->setDisplayTransform (scale, suffix + "/s");
 
     for (const char* name : { RfParameterNames::sweep_start_deg,
                               RfParameterNames::sweep_centre_x,
-                              RfParameterNames::sweep_centre_y,
-                              RfParameterNames::deg_per_pixel,
-                              RfParameterNames::map_centre_x,
-                              RfParameterNames::map_centre_y })
+                              RfParameterNames::sweep_centre_y })
         if (auto* control = controlFor (name))
             control->setDisplayTransform (scale, suffix);
 

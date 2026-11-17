@@ -67,6 +67,9 @@ private:
 
     std::unique_ptr<UtilityButton> m_polargramButton;
     std::unique_ptr<UtilityButton> m_zeroLinesButton;
+
+    /** Opens RfMapAreaPanel: map size, resolution and centre. */
+    std::unique_ptr<UtilityButton> m_mapAreaButton;
     std::unique_ptr<UtilityButton> m_sharedScaleButton;
     std::unique_ptr<UtilityButton> m_clearButton;
 

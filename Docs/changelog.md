@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **X/Y = 0 lines on the Bar Mapper maps.** A toggle in the canvas options bar draws
   white lines through visual-field x = 0 and y = 0 — fixation, once the sweep centre
   is set — wherever they cross the map.
+- **Map area on the canvas.** Map size, Resolution and Map centre X/Y have moved
+  from ANALYSIS to a **MAP AREA...** popup in the Bar Mapper's canvas, next to the
+  mouse zoom that edits the same values; the fields follow the zoom while open.
+  They are still saved with the chain and still recompute the maps (never the
+  trials). Border stays in ANALYSIS, since it changes what is measured.
 - **Version in every canvas.** The plugin version is shown small in the top-right
   corner of each canvas, so a screenshot says which build drew it.
 - **Mouse-wheel zoom on every plot, in every plugin.** Wheel (or trackpad pinch)

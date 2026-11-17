@@ -112,7 +112,12 @@ they are not free parameters.
 | **Absolute z** | off | on/off | Rectifies the profile, so suppression counts as a response (§2.4.4). Turn it on to map an inhibitory receptive field. The map's sign then becomes meaningless, and the colour scale is relabelled `\|z\|`. |
 | **Combine** | Arithmetic | Arithmetic / Geometric / Product | How the *N* directions are combined at each map pixel. **Arithmetic** is the mean: the paper's default, and the only mode its error figures were measured with. **Geometric** is the *n*th root of the product with the sign restored — sharper, but easily destroyed by one direction that responded near zero. **Product** is the plain product; the values are then in *z*ⁿ, not *z*, and the colour scale says so. |
 
-### The map itself (ANALYSIS, third group)
+### The map area (canvas, MAP AREA...) and Border (ANALYSIS)
+
+Map size, Resolution and Map centre are on the canvas behind **MAP AREA...**, beside the
+mouse zoom and pan that edit them: they choose what is looked at. Changing one recomputes
+the maps for the new window, but never touches the trials. **Border** stays in ANALYSIS,
+since it changes what is measured.
 
 | Parameter | Default | Range | What it does |
 |---|---|---|---|
