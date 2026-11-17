@@ -25,6 +25,9 @@
 #include "AverageCore/DataCollector.h"
 #include "TriggerCore/TriggerSource.h"
 
+#include <algorithm>
+#include <cmath>
+
 using namespace juce;
 
 namespace EventTriggered
@@ -180,6 +183,123 @@ RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
     // trace view has to show the same thing the back-projection consumed.
     m_traceGrid->setPlotType (DisplayMode::AVERAGE_TRAGE);
     m_traceGrid->setConditionOverlay (true);
+
+    m_mapGrid->onZoomRequested = [this] (double x, double y, double factor) { zoomMapAbout (x, y, factor); };
+    m_mapGrid->onPanRequested = [this] (double dx, double dy) { panMap (dx, dy); };
+    m_mapGrid->onResetRequested = [this] { resetMapView(); };
+
+    m_traceGrid->onZoomRequested = [this] (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)
+    { zoomTraces (xMs, y); };
+    m_traceGrid->onZoomReset = [this] { resetTraceZoom(); };
+}
+
+// --- Zoom ------------------------------------------------------------------
+
+namespace
+{
+    // The parameter ranges, restated: setNextValue clamps on its own, but the
+    // zoom has to know where the clamp will land to keep the cursor's point put.
+    constexpr double minDegPerPixel = 0.01;
+    constexpr double maxDegPerPixel = 2.0;
+    constexpr double maxCentreDeg = 90.0;
+
+    double readParameter (BarMapperNode* node, const char* name, double fallback)
+    {
+        if (auto* parameter = node->getParameter (name))
+            return static_cast<double> (static_cast<float> (parameter->getValue()));
+
+        return fallback;
+    }
+
+    void writeParameter (BarMapperNode* node, const char* name, double value)
+    {
+        if (auto* parameter = node->getParameter (name))
+            parameter->setNextValue (static_cast<float> (value));
+    }
+} // namespace
+
+void RfCanvas::zoomMapAbout (double anchorXDeg, double anchorYDeg, double factor)
+{
+    if (m_node == nullptr)
+        return;
+
+    // Read from the parameters, not from the map on screen: wheel events can
+    // arrive faster than maps, and each step has to build on the last request
+    // rather than on a picture two requests old.
+    const double degPerPixel = readParameter (m_node, RfParameterNames::deg_per_pixel, 0.1);
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y, 0.0);
+
+    const double newDegPerPixel = std::clamp (degPerPixel * factor, minDegPerPixel, maxDegPerPixel);
+
+    if (newDegPerPixel == degPerPixel)
+        return;
+
+    // The factor actually applied, after the clamp, so the anchor stays fixed
+    // even on the step that hits the limit.
+    const double applied = newDegPerPixel / degPerPixel;
+
+    writeParameter (m_node, RfParameterNames::deg_per_pixel, newDegPerPixel);
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_x,
+                    std::clamp (anchorXDeg + (centreX - anchorXDeg) * applied, -maxCentreDeg, maxCentreDeg));
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_y,
+                    std::clamp (anchorYDeg + (centreY - anchorYDeg) * applied, -maxCentreDeg, maxCentreDeg));
+}
+
+void RfCanvas::panMap (double dxDeg, double dyDeg)
+{
+    if (m_node == nullptr)
+        return;
+
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y, 0.0);
+
+    writeParameter (m_node, RfParameterNames::map_centre_x, std::clamp (centreX + dxDeg, -maxCentreDeg, maxCentreDeg));
+    writeParameter (m_node, RfParameterNames::map_centre_y, std::clamp (centreY + dyDeg, -maxCentreDeg, maxCentreDeg));
+}
+
+void RfCanvas::resetMapView()
+{
+    if (m_node == nullptr)
+        return;
+
+    // The swept area is a disc of radius |sweep start| about the sweep centre:
+    // every direction starts that far out and passes through the centre. A map
+    // just covering it shows everything the bar could have found.
+    const double sweepStart = std::abs (readParameter (m_node, RfParameterNames::sweep_start_deg, -15.0));
+    int pixels = static_cast<int> (readParameter (m_node, RfParameterNames::map_pixels, 201.0));
+
+    if (pixels % 2 == 0)
+        ++pixels;
+
+    writeParameter (m_node, RfParameterNames::map_centre_x, readParameter (m_node, RfParameterNames::sweep_centre_x, 0.0));
+    writeParameter (m_node, RfParameterNames::map_centre_y, readParameter (m_node, RfParameterNames::sweep_centre_y, 0.0));
+
+    if (sweepStart > 0.0 && pixels > 0)
+        writeParameter (m_node,
+                        RfParameterNames::deg_per_pixel,
+                        std::clamp (2.0 * sweepStart / pixels, minDegPerPixel, maxDegPerPixel));
+}
+
+void RfCanvas::zoomTraces (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)
+{
+    if (xMs)
+    {
+        m_traceGrid->setXLimits (static_cast<float> (xMs->low), static_cast<float> (xMs->high));
+        m_timeAxis->setVisibleRangeMs (static_cast<float> (xMs->low), static_cast<float> (xMs->high));
+    }
+
+    if (y)
+        m_traceGrid->setYLimits (static_cast<float> (y->low), static_cast<float> (y->high));
+}
+
+void RfCanvas::resetTraceZoom()
+{
+    m_traceGrid->resetXLimits();
+    m_traceGrid->resetYLimits();
+    m_timeAxis->resetVisibleRange();
 }
 
 RfCanvas::~RfCanvas()

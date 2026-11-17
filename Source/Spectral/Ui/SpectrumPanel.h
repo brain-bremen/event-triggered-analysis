@@ -24,9 +24,11 @@
 #pragma once
 
 #include "ColorMap.h"
+#include "TriggerCore/Ui/PlotZoomGesture.h"
 
 #include <AllLookAndFeels.h>
 #include <JuceHeader.h>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -106,11 +108,39 @@ public:
     /** True when the panel holds no data and should say so. */
     void setEmptyMessage (const juce::String& message);
 
+    /** The visible part of each axis, as fractions of the full axis.
+     *
+     *  Fractions rather than hertz or seconds because the frequency axis may be
+     *  logarithmic: a fraction of its *drawn* length zooms evenly either way. On
+     *  a heat map x is time and y frequency; on a line plot x is frequency and y
+     *  the value scale. Unit ranges are the full view. */
+    void setView (ZoomRange x, ZoomRange y);
+
+    /** Asked for by the mouse; whoever owns the panels decides whether every
+        panel follows. Not called back by setView(). */
+    std::function<void (ZoomRange x, ZoomRange y)> onViewChanged;
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    void mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+    void mouseMagnify (const juce::MouseEvent& event, float scaleFactor) override;
+    void mouseDown (const juce::MouseEvent& event) override;
+    void mouseDrag (const juce::MouseEvent& event) override;
+    void mouseUp (const juce::MouseEvent& event) override;
+    void mouseDoubleClick (const juce::MouseEvent& event) override;
+
 private:
     juce::Rectangle<int> getPlotBounds() const;
+
+    /** Screen position of an axis fraction, through the current view. */
+    float fractionToScreenX (double fraction, juce::Rectangle<int> plot) const;
+    float fractionToScreenY (double fraction, juce::Rectangle<int> plot) const;
+
+    /** The inverse of frequencyToPosition. */
+    double positionToFrequency (double position) const;
+
+    void requestView (ZoomRange x, ZoomRange y);
 
     void rebuildImage();
     void rebuildPaths();
@@ -150,6 +180,10 @@ private:
     float m_threshold = std::numeric_limits<float>::quiet_NaN();
 
     ColorMap m_colourMap;
+
+    ZoomRange m_viewX = ZoomRange::unit();
+    ZoomRange m_viewY = ZoomRange::unit();
+    PlotZoomGesture m_zoomGesture;
 
     // Caches, rebuilt only when the data or the panel size changes.
     juce::Image m_image;

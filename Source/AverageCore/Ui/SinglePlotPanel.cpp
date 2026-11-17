@@ -22,6 +22,7 @@
 
 */
 #include "SinglePlotPanel.h"
+#include "GridDisplay.h"
 #include "AverageCore/DataCollector.h"
 #include "PerformanceTimer.h"
 #include "TriggerCore/TriggerSource.h"
@@ -68,6 +69,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     addAndMakeVisible (conditionLabel.get());
 
     clear();
+    setUpZoom();
 }
 
 SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
@@ -109,6 +111,7 @@ SinglePlotPanel::SinglePlotPanel (const GridDisplay* display_,
     addAndMakeVisible (conditionLabel.get());
 
     clear();
+    setUpZoom();
 }
 
 void SinglePlotPanel::resized()
@@ -965,6 +968,8 @@ bool SinglePlotPanel::updateCachedAveragPath()
     if (useCustomYLimits || ! plotAllTraces || ! calculateDisplayedTrialRange (dataRange))
         dataRange = calculateDataRange (channelData, numSamples);
 
+    lastDrawnRange = dataRange;
+
     auto timeRange = calculateTimeRange (numSamples);
 
     cachedAveragePath.clear();
@@ -1059,6 +1064,116 @@ void SinglePlotPanel::mouseMove (const MouseEvent& event)
 void SinglePlotPanel::mouseExit (const MouseEvent& event)
 {
     // Hover functionality removed
+}
+
+void SinglePlotPanel::setUpZoom()
+{
+    // The labels sit over the trace; without this a wheel turned over a
+    // channel name would scroll the grid instead of zooming.
+    channelLabel->setInterceptsMouseClicks (false, false);
+    conditionLabel->setInterceptsMouseClicks (false, false);
+
+    zoomGesture.plotArea = [this] { return getLocalBounds(); };
+
+    // Amplitude auto-scales per panel, so a plain wheel zooms time only; Alt
+    // zooms amplitude, which pins every panel to this one's scale.
+    zoomGesture.wheelAxes = PlotZoomGesture::X;
+
+    zoomGesture.onZoom = [this] (double anchorX, double anchorY, double factor, int axes)
+    {
+        if (m_parentGrid == nullptr || ! m_parentGrid->onZoomRequested)
+            return;
+
+        // Never narrower than a few samples: past that there is nothing left
+        // to resolve, only a line segment getting longer.
+        const double minSpanMs = m_sampleRate > 0.0 ? 5000.0 / m_sampleRate : 0.5;
+
+        std::optional<ZoomRange> x;
+        std::optional<ZoomRange> y;
+
+        if (axes & PlotZoomGesture::X)
+            x = PlotZoom::zoom (visibleTimeMs(), anchorX, factor, { -pre_ms, post_ms }, minSpanMs);
+
+        if (axes & PlotZoomGesture::Y)
+            y = PlotZoom::zoom (visibleAmplitude(), anchorY, factor);
+
+        m_parentGrid->onZoomRequested (x, y);
+    };
+
+    zoomGesture.onPan = [this] (double dx, double dy)
+    {
+        if (m_parentGrid == nullptr || ! m_parentGrid->onZoomRequested)
+            return;
+
+        std::optional<ZoomRange> x;
+        std::optional<ZoomRange> y;
+
+        if (dx != 0.0 && useCustomXLimits)
+            x = PlotZoom::pan (visibleTimeMs(), dx, { -pre_ms, post_ms });
+
+        // Only an amplitude that is already pinned pans: dragging an
+        // auto-scaled one would pin it as a side effect of a sideways drag.
+        if (dy != 0.0 && useCustomYLimits)
+            y = PlotZoom::pan (visibleAmplitude(), dy);
+
+        if (x || y)
+            m_parentGrid->onZoomRequested (x, y);
+    };
+
+    zoomGesture.onReset = [this]
+    {
+        if (m_parentGrid != nullptr && m_parentGrid->onZoomReset)
+            m_parentGrid->onZoomReset();
+    };
+}
+
+ZoomRange SinglePlotPanel::visibleTimeMs() const
+{
+    if (useCustomXLimits)
+        return { xMin, xMax };
+
+    return { -pre_ms, post_ms };
+}
+
+ZoomRange SinglePlotPanel::visibleAmplitude() const
+{
+    if (useCustomYLimits)
+        return { yMin, yMax };
+
+    return { lastDrawnRange.minVal, lastDrawnRange.maxVal };
+}
+
+void SinglePlotPanel::mouseWheelMove (const MouseEvent& event, const MouseWheelDetails& wheel)
+{
+    if (! zoomGesture.mouseWheelMove (event, wheel))
+        Component::mouseWheelMove (event, wheel);
+}
+
+void SinglePlotPanel::mouseMagnify (const MouseEvent& event, float scaleFactor)
+{
+    if (! zoomGesture.mouseMagnify (event, scaleFactor))
+        Component::mouseMagnify (event, scaleFactor);
+}
+
+void SinglePlotPanel::mouseDown (const MouseEvent& event) { zoomGesture.mouseDown (event); }
+
+void SinglePlotPanel::mouseDrag (const MouseEvent& event)
+{
+    if (zoomGesture.isDragging())
+        setMouseCursor (MouseCursor::DraggingHandCursor);
+
+    zoomGesture.mouseDrag (event);
+}
+
+void SinglePlotPanel::mouseUp (const MouseEvent& event)
+{
+    zoomGesture.mouseUp (event);
+    setMouseCursor (MouseCursor::NormalCursor);
+}
+
+void SinglePlotPanel::mouseDoubleClick (const MouseEvent& event)
+{
+    zoomGesture.mouseDoubleClick (event);
 }
 
 void SinglePlotPanel::comboBoxChanged (ComboBox* comboBox)

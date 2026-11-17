@@ -134,6 +134,20 @@ public:
 private:
     void layoutViews();
 
+    /** Mouse zoom on a map, made real: the map centre and resolution move, and
+     *  the compute thread draws the new window at the same pixel count. Written
+     *  through the parameters, so the popup, the saved chain and the session
+     *  file all agree with what is on screen. */
+    void zoomMapAbout (double anchorXDeg, double anchorYDeg, double factor);
+    void panMap (double dxDeg, double dyDeg);
+
+    /** Double-click: the whole swept area, centred on the stimulus. */
+    void resetMapView();
+
+    /** Same, for the trace view, which is only ever looked at here. */
+    void zoomTraces (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y);
+    void resetTraceZoom();
+
     BarMapperNode* m_node;
     RfDisplayMode m_mode = RfDisplayMode::Map;
 

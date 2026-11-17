@@ -158,7 +158,82 @@ namespace
 
 // --- RfMapPanel ------------------------------------------------------------
 
-RfMapPanel::RfMapPanel() { setInterceptsMouseClicks (false, false); }
+RfMapPanel::RfMapPanel()
+{
+    m_zoomGesture.plotArea = [this] { return m_mapArea; };
+
+    // One resolution for both axes, or a round receptive field turns oval.
+    m_zoomGesture.lockAspect = true;
+
+    m_zoomGesture.onZoom = [this] (double anchorX, double anchorY, double factor, int)
+    {
+        if (! onZoomRequested || ! m_image.isValid())
+            return;
+
+        const auto [xDeg, yDeg] = fractionToDegrees (anchorX, anchorY);
+        onZoomRequested (xDeg, yDeg, factor);
+    };
+
+    m_zoomGesture.onPan = [this] (double dx, double dy)
+    {
+        if (! onPanRequested || ! m_image.isValid())
+            return;
+
+        const double spanDeg = m_mapping.map.geometry().spanDeg();
+        onPanRequested (dx * spanDeg, dy * spanDeg);
+    };
+
+    m_zoomGesture.onReset = [this]
+    {
+        if (onResetRequested)
+            onResetRequested();
+    };
+}
+
+std::pair<double, double> RfMapPanel::fractionToDegrees (double fx, double fy) const
+{
+    // The inverse of mapToScreen: column 0 starts at the map's left edge, row 0
+    // at its top, and the centre pixel sits at the geometry's centre.
+    const Rf::MapGeometry& geometry = m_mapping.map.geometry();
+    const double col = fx * geometry.pixels;
+    const double row = (1.0 - fy) * geometry.pixels;
+
+    return { geometry.centreXDeg + (col - geometry.centreIndex()) * geometry.degreesPerPixel,
+             geometry.centreYDeg - (row - geometry.centreIndex()) * geometry.degreesPerPixel };
+}
+
+void RfMapPanel::mouseWheelMove (const MouseEvent& event, const MouseWheelDetails& wheel)
+{
+    if (! onZoomRequested || ! m_zoomGesture.mouseWheelMove (event, wheel))
+        Component::mouseWheelMove (event, wheel);
+}
+
+void RfMapPanel::mouseMagnify (const MouseEvent& event, float scaleFactor)
+{
+    if (! onZoomRequested || ! m_zoomGesture.mouseMagnify (event, scaleFactor))
+        Component::mouseMagnify (event, scaleFactor);
+}
+
+void RfMapPanel::mouseDown (const MouseEvent& event) { m_zoomGesture.mouseDown (event); }
+
+void RfMapPanel::mouseDrag (const MouseEvent& event)
+{
+    if (m_zoomGesture.isDragging())
+        setMouseCursor (MouseCursor::DraggingHandCursor);
+
+    m_zoomGesture.mouseDrag (event);
+}
+
+void RfMapPanel::mouseUp (const MouseEvent& event)
+{
+    m_zoomGesture.mouseUp (event);
+    setMouseCursor (MouseCursor::NormalCursor);
+}
+
+void RfMapPanel::mouseDoubleClick (const MouseEvent& event)
+{
+    m_zoomGesture.mouseDoubleClick (event);
+}
 
 void RfMapPanel::setChannelName (const String& name) { m_channelName = name; }
 
@@ -309,6 +384,7 @@ void RfMapPanel::paint (Graphics& g)
     // read off these pictures.
     const int side = std::min (bounds.getWidth(), bounds.getHeight());
     const Rectangle<int> mapArea = Rectangle<int> (side, side).withCentre (bounds.getCentre());
+    m_mapArea = m_image.isValid() ? mapArea : Rectangle<int>();
 
     if (! m_image.isValid())
     {
@@ -589,7 +665,29 @@ void RfMapGrid::setResults (const RfResults& results, const StringArray& channel
         m_panels.clear();
 
         for (std::size_t i = 0; i < results.channels.size(); ++i)
-            addAndMakeVisible (m_panels.add (new RfMapPanel()));
+        {
+            auto* panel = m_panels.add (new RfMapPanel());
+
+            // Forwarded at call time rather than copied, so callbacks set on
+            // the grid after the panels exist still reach them.
+            panel->onZoomRequested = [this] (double x, double y, double factor)
+            {
+                if (onZoomRequested)
+                    onZoomRequested (x, y, factor);
+            };
+            panel->onPanRequested = [this] (double dx, double dy)
+            {
+                if (onPanRequested)
+                    onPanRequested (dx, dy);
+            };
+            panel->onResetRequested = [this]
+            {
+                if (onResetRequested)
+                    onResetRequested();
+            };
+
+            addAndMakeVisible (panel);
+        }
 
         resized();
     }

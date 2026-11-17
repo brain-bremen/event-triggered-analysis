@@ -74,6 +74,23 @@ One panel per selected channel, with each condition in its own colour. The optio
 sets the plot type, grid layout, overlay and axis limits — all display controls, none of
 which discard data. `CLEAR` discards the accumulated trials and keeps the conditions.
 
+### Zoom and pan
+
+Every plot in every plugin zooms with the mouse, the same way:
+
+| Gesture | Effect |
+|---|---|
+| **Wheel** (or trackpad pinch) | Zoom about the cursor — the point under it stays put |
+| **Shift** + wheel | Horizontal axis only |
+| **Alt** + wheel | Vertical axis only |
+| **Ctrl/Cmd** + wheel | Scroll the grid instead of zooming |
+| **Drag** | Pan |
+| **Double-click** | Back to the full view |
+
+Zoom is linked: all the panels in a grid show the same window, so channels stay
+comparable. It is display-only and never discards trials. Each plugin page says what the
+axes are and anything particular to it.
+
 ## 7. Save the result
 
 `SAVE` in the canvas's options bar writes a **session** — a directory holding one XML

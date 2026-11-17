@@ -78,7 +78,124 @@ juce::String formatTick (double value)
 }
 } // namespace
 
-SpectrumPanel::SpectrumPanel() { setOpaque (false); }
+SpectrumPanel::SpectrumPanel()
+{
+    setOpaque (false);
+
+    m_zoomGesture.plotArea = [this] { return getPlotBounds(); };
+
+    // The minimum span stops a wheel held down from zooming into a single
+    // frequency bin's worth of nothing. A hundredth of the axis is still a
+    // couple of bins on any grid this plugin builds.
+    constexpr double minSpan = 0.01;
+
+    m_zoomGesture.onZoom = [this] (double anchorX, double anchorY, double factor, int axes)
+    {
+        ZoomRange x = m_viewX;
+        ZoomRange y = m_viewY;
+
+        if (axes & PlotZoomGesture::X)
+            x = PlotZoom::zoom (x, anchorX, factor, ZoomRange::unit(), minSpan);
+        if (axes & PlotZoomGesture::Y)
+            y = PlotZoom::zoom (y, anchorY, factor, ZoomRange::unit(), minSpan);
+
+        requestView (x, y);
+    };
+
+    m_zoomGesture.onPan = [this] (double dx, double dy)
+    {
+        requestView (PlotZoom::pan (m_viewX, dx, ZoomRange::unit()),
+                     PlotZoom::pan (m_viewY, dy, ZoomRange::unit()));
+    };
+
+    m_zoomGesture.onReset = [this] { requestView (ZoomRange::unit(), ZoomRange::unit()); };
+}
+
+void SpectrumPanel::requestView (ZoomRange x, ZoomRange y)
+{
+    if (x == m_viewX && y == m_viewY)
+        return;
+
+    // Linked panels hear about it through the owner, which sets every panel's
+    // view -- this one included. A panel on its own just takes it.
+    if (onViewChanged)
+        onViewChanged (x, y);
+    else
+        setView (x, y);
+}
+
+void SpectrumPanel::setView (ZoomRange x, ZoomRange y)
+{
+    if (x == m_viewX && y == m_viewY)
+        return;
+
+    m_viewX = x;
+    m_viewY = y;
+
+    // The heat map is drawn from the unzoomed image and needs no rebuild; the
+    // line paths are built in screen coordinates and do.
+    if (m_mode == Mode::Line)
+        m_cacheValid = false;
+
+    repaint();
+}
+
+float SpectrumPanel::fractionToScreenX (double fraction, juce::Rectangle<int> plot) const
+{
+    return static_cast<float> (plot.getX() + m_viewX.fractionOf (fraction) * plot.getWidth());
+}
+
+float SpectrumPanel::fractionToScreenY (double fraction, juce::Rectangle<int> plot) const
+{
+    return static_cast<float> (plot.getBottom() - m_viewY.fractionOf (fraction) * plot.getHeight());
+}
+
+double SpectrumPanel::positionToFrequency (double position) const
+{
+    if (m_frequencies.size() < 2)
+        return 0.0;
+
+    const double low = m_frequencies.front();
+    const double high = m_frequencies.back();
+
+    if (m_logFrequencyAxis && low > 0.0)
+        return std::exp (std::log (low) + position * (std::log (high) - std::log (low)));
+
+    return low + position * (high - low);
+}
+
+void SpectrumPanel::mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+{
+    if (! m_zoomGesture.mouseWheelMove (event, wheel))
+        Component::mouseWheelMove (event, wheel);
+}
+
+void SpectrumPanel::mouseMagnify (const juce::MouseEvent& event, float scaleFactor)
+{
+    if (! m_zoomGesture.mouseMagnify (event, scaleFactor))
+        Component::mouseMagnify (event, scaleFactor);
+}
+
+void SpectrumPanel::mouseDown (const juce::MouseEvent& event) { m_zoomGesture.mouseDown (event); }
+
+void SpectrumPanel::mouseDrag (const juce::MouseEvent& event)
+{
+    if (m_zoomGesture.isDragging())
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+
+    m_zoomGesture.mouseDrag (event);
+}
+
+void SpectrumPanel::mouseUp (const juce::MouseEvent& event)
+{
+    m_zoomGesture.mouseUp (event);
+    setMouseCursor (juce::MouseCursor::NormalCursor);
+}
+
+void SpectrumPanel::mouseDoubleClick (const juce::MouseEvent& event)
+{
+    m_zoomGesture.mouseDoubleClick (event);
+}
 
 void SpectrumPanel::setTitle (const juce::String& title)
 {
@@ -110,6 +227,12 @@ void SpectrumPanel::setMode (Mode mode)
 
     m_mode = mode;
     m_cacheValid = false;
+
+    // The axes mean different things in the other mode -- x is time on a heat
+    // map and frequency on a line plot -- so a zoom carried across would land
+    // somewhere arbitrary.
+    m_viewX = ZoomRange::unit();
+    m_viewY = ZoomRange::unit();
     repaint();
 }
 
@@ -296,11 +419,10 @@ void SpectrumPanel::rebuildPaths()
 
     const auto toPoint = [&] (int index, float value)
     {
-        const float x = plot.getX()
-                        + frequencyToPosition (m_frequencies[static_cast<std::size_t> (index)])
-                              * plot.getWidth();
+        const float x = fractionToScreenX (
+            frequencyToPosition (m_frequencies[static_cast<std::size_t> (index)]), plot);
         const float normalised = (value - m_minValue) * inverseRange;
-        const float y = plot.getBottom() - std::clamp (normalised, 0.0f, 1.0f) * plot.getHeight();
+        const float y = fractionToScreenY (std::clamp (normalised, 0.0f, 1.0f), plot);
         return juce::Point<float> (x, y);
     };
 
@@ -431,29 +553,42 @@ void SpectrumPanel::paint (juce::Graphics& g)
         m_cacheValid = true;
     }
 
+    // Everything drawn in data coordinates is clipped to the plot, so a zoomed
+    // view cannot spill over the axes. The axes themselves are drawn after the
+    // state is restored.
+    g.saveState();
+    g.reduceClipRegion (plot);
+
     if (m_mode == Mode::Heatmap)
     {
         if (m_image.isValid())
         {
-            // Let JUCE scale the image up; the source is one pixel per cell.
+            // The whole image, placed where the view puts it; the clip keeps the
+            // part on screen. Let JUCE scale it up -- the source is one pixel per
+            // cell.
+            const float left = fractionToScreenX (0.0, plot);
+            const float right = fractionToScreenX (1.0, plot);
+            const float top = fractionToScreenY (1.0, plot);
+            const float bottom = fractionToScreenY (0.0, plot);
+
             g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
             g.drawImage (m_image,
-                         plot.toFloat(),
+                         { left, top, right - left, bottom - top },
                          juce::RectanglePlacement::stretchToFit | juce::RectanglePlacement::fillDestination);
         }
-
-        drawTimeAxis (g, plot);
 
         // Trigger marker.
         if (! m_binTimes.empty() && m_binTimes.front() < 0.0 && m_binTimes.back() > 0.0)
         {
             const double span = m_binTimes.back() - m_binTimes.front();
-            const float x =
-                plot.getX() + static_cast<float> (-m_binTimes.front() / span) * plot.getWidth();
+            const float x = fractionToScreenX (-m_binTimes.front() / span, plot);
 
             g.setColour (juce::Colours::white.withAlpha (0.75f));
             g.drawLine (x, static_cast<float> (plot.getY()), x, static_cast<float> (plot.getBottom()), 1.0f);
         }
+
+        g.restoreState();
+        drawTimeAxis (g, plot);
     }
     else
     {
@@ -485,16 +620,18 @@ void SpectrumPanel::paint (juce::Graphics& g)
             g.fillPath (dashed);
         }
 
+        g.restoreState();
         drawValueAxis (g, plot);
 
         // Reference line, e.g. the coherence significance threshold.
         if (std::isfinite (m_threshold) && m_maxValue > m_minValue)
         {
             const float normalised = (m_threshold - m_minValue) / (m_maxValue - m_minValue);
+            const double onScreen = m_viewY.fractionOf (normalised);
 
-            if (normalised >= 0.0f && normalised <= 1.0f)
+            if (normalised >= 0.0f && normalised <= 1.0f && onScreen >= 0.0 && onScreen <= 1.0)
             {
-                const float y = plot.getBottom() - normalised * plot.getHeight();
+                const float y = fractionToScreenY (normalised, plot);
                 const float dashes[] = { 4.0f, 3.0f };
 
                 g.setColour (juce::Colours::orangered.withAlpha (0.85f));
@@ -523,8 +660,14 @@ void SpectrumPanel::drawFrequencyAxis (juce::Graphics& g, juce::Rectangle<int> p
     g.setFont (juce::FontOptions (10.0f));
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.7f));
 
-    const double low = m_frequencies.front();
-    const double high = m_frequencies.back();
+    // Frequency is the vertical axis on a heat map and the horizontal axis on a
+    // line plot, and so zooms with whichever view that is.
+    const bool vertical = (m_mode == Mode::Heatmap);
+    const ZoomRange& view = vertical ? m_viewY : m_viewX;
+
+    // Ticks for the part of the axis on screen, not the whole of it.
+    const double low = positionToFrequency (view.low);
+    const double high = positionToFrequency (view.high);
 
     std::vector<double> ticks;
 
@@ -536,26 +679,27 @@ void SpectrumPanel::drawFrequencyAxis (juce::Graphics& g, juce::Rectangle<int> p
             for (const double multiplier : { 1.0, 2.0, 5.0 })
                 if (const double value = decade * multiplier; value >= low && value <= high)
                     ticks.push_back (value);
+
+        // Zoomed in far enough that no 1-2-5 value is left on screen: an axis
+        // with one label or none says nothing, so fall back to linear ticks.
+        if (ticks.size() < 2)
+            ticks = chooseTicks (low, high, 5);
     }
     else
     {
         ticks = chooseTicks (low, high, 6);
     }
 
-    // Frequency is the vertical axis on a heat map and the horizontal axis on a
-    // line plot.
-    const bool vertical = (m_mode == Mode::Heatmap);
-
     for (const double tick : ticks)
     {
-        const float position = frequencyToPosition (tick);
+        const double onScreen = view.fractionOf (frequencyToPosition (tick));
 
-        if (position < -0.001f || position > 1.001f)
+        if (onScreen < -0.001 || onScreen > 1.001)
             continue;
 
         if (vertical)
         {
-            const float y = plot.getBottom() - position * plot.getHeight();
+            const float y = fractionToScreenY (frequencyToPosition (tick), plot);
             g.drawText (formatTick (tick),
                         0,
                         juce::roundToInt (y) - 7,
@@ -565,7 +709,7 @@ void SpectrumPanel::drawFrequencyAxis (juce::Graphics& g, juce::Rectangle<int> p
         }
         else
         {
-            const float x = plot.getX() + position * plot.getWidth();
+            const float x = fractionToScreenX (frequencyToPosition (tick), plot);
             g.drawText (formatTick (tick),
                         juce::roundToInt (x) - 20,
                         plot.getBottom() + 2,
@@ -601,16 +745,16 @@ void SpectrumPanel::drawTimeAxis (juce::Graphics& g, juce::Rectangle<int> plot) 
     if (m_binTimes.size() < 2)
         return;
 
-    const double low = m_binTimes.front();
-    const double high = m_binTimes.back();
+    const ZoomRange full { m_binTimes.front(), m_binTimes.back() };
+    const double low = full.at (m_viewX.low);
+    const double high = full.at (m_viewX.high);
 
     g.setFont (juce::FontOptions (10.0f));
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.7f));
 
     for (const double tick : chooseTicks (low, high, 6))
     {
-        const float position = static_cast<float> ((tick - low) / (high - low));
-        const float x = plot.getX() + position * plot.getWidth();
+        const float x = fractionToScreenX (full.fractionOf (tick), plot);
 
         g.drawText (juce::String (juce::roundToInt (tick * 1000.0)),
                     juce::roundToInt (x) - 22,
@@ -634,15 +778,16 @@ void SpectrumPanel::drawValueAxis (juce::Graphics& g, juce::Rectangle<int> plot)
     g.setFont (juce::FontOptions (10.0f));
     g.setColour (findColour (ThemeColours::defaultText).withAlpha (0.7f));
 
-    for (const double tick : chooseTicks (m_minValue, m_maxValue, 5))
-    {
-        const float normalised =
-            static_cast<float> ((tick - m_minValue) / (m_maxValue - m_minValue));
+    const ZoomRange full { m_minValue, m_maxValue };
 
-        if (normalised < 0.0f || normalised > 1.0f)
+    for (const double tick : chooseTicks (full.at (m_viewY.low), full.at (m_viewY.high), 5))
+    {
+        const double onScreen = m_viewY.fractionOf (full.fractionOf (tick));
+
+        if (onScreen < -0.001 || onScreen > 1.001)
             continue;
 
-        const float y = plot.getBottom() - normalised * plot.getHeight();
+        const float y = fractionToScreenY (full.fractionOf (tick), plot);
 
         g.drawText (formatTick (tick),
                     0,

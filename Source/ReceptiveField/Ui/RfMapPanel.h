@@ -25,9 +25,11 @@
 #include "../RfComputeJob.h"
 #include "../RfMath/DisplayUnits.h"
 #include "../RfMath/RfPipeline.h"
+#include "TriggerCore/Ui/PlotZoomGesture.h"
 
 #include <VisualizerWindowHeaders.h>
 
+#include <functional>
 #include <utility>
 
 namespace EventTriggered
@@ -74,10 +76,35 @@ public:
      *  than derived here so the panel needs no screen geometry of its own. */
     void setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree);
 
+    /** Zoom requests from the mouse, in visual-field degrees.
+     *
+     *  The panel cannot zoom on its own: a map is computed at one resolution, and
+     *  magnifying its pixels would show nothing the computation did not. So it
+     *  says where the cursor was and by how much, and whoever owns the map
+     *  geometry recomputes at the new one -- same pixel count, same cost. */
+    std::function<void (double anchorXDeg, double anchorYDeg, double factor)> onZoomRequested;
+
+    /** A drag, as the visual-field distance the view should move. */
+    std::function<void (double dxDeg, double dyDeg)> onPanRequested;
+
+    /** A double-click. */
+    std::function<void()> onResetRequested;
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    void mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+    void mouseMagnify (const juce::MouseEvent& event, float scaleFactor) override;
+    void mouseDown (const juce::MouseEvent& event) override;
+    void mouseDrag (const juce::MouseEvent& event) override;
+    void mouseUp (const juce::MouseEvent& event) override;
+    void mouseDoubleClick (const juce::MouseEvent& event) override;
+
 private:
+    /** Visual-field degrees at a fraction of the map area (x from the left, y
+        from the bottom), in the geometry of the map on screen. */
+    std::pair<double, double> fractionToDegrees (double fx, double fy) const;
+
     void rebuildImage();
 
     /** Low and high ends of the colour scale actually in force: the shared range
@@ -104,6 +131,10 @@ private:
     double m_unitsPerDegree = 1.0;
     Rf::ChannelMapping m_mapping;
     juce::Image m_image;
+
+    /** Where paint() last put the map, so the gesture knows what it is over. */
+    juce::Rectangle<int> m_mapArea;
+    PlotZoomGesture m_zoomGesture;
 
     bool m_showPolargram = true;
     bool m_sharedColourRange = false;
@@ -135,6 +166,12 @@ public:
     /** Passed straight down to every panel, and kept so panels built by a later
         setResults() start out in the unit the others are already in. */
     void setDisplayUnit (Rf::DisplayUnit unit, double unitsPerDegree);
+
+    /** Passed to every panel, including ones a later setResults() creates. All
+        maps share one geometry, so a zoom on any of them zooms them all. */
+    std::function<void (double anchorXDeg, double anchorYDeg, double factor)> onZoomRequested;
+    std::function<void (double dxDeg, double dyDeg)> onPanRequested;
+    std::function<void()> onResetRequested;
 
     int getDesiredHeight() const;
     void resized() override;

@@ -28,6 +28,7 @@ set(TRIGGER_CORE_SOURCES
     Ui/TriggerSourceConfigWindow.cpp
     Ui/TriggerMonitorWindow.cpp
     Ui/SessionControls.cpp
+    Ui/PlotZoomGesture.cpp
 )
 
 set(TRIGGER_CORE_HEADERS
@@ -53,6 +54,8 @@ set(TRIGGER_CORE_HEADERS
     Ui/TriggerCountDisplay.h
     Ui/EditorLayout.h
     Ui/NestedCallOut.h
+    Ui/PlotZoom.h
+    Ui/PlotZoomGesture.h
 )
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})

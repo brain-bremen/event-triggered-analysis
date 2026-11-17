@@ -268,6 +268,21 @@ Two views.
 | **CLEAR** | Discards accumulated trials, keeps the conditions. |
 | **SAVE / LOAD** | [Sessions](../sessions/index.md), shared with the other triggered plugins. |
 
+### Zooming a map
+
+The wheel over a map zooms about the cursor, and drag pans — but unlike the other
+plugins this is not a magnifying glass. A map is computed at one resolution, so a
+zoom **recomputes** it: the wheel changes **Resolution** and **Map centre X/Y**, and
+the compute thread draws the new window at the same **Map size**. The cost of a map
+depends only on its pixel count, so a zoomed-in map is as cheap as the full one —
+milliseconds per channel — and shows real detail rather than enlarged pixels. Both axes
+always zoom together, so a round receptive field stays round.
+
+**Double-click** fits the map to the swept area: centred on **Sweep centre**, wide enough
+to cover `2 × |Sweep start|`. All maps share one geometry, so zooming any of them zooms
+them all, and the new values are in ANALYSIS and saved with the chain like a typed
+edit. In the *Traces* view the wheel zooms time, as in Triggered Average.
+
 ## Sessions
 
 SAVE writes the accumulators — the same three arrays Triggered Average writes — plus the

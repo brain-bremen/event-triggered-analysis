@@ -24,6 +24,7 @@
 #pragma once
 
 #include "DisplayMode.h"
+#include "TriggerCore/Ui/PlotZoomGesture.h"
 #include <VisualizerWindowHeaders.h>
 
 namespace EventTriggered
@@ -68,6 +69,12 @@ public:
     void setOverlayIndex (int index);
     void mouseMove (const MouseEvent& event) override;
     void mouseExit (const MouseEvent& event) override;
+    void mouseWheelMove (const MouseEvent& event, const MouseWheelDetails& wheel) override;
+    void mouseMagnify (const MouseEvent& event, float scaleFactor) override;
+    void mouseDown (const MouseEvent& event) override;
+    void mouseDrag (const MouseEvent& event) override;
+    void mouseUp (const MouseEvent& event) override;
+    void mouseDoubleClick (const MouseEvent& event) override;
     void comboBoxChanged (ComboBox* comboBox) override;
     void update();
     void invalidateCache();
@@ -140,6 +147,17 @@ private:
 
     DataRange calculateDataRange (const float* channelData, int numSamples);
 
+    /** Hooks the zoom gesture up to the grid. Shared by both constructors. */
+    void setUpZoom();
+
+    /** The time range on screen, in ms: the custom limits, or the window. */
+    ZoomRange visibleTimeMs() const;
+
+    /** The amplitude range on screen: the custom limits, or whatever the last
+        auto-scale settled on -- so a zoom starts from what the user is looking
+        at, not from the full window's range. */
+    ZoomRange visibleAmplitude() const;
+
     /** Min/max across exactly the trials that are drawn, or false if there are
      *  none. Shared by the average and the trials so that the two are plotted
      *  against the same volts-per-pixel. */
@@ -192,6 +210,11 @@ private:
     const String m_channelName;
     const double m_sampleRate;
     int channelIndexInAverageBuffer;
+
+    PlotZoomGesture zoomGesture;
+
+    /** The amplitude range the average was last drawn against. */
+    DataRange lastDrawnRange { 0.0f, 1.0f, 1.0f };
 
     // Cache for downsampled path
     Path cachedAveragePath;

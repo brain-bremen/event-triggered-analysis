@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mouse-wheel zoom on every plot, in every plugin.** Wheel (or trackpad pinch)
+  zooms about the cursor, Shift and Alt restrict it to the horizontal or vertical
+  axis, drag pans and double-click returns to the full view; Ctrl/Cmd + wheel still
+  scrolls the grid. Zoom is linked across all the panels in a grid. One shared
+  implementation (`TriggerCore/Ui/PlotZoom.h`, `PlotZoomGesture`) drives three kinds
+  of plot:
+    - **Triggered Average** — the wheel zooms time, Alt + wheel amplitude. The mouse
+      sets the AXES limits, so they are saved with the chain; the time axis above the
+      grid now follows custom X limits, which it did not before.
+    - **Triggered Power / Coherence** — spectrogram and spectrum panels zoom in their
+      drawn coordinates, so a log frequency axis zooms evenly and its ticks are
+      chosen for the visible range.
+    - **Receptive Field Bar Mapper** — a map zoom is a recompute, not a magnification:
+      the wheel moves Map centre and Resolution and the map is redrawn at the same
+      pixel count, as cheap as before. Double-click fits the map to the swept area.
+
 ### Fixed
 
 - **Bar Mapper maps an off-centre stimulus in fixation coordinates.** The

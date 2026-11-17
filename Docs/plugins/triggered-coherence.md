@@ -106,6 +106,9 @@ Defaults and ranges: [Parameter reference → Spectral](../reference/spectral.md
 All display-time: they are applied when the display reads the accumulators and discard
 nothing.
 
+**Zoom** with the mouse wheel over any panel, about the cursor, every panel together;
+double-click for the full view. See [Zoom and pan](../getting-started.md#zoom-and-pan).
+
 ### The two smoothing controls
 
 Wavelets give one estimate per trial, so with few trials the coherence estimate is badly

@@ -48,6 +48,7 @@ set(TRIGGER_CORE_TEST_SOURCES
     TriggerCore/test_SessionBundle.cpp
     TriggerCore/test_CaptureSession.cpp
     TriggerCore/test_SessionIoThread.cpp
+    TriggerCore/test_PlotZoom.cpp
 )
 
 # The frequency-domain half.
