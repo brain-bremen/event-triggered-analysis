@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can be typed in before switching.
 - **X/Y = 0 lines on the Bar Mapper maps.** A toggle in the canvas options bar draws
   white lines through visual-field x = 0 and y = 0 — fixation, once the sweep centre
-  is set — wherever they cross the map.
+  is set — wherever they cross the map. On by default.
 - **Map area on the canvas.** Map size, Resolution and Map centre X/Y have moved
   from ANALYSIS to a **MAP AREA...** popup in the Bar Mapper's canvas, next to the
   mouse zoom that edits the same values; the fields follow the zoom while open.

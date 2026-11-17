@@ -266,7 +266,7 @@ Two views.
 | **Columns**, **Size** | Grid layout. Cells are square and sized from *Size*. |
 | **MAP AREA...** | Map size, Resolution and Map centre X/Y — the part of the visual field the maps show. Follows the mouse zoom while open; changing a value recomputes the maps, never the trials. |
 | **POLAR** | Show the polargram inset. |
-| **X/Y = 0** | White lines through visual-field x = 0 and y = 0 — fixation, once Sweep centre is set. Off by default. |
+| **X/Y = 0** | White lines through visual-field x = 0 and y = 0 — fixation, once Sweep centre is set. On by default. |
 | **SAME SCALE** | One colour range across every panel, so a strong channel and a weak one look different. Off by default. |
 | **CLEAR** | Discards accumulated trials, keeps the conditions. |
 | **SAVE / LOAD** | [Sessions](../sessions/index.md), shared with the other triggered plugins. |

@@ -142,7 +142,7 @@ private:
     PlotZoomGesture m_zoomGesture;
 
     bool m_showPolargram = true;
-    bool m_showZeroLines = false;
+    bool m_showZeroLines = true;
     bool m_sharedColourRange = false;
     float m_sharedLow = 0.0f;
     float m_sharedHigh = 1.0f;
@@ -198,7 +198,7 @@ private:
     int m_panelHeight = 220;
     bool m_sharedColourRange = false;
     bool m_showPolargram = true;
-    bool m_showZeroLines = false;
+    bool m_showZeroLines = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfMapGrid)
 };

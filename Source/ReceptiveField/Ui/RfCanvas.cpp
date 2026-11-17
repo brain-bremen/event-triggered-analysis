@@ -94,6 +94,7 @@ RfOptionsBar::RfOptionsBar (RfCanvas* canvas) : m_canvas (canvas)
 
     m_zeroLinesButton = std::make_unique<UtilityButton> ("X/Y = 0");
     m_zeroLinesButton->setClickingTogglesState (true);
+    m_zeroLinesButton->setToggleState (true, dontSendNotification);
     m_zeroLinesButton->setTooltip ("White lines through x = 0 and y = 0 of the visual field");
     m_zeroLinesButton->addListener (this);
     addAndMakeVisible (m_zeroLinesButton.get());
