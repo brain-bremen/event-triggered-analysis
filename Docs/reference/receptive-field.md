@@ -86,8 +86,8 @@ because the rig does not change between sessions.
 | Name | Label | Type | Default | Range | Step | What it does |
 |---|---|---|---|---|---|---|
 | `display_unit` | Show units in | categorical | `Degrees` | `Degrees`, `Millimetres`, `Screen pixels` | — | The unit for Speed, Sweep start, Sweep centre X/Y, Resolution, Map centre X/Y, the map axes and the `RF` readout. Everything else — latency, smoothing, border, map size — is a time, a ratio or a count of map pixels, and does not change. |
-| `viewing_distance_mm` | Viewing distance | float, mm | `570` | `10` – `5000` | `1` | Eye to screen. Greyed out while the unit is Degrees. |
-| `screen_px_per_mm` | Screen resolution | float, px/mm | `3.6` | `0.1` – `100` | `0.1` | Screen pixels per millimetre — 3.6 px/mm is about 91 ppi. Greyed out unless the unit is Screen pixels. |
+| `viewing_distance_mm` | Viewing distance | float, mm | `570` | `10` – `5000` | `1` | Eye to screen. Editable whatever the unit, so the rig can be typed in before switching. |
+| `screen_px_per_mm` | Screen resolution | float, px/mm | `3.6` | `0.1` – `100` | `0.1` | Screen pixels per millimetre — 3.6 px/mm is about 91 ppi. Used only by Screen pixels, but editable whatever the unit. |
 
 The conversion is the **small-angle factor**:
 

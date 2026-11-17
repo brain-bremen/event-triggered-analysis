@@ -75,8 +75,8 @@ unit cannot change a map" structural rather than a matter of remembering.
 | Parameter | Default | Range | What it does |
 |---|---|---|---|
 | **Show units in** | Degrees | Degrees / Millimetres / Screen pixels | The unit for Speed, Sweep start, Sweep centre X/Y, Resolution, Map centre X/Y, the map axes and the `RF` readout. Latency, smoothing, border and map size are times, ratios and counts of map pixels, and do not change. |
-| **Viewing distance** | 570 mm | 10–5000 | Eye to screen. `mm/deg = distance × π/180` — 9.95 mm/deg at the default. Greyed out while the unit is Degrees. |
-| **Screen resolution** | 3.6 px/mm | 0.1–100 | Screen pixels per millimetre; 3.6 px/mm is about 91 ppi. `px/deg = mm/deg × px/mm`. Greyed out unless the unit is Screen pixels. |
+| **Viewing distance** | 570 mm | 10–5000 | Eye to screen. `mm/deg = distance × π/180` — 9.95 mm/deg at the default. Editable whatever the unit. |
+| **Screen resolution** | 3.6 px/mm | 0.1–100 | Screen pixels per millimetre; 3.6 px/mm is about 91 ppi. `px/deg = mm/deg × px/mm`. Used only by Screen pixels, but editable whatever the unit. |
 
 The conversion is the **small-angle factor**, one scale for positions and extents alike,
 so a map pixel is the same size in millimetres wherever it sits. The exact conversion for

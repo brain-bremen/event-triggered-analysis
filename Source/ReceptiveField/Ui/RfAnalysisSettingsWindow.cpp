@@ -163,18 +163,16 @@ void RfAnalysisSettingsWindow::applyDisplayUnits()
         if (auto* control = controlFor (name))
             control->setDisplayTransform (scale, suffix);
 
-    // Greyed rather than hidden when the unit is degrees: the rig is still worth
-    // documenting, and a row that vanishes takes with it the explanation of what
-    // the other two units would mean.
-    const bool geometryApplies = unit != Rf::DisplayUnit::Degrees;
-
+    // The screen geometry stays editable whatever the unit. It describes the
+    // rig, not the view: it is typed in once, usually before anyone switches
+    // unit, and is display-only, so editing it while it is not in use can change
+    // nothing. Locking each row until its unit was selected made setting up the
+    // rig a matter of switching units back and forth to reach the fields.
     if (auto* control = controlFor (RfParameterNames::viewing_distance_mm))
-        control->setActive (geometryApplies);
+        control->setActive (true);
 
-    // Millimetres need only the distance; the pixel pitch is what turns them
-    // into screen pixels.
     if (auto* control = controlFor (RfParameterNames::screen_px_per_mm))
-        control->setActive (unit == Rf::DisplayUnit::ScreenPixels);
+        control->setActive (true);
 }
 
 void RfAnalysisSettingsWindow::addSectionBreak()
