@@ -227,9 +227,10 @@ namespace
 {
     // The parameter ranges, restated: setNextValue clamps on its own, but the
     // zoom has to know where the clamp will land to keep the cursor's point put.
-    constexpr double minDegPerPixel = 0.01;
-    constexpr double maxDegPerPixel = 2.0;
-    constexpr double maxCentreDeg = 90.0;
+    // In screen millimetres, the unit the map area is stored in.
+    constexpr double minMmPerPixel = 0.05;
+    constexpr double maxMmPerPixel = 20.0;
+    constexpr double maxCentreMm = 1000.0;
 
     double readParameter (BarMapperNode* node, const char* name, double fallback)
     {
@@ -251,29 +252,35 @@ void RfCanvas::zoomMapAbout (double anchorXDeg, double anchorYDeg, double factor
     if (m_node == nullptr)
         return;
 
+    // The panel reports the cursor in the degrees the map is drawn in; the map
+    // area is stored in screen millimetres.
+    const double mmPerDeg = m_node->getMillimetresPerDegree();
+    const double anchorX = anchorXDeg * mmPerDeg;
+    const double anchorY = anchorYDeg * mmPerDeg;
+
     // Read from the parameters, not from the map on screen: wheel events can
     // arrive faster than maps, and each step has to build on the last request
     // rather than on a picture two requests old.
-    const double degPerPixel = readParameter (m_node, RfParameterNames::deg_per_pixel, 0.1);
-    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x, 0.0);
-    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y, 0.0);
+    const double mmPerPixel = readParameter (m_node, RfParameterNames::mm_per_pixel, 1.0);
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x_mm, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y_mm, 0.0);
 
-    const double newDegPerPixel = std::clamp (degPerPixel * factor, minDegPerPixel, maxDegPerPixel);
+    const double newMmPerPixel = std::clamp (mmPerPixel * factor, minMmPerPixel, maxMmPerPixel);
 
-    if (newDegPerPixel == degPerPixel)
+    if (newMmPerPixel == mmPerPixel)
         return;
 
     // The factor actually applied, after the clamp, so the anchor stays fixed
     // even on the step that hits the limit.
-    const double applied = newDegPerPixel / degPerPixel;
+    const double applied = newMmPerPixel / mmPerPixel;
 
-    writeParameter (m_node, RfParameterNames::deg_per_pixel, newDegPerPixel);
+    writeParameter (m_node, RfParameterNames::mm_per_pixel, newMmPerPixel);
     writeParameter (m_node,
-                    RfParameterNames::map_centre_x,
-                    std::clamp (anchorXDeg + (centreX - anchorXDeg) * applied, -maxCentreDeg, maxCentreDeg));
+                    RfParameterNames::map_centre_x_mm,
+                    std::clamp (anchorX + (centreX - anchorX) * applied, -maxCentreMm, maxCentreMm));
     writeParameter (m_node,
-                    RfParameterNames::map_centre_y,
-                    std::clamp (anchorYDeg + (centreY - anchorYDeg) * applied, -maxCentreDeg, maxCentreDeg));
+                    RfParameterNames::map_centre_y_mm,
+                    std::clamp (anchorY + (centreY - anchorY) * applied, -maxCentreMm, maxCentreMm));
 }
 
 void RfCanvas::panMap (double dxDeg, double dyDeg)
@@ -281,11 +288,16 @@ void RfCanvas::panMap (double dxDeg, double dyDeg)
     if (m_node == nullptr)
         return;
 
-    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x, 0.0);
-    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y, 0.0);
+    const double mmPerDeg = m_node->getMillimetresPerDegree();
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x_mm, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y_mm, 0.0);
 
-    writeParameter (m_node, RfParameterNames::map_centre_x, std::clamp (centreX + dxDeg, -maxCentreDeg, maxCentreDeg));
-    writeParameter (m_node, RfParameterNames::map_centre_y, std::clamp (centreY + dyDeg, -maxCentreDeg, maxCentreDeg));
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_x_mm,
+                    std::clamp (centreX + dxDeg * mmPerDeg, -maxCentreMm, maxCentreMm));
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_y_mm,
+                    std::clamp (centreY + dyDeg * mmPerDeg, -maxCentreMm, maxCentreMm));
 }
 
 void RfCanvas::resetMapView()
@@ -295,20 +307,21 @@ void RfCanvas::resetMapView()
 
     // The swept area is a disc of radius |sweep start| about the sweep centre:
     // every direction starts that far out and passes through the centre. A map
-    // just covering it shows everything the bar could have found.
-    const double sweepStart = std::abs (readParameter (m_node, RfParameterNames::sweep_start_deg, -15.0));
+    // just covering it shows everything the bar could have found. All in screen
+    // millimetres, so no conversion is needed.
+    const double sweepStart = std::abs (readParameter (m_node, RfParameterNames::sweep_start_mm, -150.0));
     int pixels = static_cast<int> (readParameter (m_node, RfParameterNames::map_pixels, 201.0));
 
     if (pixels % 2 == 0)
         ++pixels;
 
-    writeParameter (m_node, RfParameterNames::map_centre_x, readParameter (m_node, RfParameterNames::sweep_centre_x, 0.0));
-    writeParameter (m_node, RfParameterNames::map_centre_y, readParameter (m_node, RfParameterNames::sweep_centre_y, 0.0));
+    writeParameter (m_node, RfParameterNames::map_centre_x_mm, readParameter (m_node, RfParameterNames::sweep_centre_x_mm, 0.0));
+    writeParameter (m_node, RfParameterNames::map_centre_y_mm, readParameter (m_node, RfParameterNames::sweep_centre_y_mm, 0.0));
 
     if (sweepStart > 0.0 && pixels > 0)
         writeParameter (m_node,
-                        RfParameterNames::deg_per_pixel,
-                        std::clamp (2.0 * sweepStart / pixels, minDegPerPixel, maxDegPerPixel));
+                        RfParameterNames::mm_per_pixel,
+                        std::clamp (2.0 * sweepStart / pixels, minMmPerPixel, maxMmPerPixel));
 }
 
 void RfCanvas::zoomTraces (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)

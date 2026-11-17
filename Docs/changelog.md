@@ -20,14 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the top of ANALYSIS now switches all of them at once, given a **Viewing
   distance** and, for screen pixels, a **Screen resolution** (px/mm); both are
   saved with the signal chain, so the rig is typed in once rather than converted
-  by hand at the bench. Degrees remain the unit everything is computed, stored and
-  exported in — the conversion happens in the parameter fields and the panel
-  readouts, and the three display parameters are the only ones in this plugin that
-  do *not* ask for a recompute, so switching unit is incapable of moving a
-  receptive field or changing a map pixel. What is typed is converted back to
-  degrees and clamped against the parameter's own range, so the range does not
-  change with the unit either: `2000 mm/s` comes back as `1990 mm/s`, which is the
-  200 deg/s the parameter has always allowed. The factor is the small-angle one,
+  by hand at the bench. Lengths are stored in screen millimetres and computed in
+  degrees; the display unit and the screen resolution only change how they are
+  written, so switching unit is incapable of moving a receptive field or changing
+  a map pixel. What is typed is converted back and clamped against the
+  parameter's own range. The factor is the small-angle one,
   `mm/deg = distance × π/180` (9.95 mm/deg at 570 mm), which under-reports
   *position* by about 4% at 20° eccentricity — one factor for positions and
   extents alike keeps a map pixel the same size in millimetres wherever it sits.
@@ -61,6 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Receptive Field Bar Mapper** — a map zoom is a recompute, not a magnification:
       the wheel moves Map centre and Resolution and the map is redrawn at the same
       pixel count, as cheap as before. Double-click fits the map to the swept area.
+
+### Changed
+
+- **Bar Mapper lengths are stored in screen millimetres.** Speed, Sweep start,
+  Sweep centre, Resolution and Map centre are now kept in mm, the way the stimulus
+  program defines them (`speed_mm_per_sec`, `sweep_start_mm`, `sweep_centre_x_mm`,
+  `sweep_centre_y_mm`, `mm_per_pixel`, `map_centre_x_mm`, `map_centre_y_mm`), and
+  converted to degrees for the analysis with the **Viewing distance**. Changing the
+  distance therefore recomputes the maps — it used to only relabel numbers, so a
+  stimulus typed in mm silently changed when the distance did. Defaults are the old
+  ones in mm at 570 mm (100 mm/s, −150 mm, 1 mm per pixel). Signal chains saved
+  with the old degree-valued parameters are converted once on load, using the
+  viewing distance saved with them. Session files still store maps and estimates in
+  degrees, and now also record the sweep centre in mm.
 
 ### Fixed
 

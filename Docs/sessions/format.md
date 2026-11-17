@@ -68,7 +68,8 @@ and shape survive even if `session.xml` does not.
 | `post_samples` | int | Samples from the trigger onwards. Total samples is `pre_samples + post_samples` |
 
 The Bar Mapper adds `map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
-`map_centre_y_deg`, `sweep_centre_x_deg`, `sweep_centre_y_deg` and
+`map_centre_y_deg`, `sweep_centre_x_deg`, `sweep_centre_y_deg`, `sweep_centre_x_mm`,
+`sweep_centre_y_mm` and
 `map_estimate_fields`.
 
 ### `<CHANNELS>`

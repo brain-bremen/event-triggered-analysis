@@ -52,10 +52,10 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
 
     // Stimulus geometry first: these describe the experiment, and everything
     // below describes how it is read.
-    addControl (RfParameterNames::speed_deg_per_sec);
-    addControl (RfParameterNames::sweep_start_deg);
-    addControl (RfParameterNames::sweep_centre_x);
-    addControl (RfParameterNames::sweep_centre_y);
+    addControl (RfParameterNames::speed_mm_per_sec);
+    addControl (RfParameterNames::sweep_start_mm);
+    addControl (RfParameterNames::sweep_centre_x_mm);
+    addControl (RfParameterNames::sweep_centre_y_mm);
     addControl (RfParameterNames::latency_ms);
     addSectionBreak();
 
@@ -116,7 +116,10 @@ ParameterControl* RfAnalysisSettingsWindow::addControl (const char* parameterNam
     // since they are all shown in the unit it selects. The node is told
     // separately, by parameterValueChanged, and repaints the canvas; this hook is
     // only about the popup being self-consistent the moment the value lands.
-    if (BarMapperNode::isDisplayParameter (parameterName))
+    // The viewing distance belongs here too: it changes what a stored
+    // millimetre is in degrees, so every field shown in degrees must be redrawn.
+    if (BarMapperNode::isDisplayParameter (parameterName)
+        || juce::String (parameterName) == RfParameterNames::viewing_distance_mm)
         control->onChange = [this] { applyDisplayUnits(); };
 
     addAndMakeVisible (control.get());
@@ -143,27 +146,26 @@ void RfAnalysisSettingsWindow::applyDisplayUnits()
         return;
 
     const Rf::DisplayUnit unit = m_node->getDisplayUnit();
-    const double scale = m_node->getDisplayUnitsPerDegree();
+    const double scale = m_node->getDisplayUnitsPerMillimetre();
     const String suffix (Rf::unitSuffix (unit));
 
-    // The fields here that carry a linear visual-angle quantity, and the unit
-    // each of them is written in. Latency and smoothing are times and the border
+    // The fields here that carry a length, stored in screen millimetres, and the
+    // unit each is written in. Latency and smoothing are times and the border
     // fraction is a ratio -- none of them changes with the ruler. The map's own
     // lengths are converted by RfMapAreaPanel, on the canvas.
-    if (auto* control = controlFor (RfParameterNames::speed_deg_per_sec))
+    if (auto* control = controlFor (RfParameterNames::speed_mm_per_sec))
         control->setDisplayTransform (scale, suffix + "/s");
 
-    for (const char* name : { RfParameterNames::sweep_start_deg,
-                              RfParameterNames::sweep_centre_x,
-                              RfParameterNames::sweep_centre_y })
+    for (const char* name : { RfParameterNames::sweep_start_mm,
+                              RfParameterNames::sweep_centre_x_mm,
+                              RfParameterNames::sweep_centre_y_mm })
         if (auto* control = controlFor (name))
             control->setDisplayTransform (scale, suffix);
 
-    // The screen geometry stays editable whatever the unit. It describes the
-    // rig, not the view: it is typed in once, usually before anyone switches
-    // unit, and is display-only, so editing it while it is not in use can change
-    // nothing. Locking each row until its unit was selected made setting up the
-    // rig a matter of switching units back and forth to reach the fields.
+    // The screen geometry stays editable whatever the unit: it describes the
+    // rig, which is typed in once, usually before anyone switches unit. Locking
+    // each row until its unit was selected made setting up the rig a matter of
+    // switching units back and forth to reach the fields.
     if (auto* control = controlFor (RfParameterNames::viewing_distance_mm))
         control->setActive (true);
 

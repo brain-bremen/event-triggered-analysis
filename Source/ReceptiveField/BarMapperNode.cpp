@@ -120,34 +120,34 @@ void BarMapperNode::registerAdditionalParameters()
                              0);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::speed_deg_per_sec,
+                       RfParameterNames::speed_mm_per_sec,
                        "Speed",
-                       "Bar speed along the axis of motion",
-                       "deg/s",
-                       10.0f, 0.1f, 200.0f, 0.1f);
+                       "Bar speed along the axis of motion, on the screen",
+                       "mm/s",
+                       100.0f, 1.0f, 2000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::sweep_start_deg,
+                       RfParameterNames::sweep_start_mm,
                        "Sweep start",
-                       "Bar position along its axis at the trigger",
-                       "deg",
-                       -15.0f, -180.0f, 180.0f, 0.1f);
+                       "Bar position along its axis at the trigger, from the sweep centre",
+                       "mm",
+                       -150.0f, -2000.0f, 2000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::sweep_centre_x,
+                       RfParameterNames::sweep_centre_x_mm,
                        "Sweep centre X",
-                       "Visual-field x the bar sweeps through (the bar stimulus's "
-                       "position in the stimulus program), relative to fixation",
-                       "deg",
-                       0.0f, -90.0f, 90.0f, 0.1f);
+                       "Screen x the bar sweeps through (the bar stimulus's position "
+                       "in the stimulus program), relative to fixation",
+                       "mm",
+                       0.0f, -1000.0f, 1000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::sweep_centre_y,
+                       RfParameterNames::sweep_centre_y_mm,
                        "Sweep centre Y",
-                       "Visual-field y the bar sweeps through (the bar stimulus's "
-                       "position in the stimulus program), relative to fixation",
-                       "deg",
-                       0.0f, -90.0f, 90.0f, 0.1f);
+                       "Screen y the bar sweeps through (the bar stimulus's position "
+                       "in the stimulus program), relative to fixation",
+                       "mm",
+                       0.0f, -1000.0f, 1000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::latency_ms,
@@ -163,25 +163,25 @@ void BarMapperNode::registerAdditionalParameters()
                      201, 21, 601);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::deg_per_pixel,
+                       RfParameterNames::mm_per_pixel,
                        "Resolution",
-                       "Degrees of visual angle per map pixel",
-                       "deg",
-                       0.1f, 0.01f, 2.0f, 0.01f);
+                       "Screen millimetres per map pixel",
+                       "mm",
+                       1.0f, 0.05f, 20.0f, 0.01f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::map_centre_x,
-                       "Map centre X", "Visual-field x of the map centre, relative to fixation. "
+                       RfParameterNames::map_centre_x_mm,
+                       "Map centre X", "Screen x of the map centre, relative to fixation. "
                        "Only moves the window; where the stimulus was is Sweep centre",
-                       "deg",
-                       0.0f, -90.0f, 90.0f, 0.1f);
+                       "mm",
+                       0.0f, -1000.0f, 1000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
-                       RfParameterNames::map_centre_y,
-                       "Map centre Y", "Visual-field y of the map centre, relative to fixation. "
+                       RfParameterNames::map_centre_y_mm,
+                       "Map centre Y", "Screen y of the map centre, relative to fixation. "
                        "Only moves the window; where the stimulus was is Sweep centre",
-                       "deg",
-                       0.0f, -90.0f, 90.0f, 0.1f);
+                       "mm",
+                       0.0f, -1000.0f, 1000.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::smoothing_sigma_ms,
@@ -219,8 +219,8 @@ void BarMapperNode::registerAdditionalParameters()
     addCategoricalParameter (P::PROCESSOR_SCOPE,
                              RfParameterNames::display_unit,
                              "Show units in",
-                             "Unit for positions, extents and speeds. Display only: "
-                             "degrees remain the unit everything is computed in",
+                             "Unit positions, extents and speeds are shown in. Display "
+                             "only: lengths are stored in mm and computed in degrees",
                              { Rf::unitName (Rf::DisplayUnit::Degrees),
                                Rf::unitName (Rf::DisplayUnit::Millimetres),
                                Rf::unitName (Rf::DisplayUnit::ScreenPixels) },
@@ -229,7 +229,8 @@ void BarMapperNode::registerAdditionalParameters()
     addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::viewing_distance_mm,
                        "Viewing distance",
-                       "Eye to screen. Sets how many millimetres a degree is worth",
+                       "Eye to screen. Sets how many millimetres a degree is worth, "
+                       "and so how every length in mm is read: changing it recomputes the maps",
                        "mm",
                        570.0f, 10.0f, 5000.0f, 1.0f);
 
@@ -258,7 +259,13 @@ void BarMapperNode::parameterValueChanged (Parameter* parameter)
     if (parameter == nullptr)
         return;
 
-    // The guard the display units stand on. These three change how a number is
+    // The viewing distance is both: it rewrites every number shown in degrees,
+    // and it is how the stored millimetres become degrees -- so it redraws the
+    // display *and* recomputes the maps.
+    if (parameter->getName() == RfParameterNames::viewing_distance_mm)
+        m_displayPublisher.triggerAsyncUpdate();
+
+    // The guard the display units stand on. These two change how a number is
     // written down, never what it is, so they must not reach the pipeline: a
     // recompute here would make "switch to millimetres" a thing that can move a
     // receptive field, which is the one outcome this feature must not have.
@@ -307,6 +314,16 @@ double BarMapperNode::getDisplayUnitsPerDegree() const
     return Rf::unitsPerDegree (getDisplayUnit(), getScreenGeometry());
 }
 
+double BarMapperNode::getMillimetresPerDegree() const
+{
+    return Rf::millimetresPerDegreeOrDefault (getScreenGeometry());
+}
+
+double BarMapperNode::getDisplayUnitsPerMillimetre() const
+{
+    return Rf::unitsPerMillimetre (getDisplayUnit(), getScreenGeometry());
+}
+
 // --- Settings --------------------------------------------------------------
 
 Rf::AngleConvention BarMapperNode::getAngleConvention() const
@@ -349,9 +366,13 @@ Rf::MappingSettings BarMapperNode::getMappingSettings() const
     if (settings.map.pixels % 2 == 0)
         ++settings.map.pixels;
 
-    settings.map.degreesPerPixel = getDoubleParameter (RfParameterNames::deg_per_pixel, 0.1);
-    settings.map.centreXDeg = getDoubleParameter (RfParameterNames::map_centre_x, 0.0);
-    settings.map.centreYDeg = getDoubleParameter (RfParameterNames::map_centre_y, 0.0);
+    // Stored in screen millimetres; the pipeline works in degrees. This division
+    // is the whole of what the viewing distance does to a map.
+    const double mmPerDeg = getMillimetresPerDegree();
+
+    settings.map.degreesPerPixel = getDoubleParameter (RfParameterNames::mm_per_pixel, 1.0) / mmPerDeg;
+    settings.map.centreXDeg = getDoubleParameter (RfParameterNames::map_centre_x_mm, 0.0) / mmPerDeg;
+    settings.map.centreYDeg = getDoubleParameter (RfParameterNames::map_centre_y_mm, 0.0) / mmPerDeg;
 
     settings.profile.zScore.source = Rf::BaselineSource::PreTrigger;
     settings.profile.zScore.preTriggerSamples = settings.preSamples;
@@ -396,10 +417,13 @@ std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
     Rf::SweepGeometry sweep;
     sweep.angleDeg = *angle;
     sweep.convention = getAngleConvention();
-    sweep.speedDegPerSec = getDoubleParameter (RfParameterNames::speed_deg_per_sec, 10.0);
-    sweep.sweepStartDeg = getDoubleParameter (RfParameterNames::sweep_start_deg, -15.0);
-    sweep.centreXDeg = getDoubleParameter (RfParameterNames::sweep_centre_x, 0.0);
-    sweep.centreYDeg = getDoubleParameter (RfParameterNames::sweep_centre_y, 0.0);
+    // Millimetres on the screen in, degrees out -- see getMappingSettings().
+    const double mmPerDeg = getMillimetresPerDegree();
+
+    sweep.speedDegPerSec = getDoubleParameter (RfParameterNames::speed_mm_per_sec, 100.0) / mmPerDeg;
+    sweep.sweepStartDeg = getDoubleParameter (RfParameterNames::sweep_start_mm, -150.0) / mmPerDeg;
+    sweep.centreXDeg = getDoubleParameter (RfParameterNames::sweep_centre_x_mm, 0.0) / mmPerDeg;
+    sweep.centreYDeg = getDoubleParameter (RfParameterNames::sweep_centre_y_mm, 0.0) / mmPerDeg;
     sweep.latencyMs = getDoubleParameter (RfParameterNames::latency_ms, 60.0);
 
     return sweep;
@@ -826,10 +850,13 @@ bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
     metadata.setAttribute ("map_degrees_per_pixel", geometry.degreesPerPixel);
     metadata.setAttribute ("map_centre_x_deg", geometry.centreXDeg);
     metadata.setAttribute ("map_centre_y_deg", geometry.centreYDeg);
-    metadata.setAttribute ("sweep_centre_x_deg",
-                           getDoubleParameter (RfParameterNames::sweep_centre_x, 0.0));
-    metadata.setAttribute ("sweep_centre_y_deg",
-                           getDoubleParameter (RfParameterNames::sweep_centre_y, 0.0));
+    const double sweepCentreXMm = getDoubleParameter (RfParameterNames::sweep_centre_x_mm, 0.0);
+    const double sweepCentreYMm = getDoubleParameter (RfParameterNames::sweep_centre_y_mm, 0.0);
+
+    metadata.setAttribute ("sweep_centre_x_deg", sweepCentreXMm / getMillimetresPerDegree());
+    metadata.setAttribute ("sweep_centre_y_deg", sweepCentreYMm / getMillimetresPerDegree());
+    metadata.setAttribute ("sweep_centre_x_mm", sweepCentreXMm);
+    metadata.setAttribute ("sweep_centre_y_mm", sweepCentreYMm);
 
     // The rig, so an offline analysis can convert the degrees above into screen
     // millimetres without having to be told the distance separately. Written
@@ -1002,9 +1029,51 @@ void BarMapperNode::applyDirectionGeneratorFromXml (const juce::XmlElement* xml)
         generatorXml->getDoubleAttribute ("firstAngleDeg", defaults.firstAngleDeg);
 }
 
+void BarMapperNode::migrateDegreeParameters()
+{
+    // Before 0.5.0 the lengths were stored in degrees, under other names. The
+    // GUI skips attributes it has no parameter for, so an older chain would
+    // otherwise come back with every length at its default. Converted with the
+    // viewing distance the chain itself saved, which the GUI has already
+    // restored by the time custom parameters are loaded -- so the conversion
+    // uses the rig the degrees were typed against.
+    if (parametersAsXml == nullptr)
+        return;
+
+    auto* saved = parametersAsXml->getChildByName ("PROCESSOR_PARAMETERS");
+
+    if (saved == nullptr)
+        return;
+
+    const double mmPerDeg = getMillimetresPerDegree();
+    namespace Legacy = RfParameterNames::Legacy;
+
+    const std::pair<const char*, const char*> renamed[] = {
+        { Legacy::speed_deg_per_sec, RfParameterNames::speed_mm_per_sec },
+        { Legacy::sweep_start_deg, RfParameterNames::sweep_start_mm },
+        { Legacy::sweep_centre_x, RfParameterNames::sweep_centre_x_mm },
+        { Legacy::sweep_centre_y, RfParameterNames::sweep_centre_y_mm },
+        { Legacy::deg_per_pixel, RfParameterNames::mm_per_pixel },
+        { Legacy::map_centre_x, RfParameterNames::map_centre_x_mm },
+        { Legacy::map_centre_y, RfParameterNames::map_centre_y_mm },
+    };
+
+    for (const auto& [oldName, newName] : renamed)
+    {
+        // A chain saved by 0.5.0 or later has the new name, and that wins.
+        if (! saved->hasAttribute (oldName) || saved->hasAttribute (newName))
+            continue;
+
+        if (auto* parameter = getParameter (newName))
+            parameter->setNextValue (static_cast<float> (saved->getDoubleAttribute (oldName) * mmPerDeg), false);
+    }
+}
+
 void BarMapperNode::loadCustomParametersFromXml (XmlElement* xml)
 {
     m_angles.clear();
+
+    migrateDegreeParameters();
 
     TriggeredCaptureNode::loadCustomParametersFromXml (xml);
 

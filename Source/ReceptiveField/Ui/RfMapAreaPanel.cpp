@@ -57,9 +57,9 @@ RfMapAreaPanel::RfMapAreaPanel (BarMapperNode* node) : m_node (node)
         return;
 
     m_mapSize = makeControl (m_node, RfParameterNames::map_pixels, nameWidth, controlWidth, unitWidth);
-    m_resolution = makeControl (m_node, RfParameterNames::deg_per_pixel, nameWidth, controlWidth, unitWidth);
-    m_centreX = makeControl (m_node, RfParameterNames::map_centre_x, nameWidth, controlWidth, unitWidth);
-    m_centreY = makeControl (m_node, RfParameterNames::map_centre_y, nameWidth, controlWidth, unitWidth);
+    m_resolution = makeControl (m_node, RfParameterNames::mm_per_pixel, nameWidth, controlWidth, unitWidth);
+    m_centreX = makeControl (m_node, RfParameterNames::map_centre_x_mm, nameWidth, controlWidth, unitWidth);
+    m_centreY = makeControl (m_node, RfParameterNames::map_centre_y_mm, nameWidth, controlWidth, unitWidth);
 
     for (auto* control : rows())
         addAndMakeVisible (control);
@@ -92,7 +92,7 @@ void RfMapAreaPanel::applyDisplayUnits()
     if (m_node == nullptr)
         return;
 
-    m_appliedScale = m_node->getDisplayUnitsPerDegree();
+    m_appliedScale = m_node->getDisplayUnitsPerMillimetre();
     m_appliedSuffix = Rf::unitSuffix (m_node->getDisplayUnit());
 
     // Map size is a count of map pixels and has no unit to convert.
@@ -106,7 +106,7 @@ void RfMapAreaPanel::timerCallback()
     if (m_node == nullptr)
         return;
 
-    if (m_node->getDisplayUnitsPerDegree() != m_appliedScale
+    if (m_node->getDisplayUnitsPerMillimetre() != m_appliedScale
         || String (Rf::unitSuffix (m_node->getDisplayUnit())) != m_appliedSuffix)
     {
         applyDisplayUnits();

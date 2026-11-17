@@ -74,6 +74,31 @@ double unitsPerDegree (DisplayUnit unit, ScreenGeometry geometry)
     return 1.0;
 }
 
+double millimetresPerDegreeOrDefault (ScreenGeometry geometry)
+{
+    const double mmPerDeg = millimetresPerDegree (geometry);
+    return mmPerDeg > 0.0 ? mmPerDeg : millimetresPerDegree (ScreenGeometry {});
+}
+
+double unitsPerMillimetre (DisplayUnit unit, ScreenGeometry geometry)
+{
+    switch (unit)
+    {
+        case DisplayUnit::Degrees:
+            return 1.0 / millimetresPerDegreeOrDefault (geometry);
+
+        case DisplayUnit::Millimetres:
+            return 1.0;
+
+        case DisplayUnit::ScreenPixels:
+            return std::isfinite (geometry.screenPixelsPerMm) && geometry.screenPixelsPerMm > 0.0
+                       ? geometry.screenPixelsPerMm
+                       : 1.0;
+    }
+
+    return 1.0;
+}
+
 const char* unitSuffix (DisplayUnit unit)
 {
     switch (unit)

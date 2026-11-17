@@ -44,16 +44,22 @@ namespace RfParameterNames
     inline constexpr auto angle_zero = "angle_zero";
     inline constexpr auto angle_sense = "angle_sense";
 
-    inline constexpr auto speed_deg_per_sec = "speed_deg_per_sec";
-    inline constexpr auto sweep_start_deg = "sweep_start_deg";
-    inline constexpr auto sweep_centre_x = "sweep_centre_x";
-    inline constexpr auto sweep_centre_y = "sweep_centre_y";
+    // Lengths are stored in millimetres on the screen, which is how the stimulus
+    // program defines them. The viewing distance turns them into degrees each
+    // time the pipeline is fed, so changing it re-reads every length rather than
+    // silently redefining the stimulus.
+    inline constexpr auto viewing_distance_mm = "viewing_distance_mm";
+
+    inline constexpr auto speed_mm_per_sec = "speed_mm_per_sec";
+    inline constexpr auto sweep_start_mm = "sweep_start_mm";
+    inline constexpr auto sweep_centre_x_mm = "sweep_centre_x_mm";
+    inline constexpr auto sweep_centre_y_mm = "sweep_centre_y_mm";
     inline constexpr auto latency_ms = "latency_ms";
 
     inline constexpr auto map_pixels = "map_pixels";
-    inline constexpr auto deg_per_pixel = "deg_per_pixel";
-    inline constexpr auto map_centre_x = "map_centre_x";
-    inline constexpr auto map_centre_y = "map_centre_y";
+    inline constexpr auto mm_per_pixel = "mm_per_pixel";
+    inline constexpr auto map_centre_x_mm = "map_centre_x_mm";
+    inline constexpr auto map_centre_y_mm = "map_centre_y_mm";
 
     inline constexpr auto smoothing_sigma_ms = "smoothing_sigma_ms";
     inline constexpr auto use_absolute_z = "use_absolute_z";
@@ -63,8 +69,20 @@ namespace RfParameterNames
     // Display-only. Nothing below reaches the pipeline: see
     // BarMapperNode::isDisplayParameter.
     inline constexpr auto display_unit = "display_unit";
-    inline constexpr auto viewing_distance_mm = "viewing_distance_mm";
     inline constexpr auto screen_px_per_mm = "screen_px_per_mm";
+
+    /** The names these lengths had before 0.5.0, when they were stored in
+        degrees. Read once from an older signal chain and converted to mm. */
+    namespace Legacy
+    {
+        inline constexpr auto speed_deg_per_sec = "speed_deg_per_sec";
+        inline constexpr auto sweep_start_deg = "sweep_start_deg";
+        inline constexpr auto sweep_centre_x = "sweep_centre_x";
+        inline constexpr auto sweep_centre_y = "sweep_centre_y";
+        inline constexpr auto deg_per_pixel = "deg_per_pixel";
+        inline constexpr auto map_centre_x = "map_centre_x";
+        inline constexpr auto map_centre_y = "map_centre_y";
+    } // namespace Legacy
 } // namespace RfParameterNames
 
 /** Maps visual receptive fields by back-projecting the per-direction trial
@@ -100,6 +118,10 @@ public:
 
     void saveCustomParametersToXml (XmlElement* xml) override;
     void loadCustomParametersFromXml (XmlElement* xml) override;
+
+    /** Reads the degree-valued lengths an older signal chain saved and stores
+        them, converted, in the millimetre parameters that replaced them. */
+    void migrateDegreeParameters();
 
     DataStore* getDataStore() { return &m_dataStore; }
 
@@ -157,18 +179,25 @@ public:
 
     // --- Display units ------------------------------------------------------
     //
-    // Read by the settings popup and by the map panels, and by nothing else.
-    // None of these is an input to getMappingSettings(), which is what makes the
-    // guarantee -- switching unit cannot change a map -- structural rather than a
-    // matter of remembering.
+    // The display unit and the screen's pixel density are read by the settings
+    // popups and the map panels, and by nothing else, so switching unit cannot
+    // change a map. The viewing distance is different: it is how the stored
+    // millimetres become degrees, so it is an input to the pipeline.
 
     Rf::DisplayUnit getDisplayUnit() const;
     Rf::ScreenGeometry getScreenGeometry() const;
 
+    /** Screen millimetres per degree at the current viewing distance. What every
+        stored length is divided by to reach the pipeline. Never zero. */
+    double getMillimetresPerDegree() const;
+
     /** Multiply a value in degrees by this to show it. Never zero. */
     double getDisplayUnitsPerDegree() const;
 
-    /** Whether `parameterName` names one of the three display-only parameters.
+    /** Multiply a stored value in millimetres by this to show it. Never zero. */
+    double getDisplayUnitsPerMillimetre() const;
+
+    /** Whether `parameterName` names one of the two display-only parameters.
      *
      *  The one correctness-critical predicate in this feature: everything it
      *  returns true for is kept out of requestRecompute(), so a change of display
@@ -180,7 +209,6 @@ public:
     static bool isDisplayParameter (const juce::String& parameterName)
     {
         return parameterName == RfParameterNames::display_unit
-               || parameterName == RfParameterNames::viewing_distance_mm
                || parameterName == RfParameterNames::screen_px_per_mm;
     }
 

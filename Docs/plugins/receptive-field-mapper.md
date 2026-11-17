@@ -167,14 +167,19 @@ the `RF` readout on each panel. Fill in **Viewing distance** and, for screen pix
 **Screen resolution** — they are what the conversion needs, and they are saved with the
 signal chain so the rig is typed in once.
 
-!!! info "Display only, by construction"
+!!! info "Stored in millimetres, computed in degrees"
 
-    Degrees of visual angle remain the unit everything is computed, saved and exported
-    in. The conversion happens in the parameter fields and the panel readouts, and the
-    display parameters are the only ones in this plugin that do **not** trigger a
-    recompute — switching to millimetres cannot move a receptive field or change a map
-    pixel. What is typed is converted back to degrees and clamped against the
-    parameter's own range, so the range does not change with the unit either.
+    Lengths are stored the way the stimulus program defines them, in **millimetres on
+    the screen**, and the analysis runs in degrees. **Viewing distance** is what
+    connects the two: change it and every length is re-read, the maps are recomputed,
+    and a receptive field that sits still on the screen moves in degrees. The display
+    unit and the screen resolution, by contrast, only change how numbers are written —
+    switching to degrees or pixels cannot move a receptive field or change a map pixel.
+    What is typed is converted back to millimetres and clamped against the parameter's
+    own range.
+
+    Signal chains saved before 0.5.0 stored these lengths in degrees; they are converted
+    to millimetres once on load, using the viewing distance saved with the chain.
 
     The factor is the small-angle one, `mm/deg = distance × π/180` — 9.95 mm/deg at the
     default 570 mm. It under-reports *position* by about 4% at 20° eccentricity; see the

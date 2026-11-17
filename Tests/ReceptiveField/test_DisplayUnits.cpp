@@ -170,3 +170,33 @@ TEST (DisplayUnits, MapGeometryIsUnaffectedByAnyOfThis)
         EXPECT_EQ (before, geometry);
     }
 }
+
+TEST (DisplayUnits, MillimetresDisplayThroughTheViewingDistance)
+{
+    // Lengths are stored in millimetres. Shown in degrees they depend on the
+    // viewing distance; shown in millimetres they do not; shown in pixels they
+    // depend only on the pixel pitch.
+    ScreenGeometry near;
+    near.viewingDistanceMm = 570.0;
+    ScreenGeometry far = near;
+    far.viewingDistanceMm = 1140.0;
+
+    EXPECT_NEAR (unitsPerMillimetre (DisplayUnit::Degrees, near), 1.0 / millimetresPerDegree (near), 1e-12);
+    EXPECT_NEAR (unitsPerMillimetre (DisplayUnit::Degrees, far),
+                 0.5 * unitsPerMillimetre (DisplayUnit::Degrees, near), 1e-12);
+
+    EXPECT_DOUBLE_EQ (unitsPerMillimetre (DisplayUnit::Millimetres, near), 1.0);
+    EXPECT_DOUBLE_EQ (unitsPerMillimetre (DisplayUnit::Millimetres, far), 1.0);
+
+    EXPECT_DOUBLE_EQ (unitsPerMillimetre (DisplayUnit::ScreenPixels, near), near.screenPixelsPerMm);
+}
+
+TEST (DisplayUnits, MillimetresPerDegreeNeverZero)
+{
+    ScreenGeometry broken;
+    broken.viewingDistanceMm = 0.0;
+
+    EXPECT_GT (millimetresPerDegreeOrDefault (broken), 0.0);
+    EXPECT_DOUBLE_EQ (millimetresPerDegreeOrDefault (broken), millimetresPerDegree (ScreenGeometry {}));
+    EXPECT_GT (unitsPerMillimetre (DisplayUnit::Degrees, broken), 0.0);
+}

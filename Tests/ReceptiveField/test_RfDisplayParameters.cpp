@@ -40,34 +40,35 @@ namespace
  *  hand back whatever the code currently does, which is the thing being
  *  checked. Adding a parameter to BarMapperNode and not to one of these two
  *  lists is meant to fail here. */
-constexpr std::array<const char*, 15> analysisParameterNames()
+constexpr std::array<const char*, 16> analysisParameterNames()
 {
-    return { RfParameterNames::angle_zero,
+    // The viewing distance is here, not with the display parameters: lengths are
+    // stored in millimetres and it is how they become degrees.
+    return { RfParameterNames::viewing_distance_mm,
+             RfParameterNames::angle_zero,
              RfParameterNames::angle_sense,
-             RfParameterNames::speed_deg_per_sec,
-             RfParameterNames::sweep_start_deg,
-             RfParameterNames::sweep_centre_x,
-             RfParameterNames::sweep_centre_y,
+             RfParameterNames::speed_mm_per_sec,
+             RfParameterNames::sweep_start_mm,
+             RfParameterNames::sweep_centre_x_mm,
+             RfParameterNames::sweep_centre_y_mm,
              RfParameterNames::latency_ms,
              RfParameterNames::map_pixels,
-             RfParameterNames::deg_per_pixel,
-             RfParameterNames::map_centre_x,
-             RfParameterNames::map_centre_y,
+             RfParameterNames::mm_per_pixel,
+             RfParameterNames::map_centre_x_mm,
+             RfParameterNames::map_centre_y_mm,
              RfParameterNames::smoothing_sigma_ms,
              RfParameterNames::use_absolute_z,
              RfParameterNames::combine_mode,
              RfParameterNames::border_fraction };
 }
 
-constexpr std::array<const char*, 3> displayParameterNames()
+constexpr std::array<const char*, 2> displayParameterNames()
 {
-    return { RfParameterNames::display_unit,
-             RfParameterNames::viewing_distance_mm,
-             RfParameterNames::screen_px_per_mm };
+    return { RfParameterNames::display_unit, RfParameterNames::screen_px_per_mm };
 }
 } // namespace
 
-TEST (RfDisplayParameters, TheThreeDisplayParametersAreRecognised)
+TEST (RfDisplayParameters, TheTwoDisplayParametersAreRecognised)
 {
     for (const char* name : displayParameterNames())
         EXPECT_TRUE (BarMapperNode::isDisplayParameter (name)) << name;
@@ -110,4 +111,24 @@ TEST (RfDisplayParameters, DisplayUnitCategoriesMatchTheEnum)
 
     for (int i = 0; i < Rf::displayUnitCount; ++i)
         EXPECT_EQ (expected[static_cast<std::size_t> (i)], Rf::displayUnitFromIndex (i));
+}
+
+TEST (RfDisplayParameters, LegacyNamesAreNotCurrentParameters)
+{
+    // The degree-valued names an older chain carries must not collide with any
+    // current parameter, or the migration would read a new value as an old one.
+    for (const char* legacy : { RfParameterNames::Legacy::speed_deg_per_sec,
+                                RfParameterNames::Legacy::sweep_start_deg,
+                                RfParameterNames::Legacy::sweep_centre_x,
+                                RfParameterNames::Legacy::sweep_centre_y,
+                                RfParameterNames::Legacy::deg_per_pixel,
+                                RfParameterNames::Legacy::map_centre_x,
+                                RfParameterNames::Legacy::map_centre_y })
+    {
+        for (const char* current : analysisParameterNames())
+            EXPECT_NE (juce::String (legacy), juce::String (current));
+
+        for (const char* current : displayParameterNames())
+            EXPECT_NE (juce::String (legacy), juce::String (current));
+    }
 }

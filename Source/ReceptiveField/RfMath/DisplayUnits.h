@@ -27,12 +27,12 @@ namespace EventTriggered::Rf
 
 /** The unit a linear quantity is *shown* in.
  *
- *  Degrees of visual angle are the unit throughout RfMath, and stay so: nothing
- *  here is ever consulted by the pipeline. This exists because a stimulus is
- *  measured on a screen, in millimetres or in screen pixels, and typing a bar
- *  speed in the unit it was measured in beats converting it by hand at the
- *  bench. The conversion belongs at the edges — the parameter controls and the
- *  panel readouts — so that changing the display unit cannot change a map.
+ *  Degrees of visual angle are the unit throughout RfMath. The stimulus lengths
+ *  the user enters are stored in millimetres on the screen, as the stimulus
+ *  program defines them, and divided by millimetresPerDegree() on their way into
+ *  the pipeline -- so the viewing distance decides what a millimetre means. The
+ *  display unit, by contrast, is only how numbers are written: the conversion
+ *  happens at the edges, and changing it cannot change a map.
  */
 enum class DisplayUnit
 {
@@ -85,6 +85,19 @@ double millimetresPerDegree (ScreenGeometry geometry);
  *  collapsing the display to zero or blowing it up to infinity. Never returns
  *  zero, so dividing by it to get back to degrees is always safe. */
 double unitsPerDegree (DisplayUnit unit, ScreenGeometry geometry);
+
+/** Millimetres per degree, falling back to the default rig's when `geometry`
+ *  cannot describe a screen. Never zero, so it is always safe to divide by --
+ *  which is what turning a stored length into degrees for the pipeline does. */
+double millimetresPerDegreeOrDefault (ScreenGeometry geometry);
+
+/** Multiply a length stored in millimetres by this to display it.
+ *
+ *  The stimulus is stored the way the stimulus program defines it, in
+ *  millimetres on the screen; this is the edge conversion for those values,
+ *  as unitsPerDegree is for the ones the pipeline produces in degrees. 1/(mm per
+ *  degree) for Degrees, 1 for Millimetres, px/mm for Screen pixels. Never zero. */
+double unitsPerMillimetre (DisplayUnit unit, ScreenGeometry geometry);
 
 /** "deg", "mm" or "px". Static storage; never null. */
 const char* unitSuffix (DisplayUnit unit);
