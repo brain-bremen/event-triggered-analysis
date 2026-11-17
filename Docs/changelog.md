@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Switchable display units on the Bar Mapper — degrees, millimetres or screen
   pixels.** A stimulus is measured on a screen, and until now everything the
   mapper showed or took was degrees of visual angle: speed, sweep start,
-  resolution, map centre, the map axes and the `RF` readout. **Show units in** at
+  sweep centre, resolution, map centre, the map axes and the `RF` readout. **Show units in** at
   the top of ANALYSIS now switches all of them at once, given a **Viewing
   distance** and, for screen pixels, a **Screen resolution** (px/mm); both are
   saved with the signal chain, so the rig is typed in once rather than converted
@@ -84,8 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Sweep centre X/Y** parameters take the stimulus position relative to fixation;
   sweep start is now measured from it, and Map centre only chooses what is drawn.
   Both default to 0, so existing setups with a centred stimulus are unchanged.
-  The sweep centre is also written to the session manifest as
-  `sweep_centre_x_deg` / `sweep_centre_y_deg`.
+  The sweep centre is also written to the session manifest, as
+  `sweep_centre_x_deg` / `sweep_centre_y_deg` and `sweep_centre_x_mm` /
+  `sweep_centre_y_mm`. For VStim, enter the bar object's X/Y position (mm) here
+  and −travelDistanceMM/2 as Sweep start.
 
 ## [0.4.1] - 2026-08-25
 
