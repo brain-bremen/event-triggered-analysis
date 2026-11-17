@@ -22,6 +22,10 @@
 
 */
 #pragma once
+#include "TriggerCore/Ui/PlotZoom.h"
+
+#include <functional>
+#include <optional>
 #include "DisplayMode.h"
 #include "SinglePlotPanel.h"
 #include <VisualizerWindowHeaders.h>
@@ -90,6 +94,17 @@ public:
 
     /** Sets the opacity for individual trial traces for all panels */
     void setTrialOpacity (float opacity);
+
+    /** A panel asking for a new view, from the mouse: the time range in ms and
+     *  the amplitude range, either absent when that axis is to stay as it is.
+     *
+     *  Every panel asks through here rather than setting its own limits, so the
+     *  owner can put the request through the same path as the AXES popup --
+     *  clamped to the window, applied to every panel, saved with the chain. */
+    std::function<void (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)> onZoomRequested;
+
+    /** A double-click: back to the whole window and auto-scaled amplitude. */
+    std::function<void()> onZoomReset;
 
     /** Connects trial buffers to panels for a given trigger source */
     void setTrialBuffersForSource (const TriggerSource* source,

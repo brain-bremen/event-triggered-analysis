@@ -83,6 +83,12 @@ accumulators, so none of them discards a trial.
 
 There are no SAVE / LOAD buttons here: this plugin does not write sessions — see below.
 
+**Zoom** with the mouse wheel over any panel — time and frequency on a spectrogram,
+frequency and power on a spectrum, about the cursor, every panel together. A log
+frequency axis zooms evenly in log space. Double-click for the full view; switching
+between spectrogram and spectrum resets it. See
+[Zoom and pan](../getting-started.md#zoom-and-pan).
+
 ### Baseline
 
 `Base start` and `Base end` are relative to the trigger, so the default window is

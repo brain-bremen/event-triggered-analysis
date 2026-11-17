@@ -53,7 +53,9 @@ field — and elsewhere they do not.
    with *N* evenly spaced directions, each armed by a trial-type message.
 3. **Check the compass** under ANALYSIS: the angles are the one thing nothing can
    verify.
-4. **ANALYSIS → set the speed, sweep start and latency** to match the stimulus program,
+4. **ANALYSIS → set the speed, sweep start, sweep centre and latency** to match the
+   stimulus program — sweep centre is the bar stimulus's own position relative to
+   fixation, so the map comes out in fixation coordinates;
    then check that Pre/Post actually cover the sweep — see
    [Making the window and the sweep agree](#making-the-window-and-the-sweep-agree). The
    stock defaults do not.
@@ -143,8 +145,9 @@ all three are more often a typo in the angle column:
     rebuild the accumulators and are locked while acquiring.
 
 Four groups: display units (unit, viewing distance, screen resolution), stimulus geometry
-(speed, sweep start, latency), how the response is read (smoothing, absolute z, combine),
-and the map itself (size, resolution, centre, border). Two defaults are worth knowing:
+(speed, sweep start, sweep centre, latency), how the response is read (smoothing, absolute z, combine),
+and the RF border. The map area — size, resolution and centre — is on the canvas behind
+**MAP AREA...**, next to the mouse zoom that edits it. Two defaults are worth knowing:
 
 - **Latency 60 ms.** Without it each direction's response is displaced *along its own
   direction of motion*, so opposite directions are displaced opposite ways and the
@@ -159,19 +162,24 @@ Full list with defaults, ranges and what each one does to the map:
 ### Degrees, millimetres or screen pixels
 
 **Show units in** at the top of ANALYSIS sets the unit for every linear quantity the
-plugin shows or takes: Speed, Sweep start, Resolution, Map centre X/Y, the map axes and
+plugin shows or takes: Speed, Sweep start, Sweep centre X/Y, Resolution, Map centre X/Y, the map axes and
 the `RF` readout on each panel. Fill in **Viewing distance** and, for screen pixels,
 **Screen resolution** — they are what the conversion needs, and they are saved with the
 signal chain so the rig is typed in once.
 
-!!! info "Display only, by construction"
+!!! info "Stored in millimetres, computed in degrees"
 
-    Degrees of visual angle remain the unit everything is computed, saved and exported
-    in. The conversion happens in the parameter fields and the panel readouts, and the
-    display parameters are the only ones in this plugin that do **not** trigger a
-    recompute — switching to millimetres cannot move a receptive field or change a map
-    pixel. What is typed is converted back to degrees and clamped against the
-    parameter's own range, so the range does not change with the unit either.
+    Lengths are stored the way the stimulus program defines them, in **millimetres on
+    the screen**, and the analysis runs in degrees. **Viewing distance** is what
+    connects the two: change it and every length is re-read, the maps are recomputed,
+    and a receptive field that sits still on the screen moves in degrees. The display
+    unit and the screen resolution, by contrast, only change how numbers are written —
+    switching to degrees or pixels cannot move a receptive field or change a map pixel.
+    What is typed is converted back to millimetres and clamped against the parameter's
+    own range.
+
+    Signal chains saved before 0.5.0 stored these lengths in degrees; they are converted
+    to millimetres once on load, using the viewing distance saved with the chain.
 
     The factor is the small-angle one, `mm/deg = distance × π/180` — 9.95 mm/deg at the
     default 570 mm. It under-reports *position* by about 4% at 20° eccentricity; see the
@@ -192,20 +200,20 @@ first sample of the profile:  (−pre − latency) · speed + sweep start
 last  sample of the profile:  (post − latency) · speed + sweep start
 ```
 
-The bar reaches the map centre at `t = latency − sweep start / speed`.
+The bar reaches the sweep centre at `t = latency − sweep start / speed`.
 
 !!! warning "The stock defaults do not get there"
 
-    At 10 deg/s from −15° with Post = 1000 ms, the profile covers −20.6° to −5.6° along
-    the axis, while the default map covers ±10.05°. Everything outside the swept range is
+    At 100 mm/s from −150 mm with Post = 1000 ms, the profile covers −206 mm to −56 mm
+    along the axis, while the default map covers ±100.5 mm. Everything outside the swept range is
     padded with zero — no evidence either way, which is what zero means once the traces
     are z-scored — so the map comes out flat or edge-heavy.
 
 For a sweep that starts at −*S* and is followed symmetrically past the centre:
 
 ```
-post_ms  ≥  2 · S / speed · 1000          (3000 ms for S = 15°, speed = 10 deg/s)
-S        ≥  map size × resolution / 2     (10.05° for the default map)
+post_ms  ≥  2 · S / speed · 1000          (3000 ms for S = 150 mm, speed = 100 mm/s)
+S        ≥  map size × resolution / 2     (100.5 mm for the default map)
 ```
 
 If long windows are impractical, shrink the map instead — the map only has to cover the
@@ -261,10 +269,27 @@ Two views.
 |---|---|
 | **View** | *Map* or *Traces*. |
 | **Columns**, **Size** | Grid layout. Cells are square and sized from *Size*. |
+| **MAP AREA...** | Map size, Resolution and Map centre X/Y — the part of the visual field the maps show. Follows the mouse zoom while open; changing a value recomputes the maps, never the trials. |
 | **POLAR** | Show the polargram inset. |
+| **X/Y = 0** | White lines through visual-field x = 0 and y = 0 — fixation, once Sweep centre is set. On by default. |
 | **SAME SCALE** | One colour range across every panel, so a strong channel and a weak one look different. Off by default. |
 | **CLEAR** | Discards accumulated trials, keeps the conditions. |
 | **SAVE / LOAD** | [Sessions](../sessions/index.md), shared with the other triggered plugins. |
+
+### Zooming a map
+
+The wheel over a map zooms about the cursor, and drag pans — but unlike the other
+plugins this is not a magnifying glass. A map is computed at one resolution, so a
+zoom **recomputes** it: the wheel changes **Resolution** and **Map centre X/Y**, and
+the compute thread draws the new window at the same **Map size**. The cost of a map
+depends only on its pixel count, so a zoomed-in map is as cheap as the full one —
+milliseconds per channel — and shows real detail rather than enlarged pixels. Both axes
+always zoom together, so a round receptive field stays round.
+
+**Double-click** fits the map to the swept area: centred on **Sweep centre**, wide enough
+to cover `2 × |Sweep start|`. All maps share one geometry, so zooming any of them zooms
+them all, and the new values are in MAP AREA... and saved with the chain like a typed
+edit. In the *Traces* view the wheel zooms time, as in Triggered Average.
 
 ## Sessions
 
@@ -279,7 +304,8 @@ finished maps and their measurements:
 | `map_channel_indices` | (channels,) | int32 | Global channel indices |
 
 The map geometry (`map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
-`map_centre_y_deg`) is in the manifest, along with the viewing geometry the display units
+`map_centre_y_deg`) and the stimulus position (`sweep_centre_x_deg`,
+`sweep_centre_y_deg`) are in the manifest, along with the viewing geometry the display units
 use — `viewing_distance_mm`, `screen_px_per_mm` and the derived `screen_mm_per_deg`.
 Everything else stays in degrees whatever unit is on screen, so a file does not depend on
 what the window happened to be showing when it was written.

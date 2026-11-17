@@ -210,7 +210,8 @@ SpatialProfile toSpatialProfile (std::span<const float> trace,
     const double firstSampleTimeSec = -preSamples / sampleRateHz;
     const double latencySec = sweep.latencyMs / 1000.0;
 
-    profile.startDeg = (firstSampleTimeSec - latencySec) * sweep.speedDegPerSec + sweep.sweepStartDeg;
+    profile.startDeg = (firstSampleTimeSec - latencySec) * sweep.speedDegPerSec + sweep.sweepStartDeg
+                       + sweep.centreAlongAxisDeg();
     profile.stepDeg = sweep.speedDegPerSec / sampleRateHz;
 
     return profile;

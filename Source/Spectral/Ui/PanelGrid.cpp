@@ -43,13 +43,31 @@ void PanelGrid::setNumPanels (int numPanels)
         m_panels.removeLast();
     }
 
+    const bool adding = m_panels.size() < numPanels;
+
     while (m_panels.size() < numPanels)
     {
         auto* panel = m_panels.add (new SpectrumPanel());
         addAndMakeVisible (panel);
+
+        // Zoom is linked: whichever panel the wheel turned over, every panel
+        // shows the same window, so the channels stay comparable at a glance.
+        panel->onViewChanged = [this] (ZoomRange x, ZoomRange y) { setView (x, y); };
     }
 
+    // A new panel starts at the full view, and a grid half zoomed and half not
+    // is worse than one that has lost its zoom. A new channel set is a new
+    // look at the data anyway.
+    if (adding)
+        setView (ZoomRange::unit(), ZoomRange::unit());
+
     resized();
+}
+
+void PanelGrid::setView (ZoomRange x, ZoomRange y)
+{
+    for (auto* panel : m_panels)
+        panel->setView (x, y);
 }
 
 void PanelGrid::setColumns (int columns)

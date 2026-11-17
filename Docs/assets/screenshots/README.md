@@ -55,8 +55,8 @@ the capture.
 | `coherence-pairs.png` | The **PAIRS** table with a few pairs and seed mode visible. |
 | `coherence-canvas.png` | The Triggered Coherence canvas, with the trial count and the significance threshold legible. |
 | `rf-editor.png` | The Receptive Field Bar Mapper editor. |
-| `rf-analysis.png` | The mapper's **ANALYSIS** window with the compass preview visible. |
+| `rf-analysis.png` | The mapper's **ANALYSIS** window (display units at the top, Sweep centre X/Y in the geometry group, no map-area fields) with the compass preview visible. |
 | `rf-directions.png` | **DIRECTIONS...** showing the angle table, the convention controls and the generator with its preview line. |
-| `rf-canvas-map.png` | The Map view with several channels mapped, the border circle drawn, and ideally the polargram on. |
+| `rf-canvas-map.png` | The Map view with several channels mapped, the border circle drawn, the X/Y = 0 lines on, the options bar with **MAP AREA...** visible, and ideally the polargram on. |
 | `rf-canvas-traces.png` | The Traces view of the same data, so the pair reads as two views of one thing. |
 | `session-directory.png` | A file manager or terminal listing of a saved session directory: `session.xml`, `arrays/`, `figures/`. |

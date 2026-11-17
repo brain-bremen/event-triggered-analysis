@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/VersionTag.h"
 #include "TriggerCore/TriggerSource.h"
 #include "Spectral/SpectralTypes.h"
 #include "Spectral/Ui/PanelGrid.h"
@@ -149,6 +150,9 @@ private:
 
     ColorMapType m_colorMapType = ColorMapType::Viridis;
     bool m_sharedScale = true;
+
+    /** Which build this is, in the corner, for screenshots. */
+    VersionTag m_versionTag;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredCoherenceCanvas)
 };

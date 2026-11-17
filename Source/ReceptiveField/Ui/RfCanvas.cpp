@@ -22,8 +22,15 @@
 */
 #include "RfCanvas.h"
 
+#include <PluginVersion.h>
+
 #include "AverageCore/DataCollector.h"
+#include "RfMapAreaPanel.h"
 #include "TriggerCore/TriggerSource.h"
+#include "TriggerCore/Ui/NestedCallOut.h"
+
+#include <algorithm>
+#include <cmath>
 
 using namespace juce;
 
@@ -79,6 +86,19 @@ RfOptionsBar::RfOptionsBar (RfCanvas* canvas) : m_canvas (canvas)
     m_polargramButton->addListener (this);
     addAndMakeVisible (m_polargramButton.get());
 
+    m_mapAreaButton = std::make_unique<UtilityButton> ("MAP AREA...");
+    m_mapAreaButton->setClickingTogglesState (false);
+    m_mapAreaButton->setTooltip ("Map size, resolution and centre: the part of the visual field the maps show");
+    m_mapAreaButton->addListener (this);
+    addAndMakeVisible (m_mapAreaButton.get());
+
+    m_zeroLinesButton = std::make_unique<UtilityButton> ("X/Y = 0");
+    m_zeroLinesButton->setClickingTogglesState (true);
+    m_zeroLinesButton->setToggleState (true, dontSendNotification);
+    m_zeroLinesButton->setTooltip ("White lines through x = 0 and y = 0 of the visual field");
+    m_zeroLinesButton->addListener (this);
+    addAndMakeVisible (m_zeroLinesButton.get());
+
     m_sharedScaleButton = std::make_unique<UtilityButton> ("SAME SCALE");
     m_sharedScaleButton->setClickingTogglesState (true);
     m_sharedScaleButton->addListener (this);
@@ -112,6 +132,10 @@ void RfOptionsBar::buttonClicked (Button* button)
 {
     if (button == m_polargramButton.get())
         m_canvas->setShowPolargram (button->getToggleState());
+    else if (button == m_mapAreaButton.get())
+        NestedCallOut::show (*m_mapAreaButton, std::make_unique<RfMapAreaPanel> (m_canvas->getNode()));
+    else if (button == m_zeroLinesButton.get())
+        m_canvas->setShowZeroLines (button->getToggleState());
     else if (button == m_sharedScaleButton.get())
         m_canvas->setSharedColourRange (button->getToggleState());
     else if (button == m_clearButton.get())
@@ -149,7 +173,11 @@ void RfOptionsBar::resized()
     place (m_columnsLabel.get(), m_columnsSelector.get(), 52, 56);
     place (m_heightLabel.get(), m_heightSelector.get(), 30, 70);
 
+    m_mapAreaButton->setBounds (area.removeFromLeft (90).reduced (2, 0));
+    area.removeFromLeft (6);
     m_polargramButton->setBounds (area.removeFromLeft (60).reduced (2, 0));
+    area.removeFromLeft (6);
+    m_zeroLinesButton->setBounds (area.removeFromLeft (70).reduced (2, 0));
     area.removeFromLeft (6);
     m_sharedScaleButton->setBounds (area.removeFromLeft (90).reduced (2, 0));
 }
@@ -158,6 +186,9 @@ void RfOptionsBar::resized()
 
 RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_mapViewport = std::make_unique<Viewport>();
     m_mapGrid = new RfMapGrid();
     m_mapViewport->setViewedComponent (m_mapGrid, true);
@@ -180,6 +211,136 @@ RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
     // trace view has to show the same thing the back-projection consumed.
     m_traceGrid->setPlotType (DisplayMode::AVERAGE_TRAGE);
     m_traceGrid->setConditionOverlay (true);
+
+    m_mapGrid->onZoomRequested = [this] (double x, double y, double factor) { zoomMapAbout (x, y, factor); };
+    m_mapGrid->onPanRequested = [this] (double dx, double dy) { panMap (dx, dy); };
+    m_mapGrid->onResetRequested = [this] { resetMapView(); };
+
+    m_traceGrid->onZoomRequested = [this] (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)
+    { zoomTraces (xMs, y); };
+    m_traceGrid->onZoomReset = [this] { resetTraceZoom(); };
+}
+
+// --- Zoom ------------------------------------------------------------------
+
+namespace
+{
+    // The parameter ranges, restated: setNextValue clamps on its own, but the
+    // zoom has to know where the clamp will land to keep the cursor's point put.
+    // In screen millimetres, the unit the map area is stored in.
+    constexpr double minMmPerPixel = 0.05;
+    constexpr double maxMmPerPixel = 20.0;
+    constexpr double maxCentreMm = 1000.0;
+
+    double readParameter (BarMapperNode* node, const char* name, double fallback)
+    {
+        if (auto* parameter = node->getParameter (name))
+            return static_cast<double> (static_cast<float> (parameter->getValue()));
+
+        return fallback;
+    }
+
+    void writeParameter (BarMapperNode* node, const char* name, double value)
+    {
+        if (auto* parameter = node->getParameter (name))
+            parameter->setNextValue (static_cast<float> (value));
+    }
+} // namespace
+
+void RfCanvas::zoomMapAbout (double anchorXDeg, double anchorYDeg, double factor)
+{
+    if (m_node == nullptr)
+        return;
+
+    // The panel reports the cursor in the degrees the map is drawn in; the map
+    // area is stored in screen millimetres.
+    const double mmPerDeg = m_node->getMillimetresPerDegree();
+    const double anchorX = anchorXDeg * mmPerDeg;
+    const double anchorY = anchorYDeg * mmPerDeg;
+
+    // Read from the parameters, not from the map on screen: wheel events can
+    // arrive faster than maps, and each step has to build on the last request
+    // rather than on a picture two requests old.
+    const double mmPerPixel = readParameter (m_node, RfParameterNames::mm_per_pixel, 1.0);
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x_mm, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y_mm, 0.0);
+
+    const double newMmPerPixel = std::clamp (mmPerPixel * factor, minMmPerPixel, maxMmPerPixel);
+
+    if (newMmPerPixel == mmPerPixel)
+        return;
+
+    // The factor actually applied, after the clamp, so the anchor stays fixed
+    // even on the step that hits the limit.
+    const double applied = newMmPerPixel / mmPerPixel;
+
+    writeParameter (m_node, RfParameterNames::mm_per_pixel, newMmPerPixel);
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_x_mm,
+                    std::clamp (anchorX + (centreX - anchorX) * applied, -maxCentreMm, maxCentreMm));
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_y_mm,
+                    std::clamp (anchorY + (centreY - anchorY) * applied, -maxCentreMm, maxCentreMm));
+}
+
+void RfCanvas::panMap (double dxDeg, double dyDeg)
+{
+    if (m_node == nullptr)
+        return;
+
+    const double mmPerDeg = m_node->getMillimetresPerDegree();
+    const double centreX = readParameter (m_node, RfParameterNames::map_centre_x_mm, 0.0);
+    const double centreY = readParameter (m_node, RfParameterNames::map_centre_y_mm, 0.0);
+
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_x_mm,
+                    std::clamp (centreX + dxDeg * mmPerDeg, -maxCentreMm, maxCentreMm));
+    writeParameter (m_node,
+                    RfParameterNames::map_centre_y_mm,
+                    std::clamp (centreY + dyDeg * mmPerDeg, -maxCentreMm, maxCentreMm));
+}
+
+void RfCanvas::resetMapView()
+{
+    if (m_node == nullptr)
+        return;
+
+    // The swept area is a disc of radius |sweep start| about the sweep centre:
+    // every direction starts that far out and passes through the centre. A map
+    // just covering it shows everything the bar could have found. All in screen
+    // millimetres, so no conversion is needed.
+    const double sweepStart = std::abs (readParameter (m_node, RfParameterNames::sweep_start_mm, -150.0));
+    int pixels = static_cast<int> (readParameter (m_node, RfParameterNames::map_pixels, 201.0));
+
+    if (pixels % 2 == 0)
+        ++pixels;
+
+    writeParameter (m_node, RfParameterNames::map_centre_x_mm, readParameter (m_node, RfParameterNames::sweep_centre_x_mm, 0.0));
+    writeParameter (m_node, RfParameterNames::map_centre_y_mm, readParameter (m_node, RfParameterNames::sweep_centre_y_mm, 0.0));
+
+    if (sweepStart > 0.0 && pixels > 0)
+        writeParameter (m_node,
+                        RfParameterNames::mm_per_pixel,
+                        std::clamp (2.0 * sweepStart / pixels, minMmPerPixel, maxMmPerPixel));
+}
+
+void RfCanvas::zoomTraces (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)
+{
+    if (xMs)
+    {
+        m_traceGrid->setXLimits (static_cast<float> (xMs->low), static_cast<float> (xMs->high));
+        m_timeAxis->setVisibleRangeMs (static_cast<float> (xMs->low), static_cast<float> (xMs->high));
+    }
+
+    if (y)
+        m_traceGrid->setYLimits (static_cast<float> (y->low), static_cast<float> (y->high));
+}
+
+void RfCanvas::resetTraceZoom()
+{
+    m_traceGrid->resetXLimits();
+    m_traceGrid->resetYLimits();
+    m_timeAxis->resetVisibleRange();
 }
 
 RfCanvas::~RfCanvas()
@@ -222,6 +383,11 @@ void RfCanvas::setShowPolargram (bool show)
     m_mapGrid->setShowPolargram (show);
 }
 
+void RfCanvas::setShowZeroLines (bool show)
+{
+    m_mapGrid->setShowZeroLines (show);
+}
+
 void RfCanvas::setSharedColourRange (bool shared)
 {
     m_mapGrid->setSharedColourRange (shared);
@@ -234,6 +400,14 @@ void RfCanvas::clearData()
 }
 
 void RfCanvas::refreshState() {}
+
+void RfCanvas::displayUnitsChanged()
+{
+    if (m_node == nullptr)
+        return;
+
+    m_mapGrid->setDisplayUnit (m_node->getDisplayUnit(), m_node->getDisplayUnitsPerDegree());
+}
 
 void RfCanvas::updateSettings()
 {
@@ -269,6 +443,10 @@ void RfCanvas::refresh()
         const ContinuousChannel* info = m_node->getContinuousChannel (channel);
         names.add (info != nullptr ? info->getName() : "CH " + String (channel + 1));
     }
+
+    // Before setResults, so panels created by it are built in the current unit
+    // rather than being redrawn a frame later.
+    m_mapGrid->setDisplayUnit (m_node->getDisplayUnit(), m_node->getDisplayUnitsPerDegree());
 
     m_mapGrid->setResults (results, names);
     m_mapGrid->setSize (m_mapViewport->getWidth(), m_mapGrid->getDesiredHeight());
@@ -344,6 +522,9 @@ void RfCanvas::layoutViews()
 
 void RfCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_mapViewport->getScrollBarThickness());
+
     layoutViews();
 }
 

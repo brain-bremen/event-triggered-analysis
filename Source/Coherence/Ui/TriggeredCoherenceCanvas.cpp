@@ -22,6 +22,8 @@
 */
 #include "TriggeredCoherenceCanvas.h"
 
+#include <PluginVersion.h>
+
 #include "../TriggeredCoherenceNode.h"
 #include "Spectral/Ui/ParameterLayout.h"
 
@@ -40,6 +42,9 @@ constexpr int optionsBarHeight = optionsRowHeight * 2;
 
 TriggeredCoherenceCanvas::TriggeredCoherenceCanvas (TriggeredCoherenceNode* node) : m_node (node)
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_viewport.setViewedComponent (&m_grid, false);
     m_viewport.setScrollBarsShown (true, false);
     addAndMakeVisible (m_viewport);
@@ -370,6 +375,9 @@ void TriggeredCoherenceCanvas::paint (juce::Graphics& g)
 
 void TriggeredCoherenceCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_viewport.getScrollBarThickness());
+
     auto bounds = getLocalBounds();
     auto optionsBar = bounds.removeFromBottom (optionsBarHeight);
 

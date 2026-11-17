@@ -22,6 +22,8 @@
 */
 #include "TriggeredPowerCanvas.h"
 
+#include <PluginVersion.h>
+
 #include "../TriggeredPowerNode.h"
 #include "Spectral/SpectralParameterNames.h"
 #include "Spectral/Ui/ParameterLayout.h"
@@ -43,6 +45,9 @@ namespace
 
 TriggeredPowerCanvas::TriggeredPowerCanvas (TriggeredPowerNode* node) : m_node (node)
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_viewport.setViewedComponent (&m_grid, false);
     m_viewport.setScrollBarsShown (true, false);
     addAndMakeVisible (m_viewport);
@@ -566,6 +571,9 @@ void TriggeredPowerCanvas::paint (juce::Graphics& g)
 
 void TriggeredPowerCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_viewport.getScrollBarThickness());
+
     auto bounds = getLocalBounds();
     auto optionsBar = bounds.removeFromBottom (optionsBarHeight);
 

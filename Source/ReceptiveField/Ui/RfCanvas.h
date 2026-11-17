@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/VersionTag.h"
 #include "../BarMapperNode.h"
 #include "RfDisplayMode.h"
 #include "RfMapPanel.h"
@@ -65,6 +66,10 @@ private:
     std::unique_ptr<juce::ComboBox> m_heightSelector;
 
     std::unique_ptr<UtilityButton> m_polargramButton;
+    std::unique_ptr<UtilityButton> m_zeroLinesButton;
+
+    /** Opens RfMapAreaPanel: map size, resolution and centre. */
+    std::unique_ptr<UtilityButton> m_mapAreaButton;
     std::unique_ptr<UtilityButton> m_sharedScaleButton;
     std::unique_ptr<UtilityButton> m_clearButton;
 
@@ -106,8 +111,17 @@ public:
     void setNumColumns (int columns);
     void setPanelHeight (int pixels);
     void setShowPolargram (bool show);
+    void setShowZeroLines (bool show);
     void setSharedColourRange (bool shared);
     void clearData();
+
+    /** Re-reads the display unit from the node and redraws the maps in it.
+     *
+     *  Separate from refresh() on purpose: refresh() returns early unless the
+     *  compute thread has published a new generation, and a change of display
+     *  unit produces no new result -- that is the guarantee, not an oversight.
+     *  The node calls this from the message thread. */
+    void displayUnitsChanged();
 
     BarMapperNode* getNode() { return m_node; }
 
@@ -126,6 +140,20 @@ public:
 private:
     void layoutViews();
 
+    /** Mouse zoom on a map, made real: the map centre and resolution move, and
+     *  the compute thread draws the new window at the same pixel count. Written
+     *  through the parameters, so the popup, the saved chain and the session
+     *  file all agree with what is on screen. */
+    void zoomMapAbout (double anchorXDeg, double anchorYDeg, double factor);
+    void panMap (double dxDeg, double dyDeg);
+
+    /** Double-click: the whole swept area, centred on the stimulus. */
+    void resetMapView();
+
+    /** Same, for the trace view, which is only ever looked at here. */
+    void zoomTraces (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y);
+    void resetTraceZoom();
+
     BarMapperNode* m_node;
     RfDisplayMode m_mode = RfDisplayMode::Map;
 
@@ -143,6 +171,9 @@ private:
     juce::String m_warningText;
 
     std::uint64_t m_lastGeneration = 0;
+
+    /** Which build this is, in the corner, for screenshots. */
+    VersionTag m_versionTag;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfCanvas)
 };

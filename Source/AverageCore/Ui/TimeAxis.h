@@ -32,8 +32,20 @@ public:
     void paint (Graphics& g) override;
     void setWindowSizeMs (float pre_ms, float post_ms);
 
+    /** Labels only [minMs, maxMs] -- what the trace panels show once their x axis
+        is pinned or zoomed. Without it the axis kept labelling the whole window
+        above traces that showed a tenth of it. */
+    void setVisibleRangeMs (float minMs, float maxMs);
+
+    /** Back to labelling the whole captured window. */
+    void resetVisibleRange();
+
 private:
     float preTriggerMs = 250.0f; // should not be negative
     float postTriggerMs = 500;
+
+    bool useVisibleRange = false;
+    float visibleMinMs = 0.0f;
+    float visibleMaxMs = 0.0f;
 };
 } // namespace EventTriggered

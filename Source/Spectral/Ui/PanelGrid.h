@@ -59,6 +59,10 @@ public:
 
     void repaintPanels();
 
+    /** Shows the same part of every panel's axes. What a zoom on any one panel
+        calls, so the whole grid follows it. */
+    void setView (ZoomRange x, ZoomRange y);
+
     void resized() override;
 
 private:

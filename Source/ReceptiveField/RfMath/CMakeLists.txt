@@ -17,6 +17,7 @@
 # Open Ephys GUI present at all.
 
 set(RF_MATH_SOURCES
+    DisplayUnits.cpp
     ResponseProfile.cpp
     BackProjection.cpp
     RfMetrics.cpp
@@ -27,6 +28,7 @@ set(RF_MATH_SOURCES
 
 set(RF_MATH_HEADERS
     AngleConvention.h
+    DisplayUnits.h
     MapGeometry.h
     StimulusGeometry.h
     ResponseProfile.h

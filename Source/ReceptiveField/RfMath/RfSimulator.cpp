@@ -88,6 +88,12 @@ std::vector<float> simulateAveragedTrace (const SimulatedNeuron& neuron,
     const double gain = directionGain (neuron, canonicalAngleDeg);
     const double latencySec = neuron.latencyMs / 1000.0;
 
+    // The bar passes through the stimulus centre, not the origin. Spelled out
+    // here rather than taken from SweepGeometry::centreAlongAxisDeg, for the
+    // same reason the RF projection above is.
+    const double sweepCentreDeg = settings.sweep.centreXDeg * std::cos (rad)
+                                  + settings.sweep.centreYDeg * std::sin (rad);
+
     for (int trial = 0; trial < settings.trialsPerDirection; ++trial)
     {
         for (int sample = 0; sample < totalSamples; ++sample)
@@ -95,7 +101,7 @@ std::vector<float> simulateAveragedTrace (const SimulatedNeuron& neuron,
             const double timeSec =
                 (sample - settings.preSamples) / settings.sampleRateHz - latencySec;
             const double barPositionDeg =
-                timeSec * settings.sweep.speedDegPerSec + settings.sweep.sweepStartDeg;
+                timeSec * settings.sweep.speedDegPerSec + settings.sweep.sweepStartDeg + sweepCentreDeg;
 
             const double offset = (barPositionDeg - rfPositionDeg) / sigmaDeg;
             const double probability =

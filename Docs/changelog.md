@@ -9,31 +9,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
-## [0.4.1] - 2026-08-25
+## [0.5.0] - 2026-11-17
 
 ### Added
 
 - **Switchable display units on the Bar Mapper — degrees, millimetres or screen
   pixels.** A stimulus is measured on a screen, and until now everything the
   mapper showed or took was degrees of visual angle: speed, sweep start,
-  resolution, map centre, the map axes and the `RF` readout. **Show units in** at
+  sweep centre, resolution, map centre, the map axes and the `RF` readout. **Show units in** at
   the top of ANALYSIS now switches all of them at once, given a **Viewing
   distance** and, for screen pixels, a **Screen resolution** (px/mm); both are
   saved with the signal chain, so the rig is typed in once rather than converted
-  by hand at the bench. Degrees remain the unit everything is computed, stored and
-  exported in — the conversion happens in the parameter fields and the panel
-  readouts, and the three display parameters are the only ones in this plugin that
-  do *not* ask for a recompute, so switching unit is incapable of moving a
-  receptive field or changing a map pixel. What is typed is converted back to
-  degrees and clamped against the parameter's own range, so the range does not
-  change with the unit either: `2000 mm/s` comes back as `1990 mm/s`, which is the
-  200 deg/s the parameter has always allowed. The factor is the small-angle one,
+  by hand at the bench. Lengths are stored in screen millimetres and computed in
+  degrees; the display unit and the screen resolution only change how they are
+  written, so switching unit is incapable of moving a receptive field or changing
+  a map pixel. What is typed is converted back and clamped against the
+  parameter's own range. The factor is the small-angle one,
   `mm/deg = distance × π/180` (9.95 mm/deg at 570 mm), which under-reports
   *position* by about 4% at 20° eccentricity — one factor for positions and
   extents alike keeps a map pixel the same size in millimetres wherever it sits.
   Saved sessions keep every `*_deg` array and attribute unchanged and now also
   carry `viewing_distance_mm`, `screen_px_per_mm` and `screen_mm_per_deg`, so an
-  offline analysis can convert without being told the rig separately
+  offline analysis can convert without being told the rig separately.
+  Viewing distance and screen resolution are editable whatever the unit, so the rig
+  can be typed in before switching.
+- **X/Y = 0 lines on the Bar Mapper maps.** A toggle in the canvas options bar draws
+  white lines through visual-field x = 0 and y = 0 — fixation, once the sweep centre
+  is set — wherever they cross the map. On by default.
+- **Map area on the canvas.** Map size, Resolution and Map centre X/Y have moved
+  from ANALYSIS to a **MAP AREA...** popup in the Bar Mapper's canvas, next to the
+  mouse zoom that edits the same values; the fields follow the zoom while open.
+  They are still saved with the chain and still recompute the maps (never the
+  trials). Border stays in ANALYSIS, since it changes what is measured.
+- **Version in every canvas.** The plugin version is shown small in the top-right
+  corner of each canvas, so a screenshot says which build drew it.
+- **Mouse-wheel zoom on every plot, in every plugin.** Wheel (or trackpad pinch)
+  zooms about the cursor, Shift and Alt restrict it to the horizontal or vertical
+  axis, drag pans and double-click returns to the full view; Ctrl/Cmd + wheel still
+  scrolls the grid. Zoom is linked across all the panels in a grid. One shared
+  implementation (`TriggerCore/Ui/PlotZoom.h`, `PlotZoomGesture`) drives three kinds
+  of plot:
+    - **Triggered Average** — the wheel zooms time, Alt + wheel amplitude. The mouse
+      sets the AXES limits, so they are saved with the chain; the time axis above the
+      grid now follows custom X limits, which it did not before.
+    - **Triggered Power / Coherence** — spectrogram and spectrum panels zoom in their
+      drawn coordinates, so a log frequency axis zooms evenly and its ticks are
+      chosen for the visible range.
+    - **Receptive Field Bar Mapper** — a map zoom is a recompute, not a magnification:
+      the wheel moves Map centre and Resolution and the map is redrawn at the same
+      pixel count, as cheap as before. Double-click fits the map to the swept area.
+
+### Changed
+
+- **Bar Mapper lengths are stored in screen millimetres.** Speed, Sweep start,
+  Sweep centre, Resolution and Map centre are now kept in mm, the way the stimulus
+  program defines them (`speed_mm_per_sec`, `sweep_start_mm`, `sweep_centre_x_mm`,
+  `sweep_centre_y_mm`, `mm_per_pixel`, `map_centre_x_mm`, `map_centre_y_mm`), and
+  converted to degrees for the analysis with the **Viewing distance**. Changing the
+  distance therefore recomputes the maps — it used to only relabel numbers, so a
+  stimulus typed in mm silently changed when the distance did. Defaults are the old
+  ones in mm at 570 mm (100 mm/s, −150 mm, 1 mm per pixel). Signal chains saved
+  with the old degree-valued parameters are converted once on load, using the
+  viewing distance saved with them. Session files still store maps and estimates in
+  degrees, and now also record the sweep centre in mm.
+
+### Fixed
+
+- **Bar Mapper maps an off-centre stimulus in fixation coordinates.** The
+  back-projection assumed every sweep passed through visual-field (0, 0), but
+  VStim's *Linear Sweep Through Center* sweeps through the bar object's own
+  position. For a bar mapper placed anywhere but at fixation, the map therefore
+  came out relative to the stimulus, and **Map centre X/Y** only panned the window
+  over it — a receptive field at 0/0 stayed at 0/0 whatever the map centre. New
+  **Sweep centre X/Y** parameters take the stimulus position relative to fixation;
+  sweep start is now measured from it, and Map centre only chooses what is drawn.
+  Both default to 0, so existing setups with a centred stimulus are unchanged.
+  The sweep centre is also written to the session manifest, as
+  `sweep_centre_x_deg` / `sweep_centre_y_deg` and `sweep_centre_x_mm` /
+  `sweep_centre_y_mm`. For VStim, enter the bar object's X/Y position (mm) here
+  and −travelDistanceMM/2 as Sweep start.
+
+## [0.4.1] - 2026-08-25
+
+### Added
 
 - **Degree axes on the Bar Mapper's maps** — ticks and numbers along the bottom
   and down the left of every panel, in visual-field degrees, so the centre of a

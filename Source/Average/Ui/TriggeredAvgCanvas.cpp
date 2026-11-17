@@ -22,6 +22,8 @@
 
 */
 #include "TriggeredAvgCanvas.h"
+
+#include <PluginVersion.h>
 #include "AverageCore/DataCollector.h"
 #include "AverageCore/Ui/DisplayMode.h"
 #include "AverageCore/Ui/GridDisplay.h"
@@ -38,6 +40,35 @@ OptionsBar::OptionsBar (TriggeredAvgCanvas* canvas_, GridDisplay* display_, Time
       canvas (canvas_),
       timescale (timescale_)
 {
+    // Mouse zoom on any trace panel lands here, and goes through exactly the
+    // path an edit in the AXES popup does: the clamp, every panel, the saved
+    // parameters. Two routes to the same limits would drift apart.
+    display->onZoomRequested = [this] (std::optional<ZoomRange> xMs, std::optional<ZoomRange> y)
+    {
+        if (xMs)
+        {
+            axisLimits.useCustomX = true;
+            axisLimits.xMinMs = static_cast<float> (xMs->low);
+            axisLimits.xMaxMs = static_cast<float> (xMs->high);
+        }
+
+        if (y)
+        {
+            axisLimits.useCustomY = true;
+            axisLimits.yMin = static_cast<float> (y->low);
+            axisLimits.yMax = static_cast<float> (y->high);
+        }
+
+        applyAxisLimits();
+    };
+
+    display->onZoomReset = [this]
+    {
+        axisLimits.useCustomX = false;
+        axisLimits.useCustomY = false;
+        applyAxisLimits();
+    };
+
     clearButton = std::make_unique<UtilityButton> ("CLEAR");
     clearButton->setFont (FontOptions (12.0f));
     clearButton->addListener (this);
@@ -384,10 +415,16 @@ void OptionsBar::applyAxisLimits()
         }
 
         display->setXLimits (axisLimits.xMinMs, axisLimits.xMaxMs);
+
+        if (timescale != nullptr)
+            timescale->setVisibleRangeMs (axisLimits.xMinMs, axisLimits.xMaxMs);
     }
     else
     {
         display->resetXLimits();
+
+        if (timescale != nullptr)
+            timescale->resetVisibleRange();
     }
 
     if (axisLimits.useCustomY)
@@ -490,6 +527,9 @@ TriggeredAvgCanvas::TriggeredAvgCanvas (TriggeredAvgNode* processor_)
       m_node (processor_),
       m_dataStore (processor_->getDataStore())
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_timeAxis = std::make_unique<TimeAxis>();
     addAndMakeVisible (m_timeAxis.get());
 
@@ -525,6 +565,9 @@ void TriggeredAvgCanvas::refreshState() { resized(); }
 
 void TriggeredAvgCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_mainViewport->getScrollBarThickness());
+
     const int scrollBarThickness = m_mainViewport->getScrollBarThickness();
     const int timescaleHeight = 40;
     const int optionsBarHeight = 44;

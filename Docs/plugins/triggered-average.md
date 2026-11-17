@@ -71,6 +71,16 @@ last typed.
 
 The axis-limit parameters are display-only and never discard accumulated data.
 
+### Zoom with the mouse
+
+The wheel over a trace zooms **time** about the cursor; **Alt** + wheel zooms amplitude.
+A plain wheel leaves amplitude alone because each panel auto-scales to its own data —
+zooming one panel's amplitude pins every panel to that panel's scale, which is what
+*MANUAL* Y does. Drag pans (amplitude only once it is pinned), double-click returns to
+`AUTO` on both axes. The mouse sets the same limits as the AXES popout, so they are saved
+with the signal chain, and the time axis above the grid follows them. See
+[Zoom and pan](../getting-started.md#zoom-and-pan) for the full set of gestures.
+
 ## Sessions
 
 SAVE writes the accumulators plus what the canvas draws:

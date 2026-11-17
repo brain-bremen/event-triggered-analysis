@@ -23,6 +23,8 @@
 */
 #include "ParameterControl.h"
 
+#include <cmath>
+
 namespace EventTriggered
 {
 
@@ -126,6 +128,70 @@ ParameterControl::ParameterControl (Parameter* parameter,
 
 ParameterControl::~ParameterControl() = default;
 
+bool ParameterControl::hasDisplayTransform() const
+{
+    return m_parameter != nullptr && m_parameter->getType() == Parameter::FLOAT_PARAM
+           && ! juce::approximatelyEqual (m_displayScale, 1.0);
+}
+
+void ParameterControl::setDisplayTransform (double scale, const juce::String& unitOverride)
+{
+    // A scale that cannot be divided by is not a display choice but a bug in the
+    // caller; ignoring it leaves the control showing the parameter's own units,
+    // which is always readable.
+    if (! std::isfinite (scale) || scale <= 0.0)
+        return;
+
+    m_displayScale = scale;
+    m_unitOverride = unitOverride;
+
+    if (m_unitLabel != nullptr)
+    {
+        const juce::String unit =
+            m_unitOverride.isNotEmpty()
+                ? m_unitOverride
+                : (m_parameter != nullptr && m_parameter->getType() == Parameter::FLOAT_PARAM
+                       ? static_cast<FloatParameter*> (m_parameter)->getUnit()
+                       : juce::String());
+
+        m_unitLabel->setText (unit, juce::dontSendNotification);
+    }
+
+    // The slider's range is the parameter's range as displayed, so dragging to
+    // either end still lands exactly on the parameter's own limit.
+    if (m_slider != nullptr && m_parameter != nullptr
+        && m_parameter->getType() == Parameter::FLOAT_PARAM)
+    {
+        auto* parameter = static_cast<FloatParameter*> (m_parameter);
+
+        m_slider->setRange (parameter->getMinValue() * m_displayScale,
+                            parameter->getMaxValue() * m_displayScale,
+                            0.01 * m_displayScale);
+    }
+
+    refresh();
+}
+
+juce::String ParameterControl::formatDisplayValue (double value) const
+{
+    double step = 0.1;
+
+    if (m_parameter != nullptr && m_parameter->getType() == Parameter::FLOAT_PARAM)
+        step = static_cast<double> (static_cast<FloatParameter*> (m_parameter)->getStepSize());
+
+    const double displayedStep = std::abs (step * m_displayScale);
+
+    // Enough decimals that one step of the parameter changes the number printed,
+    // and no more: 0.1 deg is 0.99 mm and 3.6 px, so the same parameter wants two
+    // decimals in one unit and one in another.
+    const int decimals = displayedStep >= 10.0  ? 0
+                         : displayedStep >= 1.0 ? 1
+                         : displayedStep >= 0.1 ? 2
+                                                : 3;
+
+    return juce::String (value, decimals);
+}
+
 void ParameterControl::refresh()
 {
     if (m_parameter == nullptr)
@@ -140,11 +206,24 @@ void ParameterControl::refresh()
     }
     else if (m_slider != nullptr)
     {
-        m_slider->setValue (m_parameter->getValue(), juce::dontSendNotification);
+        const double value = static_cast<double> (static_cast<float> (m_parameter->getValue()));
+
+        m_slider->setValue (hasDisplayTransform() ? value * m_displayScale : value,
+                            juce::dontSendNotification);
     }
     else if (m_valueLabel != nullptr)
     {
-        m_valueLabel->setText (m_parameter->getValueAsString(), juce::dontSendNotification);
+        // Untransformed values keep going through the parameter's own
+        // getValueAsString(), so turning this feature on cannot change how a
+        // parameter has always been written.
+        const juce::String text =
+            hasDisplayTransform()
+                ? formatDisplayValue (
+                      static_cast<double> (static_cast<float> (m_parameter->getValue()))
+                      * m_displayScale)
+                : m_parameter->getValueAsString();
+
+        m_valueLabel->setText (text, juce::dontSendNotification);
     }
 }
 
@@ -171,7 +250,11 @@ void ParameterControl::commit()
         if (m_parameter->getType() == Parameter::FLOAT_PARAM)
         {
             auto* parameter = static_cast<FloatParameter*> (m_parameter);
-            const auto value = static_cast<float> (m_slider->getValue());
+            const double shown = m_slider->getValue();
+            const auto value = juce::jlimit (
+                parameter->getMinValue(),
+                parameter->getMaxValue(),
+                static_cast<float> (hasDisplayTransform() ? shown / m_displayScale : shown));
 
             changed = ! juce::approximatelyEqual (value, parameter->getFloatValue());
 
@@ -199,8 +282,16 @@ void ParameterControl::commit()
         if (m_parameter->getType() == Parameter::FLOAT_PARAM)
         {
             auto* parameter = static_cast<FloatParameter*> (m_parameter);
+
+            // Divide first, clamp second. The range belongs to the parameter and
+            // is in the parameter's units, so clamping the typed number before
+            // converting it would make the accepted range depend on the display
+            // unit -- 200 deg/s would become the limit on 200 mm/s.
+            const double typed = static_cast<double> (text.getFloatValue());
             const float value = juce::jlimit (
-                parameter->getMinValue(), parameter->getMaxValue(), text.getFloatValue());
+                parameter->getMinValue(),
+                parameter->getMaxValue(),
+                static_cast<float> (hasDisplayTransform() ? typed / m_displayScale : typed));
 
             changed = ! juce::approximatelyEqual (value, parameter->getFloatValue());
 
