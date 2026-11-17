@@ -22,6 +22,8 @@
 */
 #include "RfCanvas.h"
 
+#include <PluginVersion.h>
+
 #include "AverageCore/DataCollector.h"
 #include "TriggerCore/TriggerSource.h"
 
@@ -82,6 +84,12 @@ RfOptionsBar::RfOptionsBar (RfCanvas* canvas) : m_canvas (canvas)
     m_polargramButton->addListener (this);
     addAndMakeVisible (m_polargramButton.get());
 
+    m_zeroLinesButton = std::make_unique<UtilityButton> ("X/Y = 0");
+    m_zeroLinesButton->setClickingTogglesState (true);
+    m_zeroLinesButton->setTooltip ("White lines through x = 0 and y = 0 of the visual field");
+    m_zeroLinesButton->addListener (this);
+    addAndMakeVisible (m_zeroLinesButton.get());
+
     m_sharedScaleButton = std::make_unique<UtilityButton> ("SAME SCALE");
     m_sharedScaleButton->setClickingTogglesState (true);
     m_sharedScaleButton->addListener (this);
@@ -115,6 +123,8 @@ void RfOptionsBar::buttonClicked (Button* button)
 {
     if (button == m_polargramButton.get())
         m_canvas->setShowPolargram (button->getToggleState());
+    else if (button == m_zeroLinesButton.get())
+        m_canvas->setShowZeroLines (button->getToggleState());
     else if (button == m_sharedScaleButton.get())
         m_canvas->setSharedColourRange (button->getToggleState());
     else if (button == m_clearButton.get())
@@ -154,6 +164,8 @@ void RfOptionsBar::resized()
 
     m_polargramButton->setBounds (area.removeFromLeft (60).reduced (2, 0));
     area.removeFromLeft (6);
+    m_zeroLinesButton->setBounds (area.removeFromLeft (70).reduced (2, 0));
+    area.removeFromLeft (6);
     m_sharedScaleButton->setBounds (area.removeFromLeft (90).reduced (2, 0));
 }
 
@@ -161,6 +173,9 @@ void RfOptionsBar::resized()
 
 RfCanvas::RfCanvas (BarMapperNode* node) : m_node (node)
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_mapViewport = std::make_unique<Viewport>();
     m_mapGrid = new RfMapGrid();
     m_mapViewport->setViewedComponent (m_mapGrid, true);
@@ -342,6 +357,11 @@ void RfCanvas::setShowPolargram (bool show)
     m_mapGrid->setShowPolargram (show);
 }
 
+void RfCanvas::setShowZeroLines (bool show)
+{
+    m_mapGrid->setShowZeroLines (show);
+}
+
 void RfCanvas::setSharedColourRange (bool shared)
 {
     m_mapGrid->setSharedColourRange (shared);
@@ -476,6 +496,9 @@ void RfCanvas::layoutViews()
 
 void RfCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_mapViewport->getScrollBarThickness());
+
     layoutViews();
 }
 

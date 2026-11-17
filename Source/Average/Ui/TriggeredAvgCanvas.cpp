@@ -22,6 +22,8 @@
 
 */
 #include "TriggeredAvgCanvas.h"
+
+#include <PluginVersion.h>
 #include "AverageCore/DataCollector.h"
 #include "AverageCore/Ui/DisplayMode.h"
 #include "AverageCore/Ui/GridDisplay.h"
@@ -525,6 +527,9 @@ TriggeredAvgCanvas::TriggeredAvgCanvas (TriggeredAvgNode* processor_)
       m_node (processor_),
       m_dataStore (processor_->getDataStore())
 {
+    m_versionTag.setVersion (PLUGIN_VERSION_STRING);
+    addAndMakeVisible (m_versionTag);
+
     m_timeAxis = std::make_unique<TimeAxis>();
     addAndMakeVisible (m_timeAxis.get());
 
@@ -560,6 +565,9 @@ void TriggeredAvgCanvas::refreshState() { resized(); }
 
 void TriggeredAvgCanvas::resized()
 {
+    // First, so it is placed whatever path the layout below returns by.
+    m_versionTag.placeIn (getLocalBounds(), m_mainViewport->getScrollBarThickness());
+
     const int scrollBarThickness = m_mainViewport->getScrollBarThickness();
     const int timescaleHeight = 40;
     const int optionsBarHeight = 44;

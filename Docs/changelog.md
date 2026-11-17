@@ -9,10 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-17
 
 ### Added
 
+- **Switchable display units on the Bar Mapper — degrees, millimetres or screen
+  pixels.** A stimulus is measured on a screen, and until now everything the
+  mapper showed or took was degrees of visual angle: speed, sweep start,
+  resolution, map centre, the map axes and the `RF` readout. **Show units in** at
+  the top of ANALYSIS now switches all of them at once, given a **Viewing
+  distance** and, for screen pixels, a **Screen resolution** (px/mm); both are
+  saved with the signal chain, so the rig is typed in once rather than converted
+  by hand at the bench. Degrees remain the unit everything is computed, stored and
+  exported in — the conversion happens in the parameter fields and the panel
+  readouts, and the three display parameters are the only ones in this plugin that
+  do *not* ask for a recompute, so switching unit is incapable of moving a
+  receptive field or changing a map pixel. What is typed is converted back to
+  degrees and clamped against the parameter's own range, so the range does not
+  change with the unit either: `2000 mm/s` comes back as `1990 mm/s`, which is the
+  200 deg/s the parameter has always allowed. The factor is the small-angle one,
+  `mm/deg = distance × π/180` (9.95 mm/deg at 570 mm), which under-reports
+  *position* by about 4% at 20° eccentricity — one factor for positions and
+  extents alike keeps a map pixel the same size in millimetres wherever it sits.
+  Saved sessions keep every `*_deg` array and attribute unchanged and now also
+  carry `viewing_distance_mm`, `screen_px_per_mm` and `screen_mm_per_deg`, so an
+  offline analysis can convert without being told the rig separately.
+  Viewing distance and screen resolution are editable whatever the unit, so the rig
+  can be typed in before switching.
+- **X/Y = 0 lines on the Bar Mapper maps.** A toggle in the canvas options bar draws
+  white lines through visual-field x = 0 and y = 0 — fixation, once the sweep centre
+  is set — wherever they cross the map.
+- **Version in every canvas.** The plugin version is shown small in the top-right
+  corner of each canvas, so a screenshot says which build drew it.
 - **Mouse-wheel zoom on every plot, in every plugin.** Wheel (or trackpad pinch)
   zooms about the cursor, Shift and Alt restrict it to the horizontal or vertical
   axis, drag pans and double-click returns to the full view; Ctrl/Cmd + wheel still
@@ -46,28 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.1] - 2026-08-25
 
 ### Added
-
-- **Switchable display units on the Bar Mapper — degrees, millimetres or screen
-  pixels.** A stimulus is measured on a screen, and until now everything the
-  mapper showed or took was degrees of visual angle: speed, sweep start,
-  resolution, map centre, the map axes and the `RF` readout. **Show units in** at
-  the top of ANALYSIS now switches all of them at once, given a **Viewing
-  distance** and, for screen pixels, a **Screen resolution** (px/mm); both are
-  saved with the signal chain, so the rig is typed in once rather than converted
-  by hand at the bench. Degrees remain the unit everything is computed, stored and
-  exported in — the conversion happens in the parameter fields and the panel
-  readouts, and the three display parameters are the only ones in this plugin that
-  do *not* ask for a recompute, so switching unit is incapable of moving a
-  receptive field or changing a map pixel. What is typed is converted back to
-  degrees and clamped against the parameter's own range, so the range does not
-  change with the unit either: `2000 mm/s` comes back as `1990 mm/s`, which is the
-  200 deg/s the parameter has always allowed. The factor is the small-angle one,
-  `mm/deg = distance × π/180` (9.95 mm/deg at 570 mm), which under-reports
-  *position* by about 4% at 20° eccentricity — one factor for positions and
-  extents alike keeps a map pixel the same size in millimetres wherever it sits.
-  Saved sessions keep every `*_deg` array and attribute unchanged and now also
-  carry `viewing_distance_mm`, `screen_px_per_mm` and `screen_mm_per_deg`, so an
-  offline analysis can convert without being told the rig separately
 
 - **Degree axes on the Bar Mapper's maps** — ticks and numbers along the bottom
   and down the left of every panel, in visual-field degrees, so the centre of a

@@ -56,6 +56,7 @@ set(TRIGGER_CORE_HEADERS
     Ui/NestedCallOut.h
     Ui/PlotZoom.h
     Ui/PlotZoomGesture.h
+    Ui/VersionTag.h
 )
 
 add_library(trigger_core STATIC ${TRIGGER_CORE_SOURCES} ${TRIGGER_CORE_HEADERS})

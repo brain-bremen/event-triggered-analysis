@@ -22,6 +22,7 @@
 
 */
 #pragma once
+#include "TriggerCore/Ui/VersionTag.h"
 #include "../TriggeredAvgNode.h"
 #include "AverageCore/Ui/GridDisplay.h"
 #include "AverageCore/Ui/TimeAxis.h"
@@ -190,6 +191,9 @@ private:
     std::unique_ptr<GridDisplay> m_grid;
     std::unique_ptr<Viewport> m_optionsBarHolder;
     std::unique_ptr<OptionsBar> m_optionsBar;
+
+    /** Which build this is, in the corner, for screenshots. */
+    VersionTag m_versionTag;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TriggeredAvgCanvas)
 };

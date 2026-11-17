@@ -250,6 +250,29 @@ void RfMapPanel::setShowPolargram (bool show)
     repaint();
 }
 
+void RfMapPanel::setShowZeroLines (bool show)
+{
+    m_showZeroLines = show;
+    repaint();
+}
+
+void RfMapPanel::paintZeroLines (Graphics& g, Rectangle<int> mapArea) const
+{
+    // Through the origin of the visual field, not the map's centre: with the
+    // sweep centre set, that is fixation, which is what a stimulus is placed
+    // relative to. Each line is drawn only if it crosses the map at all.
+    const Point<float> origin = mapToScreen (mapArea, 0.0, 0.0);
+    const auto area = mapArea.toFloat();
+
+    g.setColour (Colours::white.withAlpha (0.8f));
+
+    if (origin.x >= area.getX() && origin.x <= area.getRight())
+        g.drawLine (origin.x, area.getY(), origin.x, area.getBottom(), 1.0f);
+
+    if (origin.y >= area.getY() && origin.y <= area.getBottom())
+        g.drawLine (area.getX(), origin.y, area.getRight(), origin.y, 1.0f);
+}
+
 void RfMapPanel::setSharedColourRange (bool shared, float low, float high)
 {
     m_sharedColourRange = shared;
@@ -396,6 +419,9 @@ void RfMapPanel::paint (Graphics& g)
     }
 
     g.drawImage (m_image, mapArea.toFloat());
+
+    if (m_showZeroLines)
+        paintZeroLines (g, mapArea);
 
     if (showScale)
         paintColourScale (g, scaleArea.withY (mapArea.getY()).withHeight (mapArea.getHeight()));
@@ -700,6 +726,7 @@ void RfMapGrid::setResults (const RfResults& results, const StringArray& channel
         m_panels[i]->setChannelName (i < channelNames.size() ? channelNames[i]
                                                              : "CH " + String (i + 1));
         m_panels[i]->setShowPolargram (m_showPolargram);
+        m_panels[i]->setShowZeroLines (m_showZeroLines);
         m_panels[i]->setDisplayUnit (m_displayUnit, m_unitsPerDegree);
         m_panels[i]->setValueUnit (m_valueUnit);
         m_panels[i]->setMapping (m_mappings[static_cast<std::size_t> (i)]);
@@ -775,6 +802,14 @@ void RfMapGrid::setShowPolargram (bool show)
 
     for (auto* panel : m_panels)
         panel->setShowPolargram (show);
+}
+
+void RfMapGrid::setShowZeroLines (bool show)
+{
+    m_showZeroLines = show;
+
+    for (auto* panel : m_panels)
+        panel->setShowZeroLines (show);
 }
 
 void RfMapGrid::setSharedColourRange (bool shared)

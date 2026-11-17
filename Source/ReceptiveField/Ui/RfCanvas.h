@@ -22,6 +22,7 @@
 */
 #pragma once
 
+#include "TriggerCore/Ui/VersionTag.h"
 #include "../BarMapperNode.h"
 #include "RfDisplayMode.h"
 #include "RfMapPanel.h"
@@ -65,6 +66,7 @@ private:
     std::unique_ptr<juce::ComboBox> m_heightSelector;
 
     std::unique_ptr<UtilityButton> m_polargramButton;
+    std::unique_ptr<UtilityButton> m_zeroLinesButton;
     std::unique_ptr<UtilityButton> m_sharedScaleButton;
     std::unique_ptr<UtilityButton> m_clearButton;
 
@@ -106,6 +108,7 @@ public:
     void setNumColumns (int columns);
     void setPanelHeight (int pixels);
     void setShowPolargram (bool show);
+    void setShowZeroLines (bool show);
     void setSharedColourRange (bool shared);
     void clearData();
 
@@ -165,6 +168,9 @@ private:
     juce::String m_warningText;
 
     std::uint64_t m_lastGeneration = 0;
+
+    /** Which build this is, in the corner, for screenshots. */
+    VersionTag m_versionTag;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfCanvas)
 };

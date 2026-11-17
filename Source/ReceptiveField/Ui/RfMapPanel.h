@@ -56,6 +56,10 @@ public:
     /** Draws the polargram inset over the map. */
     void setShowPolargram (bool show);
 
+    /** White lines through visual-field x = 0 and y = 0 -- the fixation point,
+        once the sweep centre is set -- wherever they fall inside the map. */
+    void setShowZeroLines (bool show);
+
     /** Fixes the colour scale across panels, so channels are comparable.
         Passing shared == false restores this panel's own auto-scaling and
         ignores the range. */
@@ -117,6 +121,7 @@ private:
     void paintAxes (juce::Graphics& g, juce::Rectangle<int> mapArea) const;
 
     void paintPolargram (juce::Graphics& g, juce::Rectangle<int> area) const;
+    void paintZeroLines (juce::Graphics& g, juce::Rectangle<int> mapArea) const;
 
     /** Where a visual-field coordinate lands inside a map drawn into `mapArea`.
      *
@@ -137,6 +142,7 @@ private:
     PlotZoomGesture m_zoomGesture;
 
     bool m_showPolargram = true;
+    bool m_showZeroLines = false;
     bool m_sharedColourRange = false;
     float m_sharedLow = 0.0f;
     float m_sharedHigh = 1.0f;
@@ -156,6 +162,7 @@ public:
     void setNumColumns (int columns);
     void setPanelHeight (int pixels);
     void setShowPolargram (bool show);
+    void setShowZeroLines (bool show);
 
     /** One colour scale for every panel, so a strong channel and a weak one are
      *  visibly different rather than both rendered full-scale. Off by default,
@@ -191,6 +198,7 @@ private:
     int m_panelHeight = 220;
     bool m_sharedColourRange = false;
     bool m_showPolargram = true;
+    bool m_showZeroLines = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RfMapGrid)
 };
