@@ -54,7 +54,9 @@ MappingSettings testSettings()
 std::vector<DirectionTrace> simulatedTraces (const SimulatedNeuron& neuron,
                                              int directions = 8,
                                              int trials = 10,
-                                             AngleConvention convention = AngleConvention::vstim())
+                                             AngleConvention convention = AngleConvention::vstim(),
+                                             double sweepCentreXDeg = 0.0,
+                                             double sweepCentreYDeg = 0.0)
 {
     SimulationSettings simulation;
     simulation.sampleRateHz = 1000.0;
@@ -63,6 +65,8 @@ std::vector<DirectionTrace> simulatedTraces (const SimulatedNeuron& neuron,
     simulation.trialsPerDirection = trials;
     simulation.sweep.speedDegPerSec = 10.0;
     simulation.sweep.sweepStartDeg = -15.0;
+    simulation.sweep.centreXDeg = sweepCentreXDeg;
+    simulation.sweep.centreYDeg = sweepCentreYDeg;
 
     const std::vector<double> angles = evenlySpacedAngles (directions);
     const std::vector<std::vector<float>> raw = simulateAllDirections (neuron, simulation, angles);
@@ -107,6 +111,45 @@ TEST (RfPipeline, MapsASimulatedReceptiveField)
     EXPECT_EQ (mapping.canonicalAnglesDeg.size(), 8u);
     EXPECT_EQ (mapping.responses.size(), 8u);
     EXPECT_EQ (mapping.minimumTrialCount, 10);
+}
+
+TEST (RfPipeline, AnOffCentreStimulusMapsInFixationCoordinates)
+{
+    // The bug report this test exists for: the bar mapper sat in the lower-left
+    // quadrant, and the map came out relative to the bar mapper, with the map
+    // centre only panning the window. With the sweep centre set, the RF must land
+    // at its fixation-relative position, and the map centre only chooses the
+    // window.
+    SimulatedNeuron neuron;
+    neuron.rfCentreXDeg = -6.0;
+    neuron.rfCentreYDeg = -3.0;
+    neuron.rfDiameterDeg = 4.0;
+    neuron.peakSpikeProbability = 0.3;
+
+    const double stimulusX = -4.0;
+    const double stimulusY = -4.0;
+
+    const std::vector<DirectionTrace> traces =
+        simulatedTraces (neuron, 8, 10, AngleConvention::vstim(), stimulusX, stimulusY);
+
+    MappingSettings settings = testSettings();
+    settings.map.centreXDeg = stimulusX;
+    settings.map.centreYDeg = stimulusY;
+
+    const ChannelMapping mapping = computeChannelMapping (traces, settings);
+
+    ASSERT_TRUE (mapping.valid);
+    EXPECT_NEAR (mapping.estimate.centreXDeg, -6.0, 0.5);
+    EXPECT_NEAR (mapping.estimate.centreYDeg, -3.0, 0.5);
+
+    // Panning the window must not move the RF.
+    settings.map.centreXDeg = -5.0;
+    settings.map.centreYDeg = -2.0;
+    const ChannelMapping panned = computeChannelMapping (traces, settings);
+
+    ASSERT_TRUE (panned.valid);
+    EXPECT_NEAR (panned.estimate.centreXDeg, mapping.estimate.centreXDeg, 0.15);
+    EXPECT_NEAR (panned.estimate.centreYDeg, mapping.estimate.centreYDeg, 0.15);
 }
 
 TEST (RfPipeline, TheConventionChangesWhereTheReceptiveFieldLands)

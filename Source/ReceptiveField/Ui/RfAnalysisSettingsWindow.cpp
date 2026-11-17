@@ -45,6 +45,8 @@ RfAnalysisSettingsWindow::RfAnalysisSettingsWindow (BarMapperNode* node,
     // below describes how it is read.
     addControl (RfParameterNames::speed_deg_per_sec);
     addControl (RfParameterNames::sweep_start_deg);
+    addControl (RfParameterNames::sweep_centre_x);
+    addControl (RfParameterNames::sweep_centre_y);
     addControl (RfParameterNames::latency_ms);
     addSectionBreak();
 

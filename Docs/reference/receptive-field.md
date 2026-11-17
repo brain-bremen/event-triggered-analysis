@@ -45,6 +45,8 @@ they are not free parameters.
 |---|---|---|---|---|---|---|
 | `speed_deg_per_sec` | Speed | float, deg/s | `10` | `0.1` – `200` | `0.1` | Bar speed along its axis of motion. Sets the scale factor from time to space: one sample becomes `speed / sample rate` degrees. **Getting it wrong scales the whole map**, with nothing else looking odd. |
 | `sweep_start_deg` | Sweep start | float, deg | `-15` | `-180` – `180` | `0.1` | Where the bar's centre was, *along its own axis*, at the trigger. Usually negative: the sweep starts off to one side and crosses the centre part-way through — for a sweep through the centre this is −travelDistance/2. **Getting it wrong translates the whole map** along each direction of motion, which shows up as a blurred or displaced receptive field. |
+| `sweep_centre_x` | Sweep centre X | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *x* (relative to fixation, +x right) of the point every sweep passes through — the bar stimulus's own position in the stimulus program (in VStim, the X position of the object carrying *Linear Sweep Through Center*). Sweep start is measured from here. **Left at 0 for an off-centre stimulus, the map comes out relative to the stimulus rather than to fixation**, and Map centre only pans the window over it. |
+| `sweep_centre_y` | Sweep centre Y | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *y* (+y up) of the same point. |
 | `latency_ms` | Latency | float, ms | `60` | `0` – `500` | `1` | Neuronal latency, subtracted before time becomes space. Without it each direction's response is displaced along its own direction of motion and the combined field is inflated (their Fig. 3); too large a latency inflates it the other way. The right value maximises the map peak, which is what the latency scan exploits (§2.4.5). |
 
 ## How the response is read — ANALYSIS
@@ -69,7 +71,7 @@ they are not free parameters.
 |---|---|---|---|---|---|---|
 | `map_pixels` | Map size | int, px | `201` | `21` – `601` | — | Map width and height. **Forced odd internally** so there is a true centre pixel. Cost is quadratic in this. |
 | `deg_per_pixel` | Resolution | float, deg | `0.1` | `0.01` – `2.0` | `0.01` | Degrees of visual angle per map pixel. Together with Map size this fixes the extent: **span = size × resolution**, 20.1° square by default. Finer than the smoothing width buys nothing but pixels. |
-| `map_centre_x` | Map centre X | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *x* of the map's centre pixel, in the same frame the sweep angles are in (+x right, +y up). |
+| `map_centre_x` | Map centre X | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *x* of the map's centre pixel, relative to fixation, in the same frame the sweep angles are in (+x right, +y up). Only chooses which part of the visual field is drawn — where the stimulus was is Sweep centre. Usually set to the sweep centre, or to where the receptive field turned out to be. |
 | `map_centre_y` | Map centre Y | float, deg | `0` | `-90` – `90` | `0.1` | Visual-field *y* of the map's centre pixel. **Move the map to where the receptive field is rather than enlarging it** — cost is quadratic in size, and free in centre. |
 | `border_fraction` | Border | float | `0.76` | `0.1` – `0.99` | `0.01` | Fraction of the map peak at which the receptive-field border is drawn, and therefore what the reported area, equivalent diameter and bounding box mean. **Not 0.5** — 0.76 is the paper's empirical correction (§3.1.1) for the enlargement smoothing and back-projection introduce. Changing it changes the reported sizes, not the map. |
 
@@ -83,7 +85,7 @@ because the rig does not change between sessions.
 
 | Name | Label | Type | Default | Range | Step | What it does |
 |---|---|---|---|---|---|---|
-| `display_unit` | Show units in | categorical | `Degrees` | `Degrees`, `Millimetres`, `Screen pixels` | — | The unit for Speed, Sweep start, Resolution, Map centre X/Y, the map axes and the `RF` readout. Everything else — latency, smoothing, border, map size — is a time, a ratio or a count of map pixels, and does not change. |
+| `display_unit` | Show units in | categorical | `Degrees` | `Degrees`, `Millimetres`, `Screen pixels` | — | The unit for Speed, Sweep start, Sweep centre X/Y, Resolution, Map centre X/Y, the map axes and the `RF` readout. Everything else — latency, smoothing, border, map size — is a time, a ratio or a count of map pixels, and does not change. |
 | `viewing_distance_mm` | Viewing distance | float, mm | `570` | `10` – `5000` | `1` | Eye to screen. Greyed out while the unit is Degrees. |
 | `screen_px_per_mm` | Screen resolution | float, px/mm | `3.6` | `0.1` – `100` | `0.1` | Screen pixels per millimetre — 3.6 px/mm is about 91 ppi. Greyed out unless the unit is Screen pixels. |
 
@@ -170,7 +172,7 @@ Everything [Triggered Average](triggered-average.md#session-arrays) writes, plus
 | `map_channel_indices` | (channels,) | int32 | Global channel indices |
 
 Manifest attributes: `map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
-`map_centre_y_deg`, and `map_estimate_fields` — the comma-separated column names of
+`map_centre_y_deg`, `sweep_centre_x_deg`, `sweep_centre_y_deg`, and `map_estimate_fields` — the comma-separated column names of
 `map_estimates`.
 
 See [Saved sessions](../sessions/format.md).

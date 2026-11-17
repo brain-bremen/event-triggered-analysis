@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > in its own repository and merged into this one at 0.3.0. Its history and this
 > changelog came with it. Entries from 0.3.0 onwards cover all three plugins.
 
+## [Unreleased]
+
+### Fixed
+
+- **Bar Mapper maps an off-centre stimulus in fixation coordinates.** The
+  back-projection assumed every sweep passed through visual-field (0, 0), but
+  VStim's *Linear Sweep Through Center* sweeps through the bar object's own
+  position. For a bar mapper placed anywhere but at fixation, the map therefore
+  came out relative to the stimulus, and **Map centre X/Y** only panned the window
+  over it — a receptive field at 0/0 stayed at 0/0 whatever the map centre. New
+  **Sweep centre X/Y** parameters take the stimulus position relative to fixation;
+  sweep start is now measured from it, and Map centre only chooses what is drawn.
+  Both default to 0, so existing setups with a centred stimulus are unchanged.
+  The sweep centre is also written to the session manifest as
+  `sweep_centre_x_deg` / `sweep_centre_y_deg`.
+
 ## [0.4.1] - 2026-08-25
 
 ### Added

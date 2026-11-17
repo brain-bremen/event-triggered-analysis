@@ -134,6 +134,22 @@ void BarMapperNode::registerAdditionalParameters()
                        -15.0f, -180.0f, 180.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
+                       RfParameterNames::sweep_centre_x,
+                       "Sweep centre X",
+                       "Visual-field x the bar sweeps through (the bar stimulus's "
+                       "position in the stimulus program), relative to fixation",
+                       "deg",
+                       0.0f, -90.0f, 90.0f, 0.1f);
+
+    addFloatParameter (P::PROCESSOR_SCOPE,
+                       RfParameterNames::sweep_centre_y,
+                       "Sweep centre Y",
+                       "Visual-field y the bar sweeps through (the bar stimulus's "
+                       "position in the stimulus program), relative to fixation",
+                       "deg",
+                       0.0f, -90.0f, 90.0f, 0.1f);
+
+    addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::latency_ms,
                        "Latency",
                        "Neuronal latency subtracted before time is converted to space",
@@ -155,12 +171,16 @@ void BarMapperNode::registerAdditionalParameters()
 
     addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::map_centre_x,
-                       "Map centre X", "Visual-field x of the map centre", "deg",
+                       "Map centre X", "Visual-field x of the map centre, relative to fixation. "
+                       "Only moves the window; where the stimulus was is Sweep centre",
+                       "deg",
                        0.0f, -90.0f, 90.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
                        RfParameterNames::map_centre_y,
-                       "Map centre Y", "Visual-field y of the map centre", "deg",
+                       "Map centre Y", "Visual-field y of the map centre, relative to fixation. "
+                       "Only moves the window; where the stimulus was is Sweep centre",
+                       "deg",
                        0.0f, -90.0f, 90.0f, 0.1f);
 
     addFloatParameter (P::PROCESSOR_SCOPE,
@@ -310,6 +330,8 @@ std::optional<Rf::SweepGeometry> BarMapperNode::getSweepForSource (
     sweep.convention = getAngleConvention();
     sweep.speedDegPerSec = getDoubleParameter (RfParameterNames::speed_deg_per_sec, 10.0);
     sweep.sweepStartDeg = getDoubleParameter (RfParameterNames::sweep_start_deg, -15.0);
+    sweep.centreXDeg = getDoubleParameter (RfParameterNames::sweep_centre_x, 0.0);
+    sweep.centreYDeg = getDoubleParameter (RfParameterNames::sweep_centre_y, 0.0);
     sweep.latencyMs = getDoubleParameter (RfParameterNames::latency_ms, 60.0);
 
     return sweep;
@@ -728,6 +750,10 @@ bool BarMapperNode::saveSessionPayload (SessionWriter& writer)
     metadata.setAttribute ("map_degrees_per_pixel", geometry.degreesPerPixel);
     metadata.setAttribute ("map_centre_x_deg", geometry.centreXDeg);
     metadata.setAttribute ("map_centre_y_deg", geometry.centreYDeg);
+    metadata.setAttribute ("sweep_centre_x_deg",
+                           getDoubleParameter (RfParameterNames::sweep_centre_x, 0.0));
+    metadata.setAttribute ("sweep_centre_y_deg",
+                           getDoubleParameter (RfParameterNames::sweep_centre_y, 0.0));
 
     // Names the columns of map_estimates, so a reader does not have to count
     // along a row of seven doubles and hope.

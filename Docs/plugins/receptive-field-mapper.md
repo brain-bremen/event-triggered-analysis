@@ -53,7 +53,9 @@ field — and elsewhere they do not.
    with *N* evenly spaced directions, each armed by a trial-type message.
 3. **Check the compass** under ANALYSIS: the angles are the one thing nothing can
    verify.
-4. **ANALYSIS → set the speed, sweep start and latency** to match the stimulus program,
+4. **ANALYSIS → set the speed, sweep start, sweep centre and latency** to match the
+   stimulus program — sweep centre is the bar stimulus's own position relative to
+   fixation, so the map comes out in fixation coordinates;
    then check that Pre/Post actually cover the sweep — see
    [Making the window and the sweep agree](#making-the-window-and-the-sweep-agree). The
    stock defaults do not.
@@ -143,7 +145,7 @@ all three are more often a typo in the angle column:
     rebuild the accumulators and are locked while acquiring.
 
 Four groups: display units (unit, viewing distance, screen resolution), stimulus geometry
-(speed, sweep start, latency), how the response is read (smoothing, absolute z, combine),
+(speed, sweep start, sweep centre, latency), how the response is read (smoothing, absolute z, combine),
 and the map itself (size, resolution, centre, border). Two defaults are worth knowing:
 
 - **Latency 60 ms.** Without it each direction's response is displaced *along its own
@@ -159,7 +161,7 @@ Full list with defaults, ranges and what each one does to the map:
 ### Degrees, millimetres or screen pixels
 
 **Show units in** at the top of ANALYSIS sets the unit for every linear quantity the
-plugin shows or takes: Speed, Sweep start, Resolution, Map centre X/Y, the map axes and
+plugin shows or takes: Speed, Sweep start, Sweep centre X/Y, Resolution, Map centre X/Y, the map axes and
 the `RF` readout on each panel. Fill in **Viewing distance** and, for screen pixels,
 **Screen resolution** — they are what the conversion needs, and they are saved with the
 signal chain so the rig is typed in once.
@@ -279,7 +281,8 @@ finished maps and their measurements:
 | `map_channel_indices` | (channels,) | int32 | Global channel indices |
 
 The map geometry (`map_pixels`, `map_degrees_per_pixel`, `map_centre_x_deg`,
-`map_centre_y_deg`) is in the manifest, along with the viewing geometry the display units
+`map_centre_y_deg`) and the stimulus position (`sweep_centre_x_deg`,
+`sweep_centre_y_deg`) are in the manifest, along with the viewing geometry the display units
 use — `viewing_distance_mm`, `screen_px_per_mm` and the derived `screen_mm_per_deg`.
 Everything else stays in degrees whatever unit is on screen, so a file does not depend on
 what the window happened to be showing when it was written.

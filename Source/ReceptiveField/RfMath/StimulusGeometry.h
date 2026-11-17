@@ -55,6 +55,18 @@ struct SweepGeometry
      *  -travelDistance/2, expressed in degrees. */
     double sweepStartDeg = -15.0;
 
+    /** Visual-field position (relative to fixation, +x right, +y up) of the
+     *  point every sweep passes through — the bar stimulus's own position in the
+     *  stimulus program.
+     *
+     *  `sweepStartDeg` is measured along the axis of motion from this point, not
+     *  from the origin. VStim's LinearSweepThroughCenter sweeps through the bar
+     *  object's position, which is rarely the fixation point; leaving this at
+     *  zero for such a stimulus does not blur the map, it silently places it in
+     *  stimulus-relative coordinates. */
+    double centreXDeg = 0.0;
+    double centreYDeg = 0.0;
+
     /** Neuronal latency, subtracted before time is converted to space.
      *
      *  Without it the response is displaced along the direction of motion (their
@@ -63,6 +75,19 @@ struct SweepGeometry
     double latencyMs = 60.0;
 
     double canonicalAngleDeg() const { return toCanonicalDeg (angleDeg, convention); }
+
+    /** The sweep centre projected onto this direction's axis of motion.
+     *
+     *  A map point x is crossed when the bar's centre reaches x·u; the bar's
+     *  centre along the axis is centre·u + sweepStart + speed·t. So the stimulus
+     *  centre enters the whole computation as one offset per direction on the
+     *  profile's origin, and back-projection, latency scanning and coverage need
+     *  not know it exists. */
+    double centreAlongAxisDeg() const
+    {
+        const double rad = degToRad (canonicalAngleDeg());
+        return centreXDeg * std::cos (rad) + centreYDeg * std::sin (rad);
+    }
 
     bool isValid() const { return speedDegPerSec > 0.0; }
 };

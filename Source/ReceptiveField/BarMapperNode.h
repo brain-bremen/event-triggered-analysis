@@ -45,6 +45,8 @@ namespace RfParameterNames
 
     inline constexpr auto speed_deg_per_sec = "speed_deg_per_sec";
     inline constexpr auto sweep_start_deg = "sweep_start_deg";
+    inline constexpr auto sweep_centre_x = "sweep_centre_x";
+    inline constexpr auto sweep_centre_y = "sweep_centre_y";
     inline constexpr auto latency_ms = "latency_ms";
 
     inline constexpr auto map_pixels = "map_pixels";

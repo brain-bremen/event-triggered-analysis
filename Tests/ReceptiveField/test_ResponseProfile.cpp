@@ -206,6 +206,36 @@ TEST (ResponseProfile, LatencyShiftsThePositionByLatencyTimesSpeed)
     EXPECT_NEAR (withoutLatency.startDeg - withLatency.startDeg, 1.0, 1e-9);
 }
 
+TEST (ResponseProfile, SweepCentreShiftsTheOriginByItsProjectionOntoTheAxis)
+{
+    // The bar sweeps through the stimulus's own position, not through fixation.
+    // That position enters as its projection onto the axis of motion: all of x
+    // for a rightward sweep, all of y for an upward one, a mix on a diagonal.
+    SweepGeometry sweep;
+    sweep.speedDegPerSec = 10.0;
+    sweep.sweepStartDeg = -15.0;
+    sweep.latencyMs = 0.0;
+
+    const std::vector<float> trace (100, 1.0f);
+
+    sweep.angleDeg = 0.0;
+    const SpatialProfile atOrigin = toSpatialProfile (trace, 1000.0, 0, sweep);
+
+    sweep.centreXDeg = -4.0;
+    sweep.centreYDeg = 3.0;
+
+    const SpatialProfile rightward = toSpatialProfile (trace, 1000.0, 0, sweep);
+    EXPECT_NEAR (rightward.startDeg - atOrigin.startDeg, -4.0, 1e-9);
+
+    sweep.angleDeg = 90.0;
+    const SpatialProfile upward = toSpatialProfile (trace, 1000.0, 0, sweep);
+    EXPECT_NEAR (upward.startDeg - atOrigin.startDeg, 3.0, 1e-9);
+
+    sweep.angleDeg = 180.0;
+    const SpatialProfile leftward = toSpatialProfile (trace, 1000.0, 0, sweep);
+    EXPECT_NEAR (leftward.startDeg - atOrigin.startDeg, 4.0, 1e-9);
+}
+
 TEST (ResponseProfile, LookupOutsideTheSweptRangeReturnsThePadValue)
 {
     SpatialProfile profile;
